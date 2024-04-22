@@ -1,0 +1,376 @@
+import pickle
+import struct
+import time
+import os
+import json
+
+from logging import getLogger
+from dataclasses import dataclass
+from pymysqlreplication import BinLogStreamReader
+from pymysqlreplication.row_event import (
+    DeleteRowsEvent,
+    UpdateRowsEvent,
+    WriteRowsEvent,
+)
+from pymysql.err import OperationalError
+
+from config import MysqlSettings, BinlogReplicatorSettings
+
+
+logger = getLogger(__name__)
+
+
+@dataclass
+class LogEvent:
+    transaction_id: tuple[str, int] = 0  # (file_name, log_pos)
+    db_name: str = ''
+    table_name: str = ''
+    records: list | None = None
+    is_removal: bool = False
+
+
+class FileWriter:
+    FLUSH_INTERVAL = 10
+
+    def __init__(self, file_path):
+        self.num_records = 0
+        self.file = open(file_path, 'wb')
+        self.last_flush_time = 0
+
+    def close(self):
+        self.file.close()
+
+    def write_event(self, log_event):
+        data = pickle.dumps(log_event)
+        data_size = len(data)
+        data = struct.pack('>I', data_size) + data
+        self.file.write(data)
+        curr_time = time.time()
+        if curr_time - self.last_flush_time > FileWriter.FLUSH_INTERVAL:
+            self.file.flush()
+        self.num_records += len(log_event.records)
+
+
+class FileReader:
+    def __init__(self, file_path):
+        self.file = open(file_path, 'rb')
+        self.current_buffer = b''
+        self.file_num = int(os.path.basename(file_path).split('.')[0])
+
+    def close(self):
+        self.file.close()
+
+    def read_next_event(self) -> LogEvent | None:
+
+        # read size if we don't have enough bytes to get size
+        if len(self.current_buffer) < 4:
+            self.current_buffer += self.file.read(4 - len(self.current_buffer))
+
+        # still no size - unable to read
+        if len(self.current_buffer) < 4:
+            return None
+
+        size_data = self.current_buffer[:4]
+        size_to_read = struct.unpack('>I', size_data)[0]
+
+        # read
+        if len(self.current_buffer) != size_to_read + 4:
+            self.current_buffer += self.file.read(size_to_read + 4 - len(self.current_buffer))
+
+        if len(self.current_buffer) != size_to_read + 4:
+            return None
+
+        event = pickle.loads(self.current_buffer[4:])
+        self.current_buffer = b''
+        return event
+
+
+def get_existing_file_nums(data_dir, db_name):
+    db_path = os.path.join(data_dir, db_name)
+    if not os.path.exists(db_path):
+        os.mkdir(db_path)
+    existing_files = os.listdir(db_path)
+    existing_files = [f for f in existing_files if f.endswith('.bin')]
+    existing_file_nums = sorted([int(f.split('.')[0]) for f in existing_files])
+    return existing_file_nums
+
+
+def get_file_name_by_num(data_dir, db_name, file_num):
+    return os.path.join(data_dir, db_name, f'{file_num}.bin')
+
+
+class DataReader:
+    def __init__(self, replicator_settings: BinlogReplicatorSettings, db_name: str):
+        self.data_dir = replicator_settings.data_dir
+        self.db_name = db_name
+        self.current_file_reader: FileReader | None = None
+
+    def get_last_transaction_id(self):
+        last_file_name = self.get_last_file_name()
+        if last_file_name is None:
+            return None
+        file_reader = FileReader(file_path=last_file_name)
+        last_transaction_id = None
+        while True:
+            event = file_reader.read_next_event()
+            if event is None:
+                break
+            last_transaction_id = event.transaction_id
+        file_reader.close()
+        return last_transaction_id
+
+    def get_last_file_name(self):
+        existing_file_nums = get_existing_file_nums(self.data_dir, self.db_name)
+        if existing_file_nums:
+            last_file_num = max(existing_file_nums)
+            file_name = f'{last_file_num}.bin'
+            file_name = os.path.join(self.data_dir, self.db_name, file_name)
+            return file_name
+        return None
+
+    def get_first_transaction_in_file(self, file_num):
+        file_name = get_file_name_by_num(self.data_dir, self.db_name, file_num)
+        file_reader = FileReader(file_name)
+        first_event = file_reader.read_next_event()
+        if first_event is None:
+            return None
+        return first_event.transaction_id
+
+    def get_file_with_transaction(self, existing_file_nums, transaction_id):
+        matching_file_num = None
+        prev_file_num = None
+        for file_num in existing_file_nums:
+            file_first_transaction = self.get_first_transaction_in_file(file_num)
+            if file_first_transaction > transaction_id:
+                matching_file_num = prev_file_num
+                break
+            prev_file_num = file_num
+        if matching_file_num is None:
+            matching_file_num = existing_file_nums[-1]
+        return matching_file_num
+
+    def set_position(self, transaction_id):
+        existing_file_nums = get_existing_file_nums(self.data_dir, self.db_name)
+
+        if transaction_id is None:
+            # todo: handle empty files case
+            if not existing_file_nums:
+                self.current_file_reader = None
+                logger.info(f'set position - no files found')
+                return
+
+            matching_file_num = existing_file_nums[0]
+            file_name = get_file_name_by_num(self.data_dir, self.db_name, matching_file_num)
+            self.current_file_reader = FileReader(file_name)
+            logger.info(f'set position to the first file {file_name}')
+            return
+
+        matching_file_num = self.get_file_with_transaction(existing_file_nums, transaction_id)
+
+        file_name = get_file_name_by_num(self.data_dir, self.db_name, matching_file_num)
+        logger.info(f'set position to {file_name}')
+
+        self.current_file_reader = FileReader(file_name)
+        while True:
+            event = self.current_file_reader.read_next_event()
+            if event is None:
+                break
+            if event.transaction_id == transaction_id:
+                logger.info(f'found transaction {transaction_id} inside {file_name}')
+                return
+            if event.transaction_id > transaction_id:
+                break
+        raise Exception(f'transaction {transaction_id} not found in {file_name}')
+
+    def read_next_event(self) -> LogEvent | None:
+        if self.current_file_reader is None:
+            # no file reader - try to read from the beginning
+            existing_file_nums = get_existing_file_nums(self.data_dir, self.db_name)
+            if not existing_file_nums:
+                return None
+            file_num = existing_file_nums[0]
+            file_name = get_file_name_by_num(self.data_dir, self.db_name, file_num)
+            self.current_file_reader = FileReader(file_name)
+            return self.read_next_event()
+
+        result = self.current_file_reader.read_next_event()
+
+        if result is None:
+            # no result in current file - check if new file available
+            next_file_num = self.current_file_reader.file_num + 1
+            next_file_path = get_file_name_by_num(self.data_dir, self.db_name, next_file_num)
+            if not os.path.exists(next_file_path):
+                return None
+            logger.debug(f'switching to next file {next_file_path}')
+            self.current_file_reader = FileReader(next_file_path)
+            return self.read_next_event()
+
+        return result
+
+
+class DataWriter:
+    def __init__(self, replicator_settings: BinlogReplicatorSettings):
+        self.data_dir = replicator_settings.data_dir
+        if not os.path.exists(self.data_dir):
+            os.mkdir(self.data_dir)
+        self.records_per_file = replicator_settings.records_per_file
+        self.db_file_writers: dict[str, FileWriter] = {}  # db_name => FileWriter
+
+    def store_event(self, log_event: LogEvent):
+        logger.debug(f'store event {log_event.transaction_id}')
+        file_writer = self.get_or_create_file_writer(log_event.db_name)
+        file_writer.write_event(log_event)
+
+    def get_or_create_file_writer(self, db_name: str) -> FileWriter:
+        file_writer = self.db_file_writers.get(db_name)
+        if file_writer is not None:
+            if file_writer.num_records >= self.records_per_file:
+                file_writer.close()
+                del self.db_file_writers[db_name]
+                file_writer = None
+        if file_writer is None:
+            file_writer = self.create_file_writer(db_name)
+            self.db_file_writers[db_name] = file_writer
+        return file_writer
+
+    def create_file_writer(self, db_name: str) -> FileWriter:
+        next_free_file = self.get_next_file_name(db_name)
+        return FileWriter(next_free_file)
+
+    def get_next_file_name(self, db_name: str):
+        existing_file_nums = get_existing_file_nums(self.data_dir, db_name)
+
+        last_file_num = 0
+        if existing_file_nums:
+            last_file_num = max(existing_file_nums)
+
+        new_file_num = last_file_num + 1
+        new_file_name = f'{new_file_num}.bin'
+        new_file_name = os.path.join(self.data_dir, db_name, new_file_name)
+        return new_file_name
+
+
+class State:
+
+    def __init__(self, file_name):
+        self.file_name = file_name
+        self.last_seen_transaction = None
+        self.prev_last_seen_transaction = None
+        self.load()
+
+    def load(self):
+        file_name = self.file_name
+        if not os.path.exists(file_name):
+            return
+        data = open(file_name, 'rt').read()
+        data = json.loads(data)
+        self.last_seen_transaction = data['last_seen_transaction']
+        self.prev_last_seen_transaction = data['prev_last_seen_transaction']
+        if self.last_seen_transaction is not None:
+            self.last_seen_transaction = tuple(self.last_seen_transaction)
+        if self.prev_last_seen_transaction is not None:
+            self.prev_last_seen_transaction = tuple(self.prev_last_seen_transaction)
+
+    def save(self):
+        file_name = self.file_name
+        data = json.dumps({
+            'last_seen_transaction': self.last_seen_transaction,
+            'prev_last_seen_transaction': self.prev_last_seen_transaction,
+        })
+        with open(file_name + '.tmp', 'wt') as f:
+            f.write(data)
+        os.rename(file_name + '.tmp', file_name)
+
+
+class BinlogReplicator:
+    SAVE_UPDATE_INTERVAL = 60
+
+    def __init__(self, mysql_settings: MysqlSettings, replicator_settings: BinlogReplicatorSettings):
+        self.mysql_settings = mysql_settings
+        self.replicator_settings = replicator_settings
+        mysql_settings = {
+            'host': mysql_settings.host,
+            'port': mysql_settings.port,
+            'user': mysql_settings.user,
+            'passwd': mysql_settings.password,
+        }
+        self.data_writer = DataWriter(self.replicator_settings)
+        self.state = State(os.path.join(replicator_settings.data_dir, 'state.json'))
+        print(" === start pos", self.state.prev_last_seen_transaction)
+
+        log_file, log_pos = None, None
+        if self.state.prev_last_seen_transaction:
+            log_file, log_pos = self.state.prev_last_seen_transaction
+
+        self.stream = BinLogStreamReader(
+            connection_settings=mysql_settings,
+            server_id=842,
+            blocking=False,
+            resume_stream=True,
+            log_pos=log_pos,
+            log_file=log_file,
+        )
+        self.last_state_update = 0
+
+    def run(self):
+        last_transaction_id = None
+        while True:
+            try:
+                last_read_count = 0
+                for event in self.stream:
+                    last_read_count += 1
+                    transaction_id = (self.stream.log_file, self.stream.log_pos)
+                    last_transaction_id = transaction_id
+
+                    self.update_state_if_required(transaction_id)
+
+                    if type(event) not in (DeleteRowsEvent, UpdateRowsEvent, WriteRowsEvent):
+                        continue
+
+                    assert event.packet.log_pos == self.stream.log_pos
+
+                    log_event = LogEvent()
+                    log_event.table_name = event.table
+                    log_event.db_name = event.schema
+                    log_event.transaction_id = transaction_id
+                    log_event.is_removal = isinstance(event, DeleteRowsEvent)
+                    log_event.records = []
+
+                    for row in event.rows:
+                        if isinstance(event, DeleteRowsEvent):
+                            vals = row["values"]
+                            vals = list(vals.values())
+                            log_event.records.append(vals)
+
+                        elif isinstance(event, UpdateRowsEvent):
+                            vals = row["after_values"]
+                            vals = list(vals.values())
+                            log_event.records.append(vals)
+
+                        elif isinstance(event, WriteRowsEvent):
+                            vals = row["values"]
+                            vals = list(vals.values())
+                            log_event.records.append(vals)
+
+                    self.data_writer.store_event(log_event)
+
+                self.update_state_if_required(last_transaction_id)
+                print("last read count", last_read_count)
+                if last_read_count < 50:
+                    time.sleep(10)
+
+            except OperationalError as e:
+                print('=== operational error', e)
+                time.sleep(15)
+
+    def update_state_if_required(self, transaction_id):
+        curr_time = time.time()
+        if curr_time - self.last_state_update < BinlogReplicator.SAVE_UPDATE_INTERVAL:
+            return
+        if not os.path.exists(self.replicator_settings.data_dir):
+            os.mkdir(self.replicator_settings.data_dir)
+        self.state.prev_last_seen_transaction = self.state.last_seen_transaction
+        self.state.last_seen_transaction = transaction_id
+        self.state.save()
+        self.last_state_update = curr_time
+        print('saved state', transaction_id, self.state.prev_last_seen_transaction)
