@@ -2,6 +2,7 @@ import pickle
 import struct
 import time
 import os
+import os.path
 import json
 
 from logging import getLogger
@@ -249,6 +250,18 @@ class DataWriter:
         new_file_name = os.path.join(self.data_dir, db_name, new_file_name)
         return new_file_name
 
+    def remove_old_files(self, ts_from):
+        subdirs = [f.path for f in os.scandir(self.data_dir) if f.is_dir()]
+        for db_name in subdirs:
+            print('check for old files', db_name)
+            existing_file_nums = get_existing_file_nums(self.data_dir, db_name)[:-1]
+            for file_num in existing_file_nums:
+                file_path = os.path.join(self.data_dir, db_name, f'{file_num}.bin')
+                modify_time = os.path.getmtime(file_path)
+                if modify_time <= ts_from:
+                    print('removing', db_name, file_num, file_path)
+                    os.remove(file_path)
+
 
 class State:
 
@@ -284,6 +297,8 @@ class State:
 
 class BinlogReplicator:
     SAVE_UPDATE_INTERVAL = 60
+    BINLOG_CLEAN_INTERVAL = 5 * 60
+    BINLOG_RETENTION_PERIOD = 12 * 60 * 60
 
     def __init__(self, mysql_settings: MysqlSettings, replicator_settings: BinlogReplicatorSettings):
         self.mysql_settings = mysql_settings
@@ -311,6 +326,16 @@ class BinlogReplicator:
             log_file=log_file,
         )
         self.last_state_update = 0
+        self.last_binlog_clear_time = 0
+
+    def clear_old_binlog_if_required(self):
+        curr_time = time.time()
+        if curr_time - self.last_binlog_clear_time < BinlogReplicator.BINLOG_CLEAN_INTERVAL:
+            return
+
+        self.last_binlog_clear_time = curr_time
+        self.data_writer.remove_old_files(curr_time - BinlogReplicator.BINLOG_RETENTION_PERIOD)
+
 
     def run(self):
         last_transaction_id = None
@@ -355,6 +380,7 @@ class BinlogReplicator:
                     self.data_writer.store_event(log_event)
 
                 self.update_state_if_required(last_transaction_id)
+                self.clear_old_binlog_if_required()
                 print("last read count", last_read_count)
                 if last_read_count < 50:
                     time.sleep(10)
