@@ -208,6 +208,8 @@ class DbReplicator:
             self.save_state_if_required()
 
     def run_realtime_replication(self):
+        self.mysql_api.close()
+        self.mysql_api = None
         logger.info(f'running realtime replication from the position: {self.state.last_processed_transaction}')
         self.state.status = Status.RUNNING_REALTIME_REPLICATION
         self.state.save()

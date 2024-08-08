@@ -1,3 +1,4 @@
+import time
 import mysql.connector
 from pyparsing import Word, alphas, alphanums
 
@@ -6,32 +7,49 @@ from table_structure import TableStructure, TableField
 
 
 class MySQLApi:
+    RECONNECT_INTERVAL = 3 * 60
+
     def __init__(self, database: str | None, mysql_settings: MysqlSettings):
         self.database = database
         self.mysql_settings = mysql_settings
+        self.last_connect_time = 0
+        self.reconnect_if_required()
+
+    def close(self):
+        self.db.close()
+
+    def reconnect_if_required(self):
+        curr_time = time.time()
+        if curr_time - self.last_connect_time < MySQLApi.RECONNECT_INTERVAL:
+            return
+        print('(re)connecting to mysql')
         self.db = mysql.connector.connect(
-            host=mysql_settings.host,
-            port=mysql_settings.port,
-            user=mysql_settings.user,
-            passwd=mysql_settings.password,
+            host=self.mysql_settings.host,
+            port=self.mysql_settings.port,
+            user=self.mysql_settings.user,
+            passwd=self.mysql_settings.password,
         )
         self.cursor = self.db.cursor()
-        if database is not None:
-            self.cursor.execute(f'USE {database}')
+        if self.database is not None:
+            self.cursor.execute(f'USE {self.database}')
+        self.last_connect_time = curr_time
 
     def get_tables(self):
+        self.reconnect_if_required()
         self.cursor.execute('SHOW TABLES')
         res = self.cursor.fetchall()
         tables = [x[0] for x in res]
         return tables
 
     def get_binlog_files(self):
+        self.reconnect_if_required()
         self.cursor.execute('SHOW BINARY LOGS')
         res = self.cursor.fetchall()
         tables = [x[0] for x in res]
         return tables
 
     def get_table_structure(self, table_name) -> TableStructure:
+        self.reconnect_if_required()
         self.cursor.execute(f'SHOW CREATE TABLE {table_name}')
         res = self.cursor.fetchall()
         create_statement = res[0][1].strip()
@@ -82,7 +100,8 @@ class MySQLApi:
         structure.preprocess()
         return structure
 
-    def get_records(self, table_name, order_by, limit, start_value = None):
+    def get_records(self, table_name, order_by, limit, start_value=None):
+        self.reconnect_if_required()
         where = ''
         if start_value is not None:
             where = f'WHERE {order_by} > {start_value} '
