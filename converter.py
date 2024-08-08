@@ -31,6 +31,8 @@ class MysqlToClickhouseConverter:
     def convert_type(self, mysql_type):
         if mysql_type == 'int':
             return 'Int32'
+        if mysql_type == 'bigint':
+            return 'Int64'
         if mysql_type == 'double':
             return 'Float64'
         if mysql_type == 'real':
