@@ -40,7 +40,7 @@ class LogEvent:
 
 
 class FileWriter:
-    FLUSH_INTERVAL = 10
+    FLUSH_INTERVAL = 1
 
     def __init__(self, file_path):
         self.num_records = 0
@@ -308,6 +308,7 @@ class BinlogReplicator:
     SAVE_UPDATE_INTERVAL = 60
     BINLOG_CLEAN_INTERVAL = 5 * 60
     BINLOG_RETENTION_PERIOD = 12 * 60 * 60
+    READ_LOG_INTERVAL = 1
 
     def __init__(self, mysql_settings: MysqlSettings, replicator_settings: BinlogReplicatorSettings):
         self.mysql_settings = mysql_settings
@@ -364,8 +365,12 @@ class BinlogReplicator:
                     assert event.packet.log_pos == self.stream.log_pos
 
                     log_event = LogEvent()
-                    log_event.table_name = event.table
+                    if hasattr(event, 'table'):
+                        log_event.table_name = event.table
                     log_event.db_name = event.schema
+                    if isinstance(log_event.db_name, bytes):
+                        log_event.db_name = log_event.db_name.decode('utf-8')
+
                     log_event.transaction_id = transaction_id
                     if isinstance(event, UpdateRowsEvent) or isinstance(event, WriteRowsEvent):
                         log_event.event_type = EventType.ADD_EVENT.value
@@ -403,7 +408,7 @@ class BinlogReplicator:
                 self.clear_old_binlog_if_required()
                 print("last read count", last_read_count)
                 if last_read_count < 50:
-                    time.sleep(10)
+                    time.sleep(BinlogReplicator.READ_LOG_INTERVAL)
 
             except OperationalError as e:
                 print('=== operational error', e)

@@ -86,8 +86,10 @@ class DbReplicator:
     SAVE_STATE_INTERVAL = 10
     STATS_DUMP_INTERVAL = 60
 
-    DATA_DUMP_INTERVAL = 10
+    DATA_DUMP_INTERVAL = 1
     DATA_DUMP_BATCH_SIZE = 10000
+
+    READ_LOG_INTERVAL = 1
 
     def __init__(self, config: Settings, database: str):
         self.config = config
@@ -100,7 +102,7 @@ class DbReplicator:
             database=database,
             clickhouse_settings=config.clickhouse,
         )
-        self.converter = MysqlToClickhouseConverter()
+        self.converter = MysqlToClickhouseConverter(self)
         self.data_reader = DataReader(config.binlog_replicator, database)
         self.state = State(os.path.join(config.binlog_replicator.data_dir, database, 'state.pckl'))
         self.clickhouse_api.tables_last_record_version = self.state.tables_last_record_version
@@ -217,7 +219,7 @@ class DbReplicator:
         while True:
             event = self.data_reader.read_next_event()
             if event is None:
-                time.sleep(10)
+                time.sleep(DbReplicator.READ_LOG_INTERVAL)
                 self.upload_records_if_required(table_name=None)
                 continue
             self.handle_event(event)
@@ -292,6 +294,25 @@ class DbReplicator:
             current_table_records_to_insert.pop(record_id, None)
 
     def handle_query_event(self, event: LogEvent):
+        query = event.records.strip()
+        print(" === handle_query_event", query)
+        if query.lower().startswith('alter'):
+            self.handle_alter_query(query, event.db_name)
+        if query.lower().startswith('create table'):
+            self.handle_create_table_query(query, event.db_name)
+        if query.lower().startswith('drop table'):
+            self.handle_drop_table_query(query, event.db_name)
+
+
+    def handle_alter_query(self, query, db_name):
+        self.upload_records()
+        ch_alter_query = self.converter.convert_alter_query(query, db_name)
+        self.clickhouse_api.execute_command(ch_alter_query)
+
+    def handle_create_table_query(self, query):
+        pass
+
+    def handle_drop_table_query(self, query):
         pass
 
     def log_stats_if_required(self):
@@ -317,7 +338,10 @@ class DbReplicator:
         if not need_dump:
             return
 
-        self.last_records_upload_time = curr_time
+        self.upload_records()
+
+    def upload_records(self):
+        self.last_records_upload_time = time.time()
 
         for table_name, id_to_records in self.records_to_insert.items():
             records = id_to_records.values()

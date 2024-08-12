@@ -25,8 +25,8 @@ def convert_bytes(obj):
 
 
 class MysqlToClickhouseConverter:
-    def __init__(self):
-        pass
+    def __init__(self, db_replicator: 'DbReplicator' = None):
+        self.db_replicator = db_replicator
 
     def convert_type(self, mysql_type):
         if mysql_type == 'int':
@@ -103,3 +103,61 @@ class MysqlToClickhouseConverter:
                     clickhouse_field_value = json.dumps(convert_bytes(clickhouse_field_value))
             clickhouse_record.append(clickhouse_field_value)
         return tuple(clickhouse_record)
+
+    def __basic_validate_query(self, mysql_query):
+        mysql_query = mysql_query.strip()
+        if mysql_query.endswith(';'):
+            mysql_query = mysql_query[:-1]
+        if mysql_query.find(';') != -1:
+            raise Exception('multi-query statement not supported')
+        return mysql_query
+
+    def convert_alter_query(self, mysql_query, db_name):
+        mysql_query = self.__basic_validate_query(mysql_query)
+
+        tokens = mysql_query.split()
+        if tokens[0].lower() != 'alter':
+            raise Exception('wrong query')
+
+        if tokens[1].lower() != 'table':
+            raise Exception('wrong query')
+
+        table_name = tokens[2]
+        op_name = tokens[3].lower()
+        if op_name == 'add':
+            return self.__convert_alter_table_add_column(db_name, table_name, tokens[4:])
+
+        raise Exception('not implement')
+
+    def __convert_alter_table_add_column(self, db_name, table_name, tokens):
+        if len(tokens) != 2:
+            raise Exception('wrong tokens count', tokens)
+
+        column_name = tokens[0]
+        column_type_mysql = tokens[1]
+        column_type_ch = self.convert_type(column_type_mysql)
+        column_after = None
+
+        # update table structure
+        if self.db_replicator:
+            table_structure = self.db_replicator.state.tables_structure[table_name]
+            mysql_table_structure: TableStructure = table_structure[0]
+            ch_table_structure: TableStructure = table_structure[1]
+
+            if column_after is None:
+                column_after = mysql_table_structure.fields[-1].name
+
+            mysql_table_structure.fields.append(TableField(name=column_name, field_type=column_type_mysql))
+            ch_table_structure.fields.append(TableField(name=column_name, field_type=column_type_ch))
+
+        query = f'ALTER TABLE {db_name}.{table_name} ADD COLUMN {column_name} {column_type_ch}'
+        if column_after is not None:
+            query += f' AFTER {column_after}'
+
+        return query
+
+    def convert_create_table_query(self, mysql_query):
+        raise Exception('not implement')
+
+    def convert_drop_table_query(self, mysql_query):
+        raise Exception('not implement')
