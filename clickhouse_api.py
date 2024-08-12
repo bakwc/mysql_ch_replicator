@@ -63,16 +63,16 @@ class ClickhouseApi:
     def set_last_used_version(self, table_name, last_used_version):
         self.tables_last_record_version[table_name] = last_used_version
 
-    def create_table(self, table_name, structure: TableStructure):
+    def create_table(self, structure: TableStructure):
         if not structure.primary_key:
-            raise Exception(f'missing primary key for {table_name}')
+            raise Exception(f'missing primary key for {structure.table_name}')
 
         primary_key_type = ''
         for field in structure.fields:
             if field.name == structure.primary_key:
                 primary_key_type = field.field_type
         if not primary_key_type:
-            raise Exception(f'failed to get type of primary key {table_name} {structure.primary_key}')
+            raise Exception(f'failed to get type of primary key {structure.table_name} {structure.primary_key}')
 
         fields = [
             f'    `{field.name}` {field.field_type}' for field in structure.fields
@@ -85,7 +85,7 @@ class ClickhouseApi:
 
         query = CREATE_TABLE_QUERY.format(**{
             'db_name': self.database,
-            'table_name': table_name,
+            'table_name': structure.table_name,
             'fields': fields,
             'primary_key': structure.primary_key,
             'partition_by': partition_by,

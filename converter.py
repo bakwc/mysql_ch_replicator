@@ -1,4 +1,5 @@
 import json
+from pyparsing import Word, alphas, alphanums
 
 from table_structure import TableStructure, TableField
 
@@ -25,6 +26,7 @@ def convert_bytes(obj):
 
 
 def strip_sql_name(name):
+    name = name.strip()
     if name.startswith('`'):
         name = name[1:]
     if name.endswith('`'):
@@ -78,6 +80,7 @@ class MysqlToClickhouseConverter:
 
     def convert_table_structure(self, mysql_structure: TableStructure) -> TableStructure:
         clickhouse_structure = TableStructure()
+        clickhouse_structure.table_name = mysql_structure.table_name
         for field in mysql_structure.fields:
             clickhouse_field_type = self.convert_field_type(field.field_type, field.parameters)
             clickhouse_structure.fields.append(TableField(
@@ -257,8 +260,59 @@ class MysqlToClickhouseConverter:
         query = f'ALTER TABLE {db_name}.{table_name} MODIFY COLUMN {column_name} {column_type_ch}'
         return query
 
-    def convert_create_table_query(self, mysql_query):
-        raise Exception('not implement')
+    def parse_create_table_query(self, mysql_query) -> tuple[TableStructure, TableStructure]:
+        mysql_table_structure = self.parse_mysql_table_structure(mysql_query)
+        ch_table_structure = self.convert_table_structure(mysql_table_structure)
+        return mysql_table_structure, ch_table_structure
 
     def convert_drop_table_query(self, mysql_query):
         raise Exception('not implement')
+
+    def parse_mysql_table_structure(self, create_statement, required_table_name=None):
+        lines = create_statement.split('\n')
+        inside_create = False
+
+        structure = TableStructure()
+
+        for line in lines:
+            line = line.strip()
+            if line.startswith('--'):
+                continue
+            if not inside_create:
+                # CREATE TABLE `auth_group` (
+                pattern = 'CREATE TABLE ' + Word(alphanums + '_` ') + '('
+                result = pattern.parseString(line)
+                structure.table_name = strip_sql_name(result[1])
+                if required_table_name is not None:
+                    if structure.table_name != required_table_name:
+                        raise Exception('failed to parse ' + required_table_name)
+                inside_create = True
+                continue
+            if line.lower().startswith('primary key'):
+                # PRIMARY KEY (`policyaction_ptr_id`),
+                pattern = 'PRIMARY KEY (' + Word(alphanums + '_`') + ')'
+                result = pattern.parseString(line)
+                structure.primary_key = strip_sql_name(result[1])
+                continue
+            if line.startswith(')'):
+                inside_create = False
+                continue
+
+            if line.endswith(','):
+                line = line[:-1]
+
+            definition = line.split(' ')
+            field_name = definition[0]
+            field_name = strip_sql_name(field_name)
+            field_type = definition[1]
+            field_parameters = ''
+            if len(definition) > 2:
+                field_parameters = ' '.join(definition[2:])
+
+            structure.fields.append(TableField(
+                name=field_name,
+                field_type=field_type,
+                parameters=field_parameters,
+            ))
+        structure.preprocess()
+        return structure

@@ -11,6 +11,8 @@ import clickhouse_api
 CONFIG_FILE = 'config.yaml'
 TEST_DB_NAME = 'replication_test_db'
 TEST_TABLE_NAME = 'test_table'
+TEST_TABLE_NAME_2 = 'test_table_2'
+TEST_TABLE_NAME_3 = 'test_table_3'
 
 
 def assert_wait(condition, max_wait_time=15.0, retry_interval=0.05):
@@ -139,3 +141,33 @@ CREATE TABLE {TEST_TABLE_NAME} (
     mysql.execute(f"ALTER TABLE `{TEST_TABLE_NAME}` MODIFY `last_name` varchar(1024) NOT NULL")
 
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Filipp'")[0].get('last_name') == '')
+
+
+    mysql.execute(f'''
+    CREATE TABLE {TEST_TABLE_NAME_2} (
+        id int NOT NULL AUTO_INCREMENT,
+        name varchar(255),
+        age int,
+        PRIMARY KEY (id)
+    ); 
+        ''')
+
+    assert_wait(lambda: TEST_TABLE_NAME_2 in ch.get_tables())
+
+    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME_2} (name, age) VALUES ('Ivan', 42);", commit=True)
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME_2)) == 1)
+
+
+    mysql.execute(f'''
+    CREATE TABLE `{TEST_TABLE_NAME_3}` (
+        id int NOT NULL AUTO_INCREMENT,
+        `name` varchar(255),
+        age int,
+        PRIMARY KEY (`id`)
+    ); 
+        ''')
+
+    assert_wait(lambda: TEST_TABLE_NAME_3 in ch.get_tables())
+
+    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME_3} (name, `age`) VALUES ('Ivan', 42);", commit=True)
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME_3)) == 1)

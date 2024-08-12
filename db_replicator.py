@@ -139,10 +139,13 @@ class DbReplicator:
         self.state.save()
 
     def create_initial_structure_table(self, table_name):
-        mysql_structure = self.mysql_api.get_table_structure(table_name)
+        mysql_create_statement = self.mysql_api.get_table_create_statement(table_name)
+        mysql_structure = self.converter.parse_mysql_table_structure(
+            mysql_create_statement, required_table_name=table_name,
+        )
         clickhouse_structure = self.converter.convert_table_structure(mysql_structure)
         self.state.tables_structure[table_name] = (mysql_structure, clickhouse_structure)
-        self.clickhouse_api.create_table(table_name, clickhouse_structure)
+        self.clickhouse_api.create_table(clickhouse_structure)
 
     def perform_initial_replication(self):
         logger.info('running initial replication')
@@ -312,8 +315,10 @@ class DbReplicator:
             return
         self.clickhouse_api.execute_command(ch_alter_query)
 
-    def handle_create_table_query(self, query):
-        pass
+    def handle_create_table_query(self, query, db_name):
+        mysql_structure, ch_structure = self.converter.parse_create_table_query(query)
+        self.state.tables_structure[mysql_structure.table_name] = (mysql_structure, ch_structure)
+        self.clickhouse_api.create_table(ch_structure)
 
     def handle_drop_table_query(self, query):
         pass
