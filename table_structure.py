@@ -34,3 +34,10 @@ class TableStructure:
                 del self.fields[idx]
                 return
         raise Exception(f'field {field_name} not found')
+
+    def update_field(self, new_field: TableField):
+        for idx, field in enumerate(self.fields):
+            if field.name == new_field.name:
+                self.fields[idx] = new_field
+                return
+        raise Exception(f'field {new_field.name} not found')

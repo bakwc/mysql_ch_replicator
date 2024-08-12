@@ -150,6 +150,12 @@ class MysqlToClickhouseConverter:
                 tokens = tokens[1:]
             return self.__convert_alter_table_drop_column(db_name, table_name, tokens)
 
+        if op_name == 'modify':
+            tokens = tokens[4:]
+            if tokens[0].lower() == 'modify':
+                tokens = tokens[1:]
+            return self.__convert_alter_table_modify_column(db_name, table_name, tokens)
+
         raise Exception('not implement')
 
     def __convert_alter_table_add_column(self, db_name, table_name, tokens):
@@ -216,6 +222,36 @@ class MysqlToClickhouseConverter:
             ch_table_structure.remove_field(field_name=column_name)
 
         query = f'ALTER TABLE {db_name}.{table_name} DROP COLUMN {column_name}'
+        return query
+
+    def __convert_alter_table_modify_column(self, db_name, table_name, tokens):
+        if len(tokens) < 2:
+            raise Exception('wrong tokens count', tokens)
+
+        if ',' in ' '.join(tokens):
+            raise Exception('add multiple columns not implemented', tokens)
+
+        column_name = tokens[0]
+        column_type_mysql = tokens[1]
+        column_type_mysql_parameters = ' '.join(tokens[2:])
+
+        column_type_ch = self.convert_field_type(column_type_mysql, column_type_mysql_parameters)
+
+        # update table structure
+        if self.db_replicator:
+            table_structure = self.db_replicator.state.tables_structure[table_name]
+            mysql_table_structure: TableStructure = table_structure[0]
+            ch_table_structure: TableStructure = table_structure[1]
+
+            mysql_table_structure.update_field(
+                TableField(name=column_name, field_type=column_type_mysql),
+            )
+
+            ch_table_structure.update_field(
+                TableField(name=column_name, field_type=column_type_ch),
+            )
+
+        query = f'ALTER TABLE {db_name}.{table_name} MODIFY COLUMN {column_name} {column_type_ch}'
         return query
 
     def convert_create_table_query(self, mysql_query):
