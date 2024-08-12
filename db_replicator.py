@@ -12,7 +12,7 @@ from mysql_api import MySQLApi
 from clickhouse_api import ClickhouseApi
 from converter import MysqlToClickhouseConverter
 from table_structure import TableStructure
-from binlog_replicator import DataReader, LogEvent
+from binlog_replicator import DataReader, LogEvent, EventType
 
 
 logger = getLogger(__name__)
@@ -232,10 +232,13 @@ class DbReplicator:
         self.stats.last_transaction = event.transaction_id
         self.state.last_processed_transaction_non_uploaded = event.transaction_id
 
-        if not event.is_removal:
-            self.handle_insert_event(event)
-        else:
-            self.handle_erase_event(event)
+        event_handlers = {
+            EventType.ADD_EVENT.value: self.handle_insert_event,
+            EventType.REMOVE_EVENT.value: self.handle_erase_event,
+            EventType.QUERY.value: self.handle_query_event,
+        }
+
+        event_handlers[event.event_type](event)
 
         self.upload_records_if_required(table_name=event.table_name)
 
@@ -287,6 +290,9 @@ class DbReplicator:
         for record_id in keys_to_remove:
             current_table_records_to_delete.add(record_id)
             current_table_records_to_insert.pop(record_id, None)
+
+    def handle_query_event(self, event: LogEvent):
+        pass
 
     def log_stats_if_required(self):
         curr_time = time.time()

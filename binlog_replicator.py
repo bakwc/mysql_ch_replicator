@@ -5,6 +5,7 @@ import os
 import os.path
 import json
 
+from enum import Enum
 from logging import getLogger
 from dataclasses import dataclass
 from pymysqlreplication import BinLogStreamReader
@@ -13,6 +14,7 @@ from pymysqlreplication.row_event import (
     UpdateRowsEvent,
     WriteRowsEvent,
 )
+from pymysqlreplication.event import QueryEvent
 from pymysql.err import OperationalError
 
 from config import MysqlSettings, BinlogReplicatorSettings
@@ -21,13 +23,20 @@ from config import MysqlSettings, BinlogReplicatorSettings
 logger = getLogger(__name__)
 
 
+class EventType(Enum):
+    UNKNOWN = 0
+    ADD_EVENT = 1
+    REMOVE_EVENT = 2
+    QUERY = 3
+
+
 @dataclass
 class LogEvent:
     transaction_id: tuple[str, int] = 0  # (file_name, log_pos)
     db_name: str = ''
     table_name: str = ''
-    records: list | None = None
-    is_removal: bool = False
+    records: list | str | None = None
+    event_type: int = EventType.UNKNOWN.value
 
 
 class FileWriter:
@@ -349,7 +358,7 @@ class BinlogReplicator:
 
                     self.update_state_if_required(transaction_id)
 
-                    if type(event) not in (DeleteRowsEvent, UpdateRowsEvent, WriteRowsEvent):
+                    if type(event) not in (DeleteRowsEvent, UpdateRowsEvent, WriteRowsEvent, QueryEvent):
                         continue
 
                     assert event.packet.log_pos == self.stream.log_pos
@@ -358,24 +367,35 @@ class BinlogReplicator:
                     log_event.table_name = event.table
                     log_event.db_name = event.schema
                     log_event.transaction_id = transaction_id
-                    log_event.is_removal = isinstance(event, DeleteRowsEvent)
-                    log_event.records = []
+                    if isinstance(event, UpdateRowsEvent) or isinstance(event, WriteRowsEvent):
+                        log_event.event_type = EventType.ADD_EVENT.value
 
-                    for row in event.rows:
-                        if isinstance(event, DeleteRowsEvent):
-                            vals = row["values"]
-                            vals = list(vals.values())
-                            log_event.records.append(vals)
+                    if isinstance(event, DeleteRowsEvent):
+                        log_event.event_type = EventType.REMOVE_EVENT.value
 
-                        elif isinstance(event, UpdateRowsEvent):
-                            vals = row["after_values"]
-                            vals = list(vals.values())
-                            log_event.records.append(vals)
+                    if isinstance(event, QueryEvent):
+                        log_event.event_type = EventType.QUERY.value
 
-                        elif isinstance(event, WriteRowsEvent):
-                            vals = row["values"]
-                            vals = list(vals.values())
-                            log_event.records.append(vals)
+                    if isinstance(event, QueryEvent):
+                        log_event.records = event.query
+                    else:
+                        log_event.records = []
+
+                        for row in event.rows:
+                            if isinstance(event, DeleteRowsEvent):
+                                vals = row["values"]
+                                vals = list(vals.values())
+                                log_event.records.append(vals)
+
+                            elif isinstance(event, UpdateRowsEvent):
+                                vals = row["after_values"]
+                                vals = list(vals.values())
+                                log_event.records.append(vals)
+
+                            elif isinstance(event, WriteRowsEvent):
+                                vals = row["values"]
+                                vals = list(vals.values())
+                                log_event.records.append(vals)
 
                     self.data_writer.store_event(log_event)
 

@@ -35,10 +35,19 @@ class ClickhouseApi:
         self.tables_last_record_version = {}  # table_name => last used row version
 
     def get_tables(self):
-        return []
+        result = self.client.query('SHOW TABLES')
+        tables = result.result_rows
+        table_list = [row[0] for row in tables]
+        return table_list
 
     def get_table_structure(self, table_name):
         return {}
+
+    def get_databases(self):
+        result = self.client.query('SHOW DATABASES')
+        databases = result.result_rows
+        database_list = [row[0] for row in databases]
+        return database_list
 
     def execute_command(self, query):
         self.client.command(query)
@@ -107,3 +116,9 @@ class ClickhouseApi:
             'field_values': field_values,
         })
         self.execute_command(query)
+
+    def drop_database(self, db_name):
+        self.execute_command(f'DROP DATABASE IF EXISTS {db_name}')
+
+    def create_database(self, db_name):
+        self.cursor.execute(f'CREATE DATABASE {db_name}')

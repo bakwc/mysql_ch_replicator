@@ -34,6 +34,18 @@ class MySQLApi:
             self.cursor.execute(f'USE {self.database}')
         self.last_connect_time = curr_time
 
+    def drop_database(self, db_name):
+        self.cursor.execute(f'DROP DATABASE IF EXISTS {db_name}')
+
+    def create_database(self, db_name):
+        self.cursor.execute(f'CREATE DATABASE {db_name}')
+
+    def execute(self, command, commit=False):
+        print(f'Executing: <{command}>')
+        self.cursor.execute(command)
+        if commit:
+            self.db.commit()
+
     def get_tables(self):
         self.reconnect_if_required()
         self.cursor.execute('SHOW TABLES')
