@@ -27,3 +27,10 @@ class TableStructure:
             raise Exception('field after not found', after)
 
         self.fields.insert(idx_to_insert, new_field)
+
+    def remove_field(self, field_name):
+        for idx, field in enumerate(self.fields):
+            if field.name == field_name:
+                del self.fields[idx]
+                return
+        raise Exception(f'field {field_name} not found')

@@ -133,6 +133,12 @@ class MysqlToClickhouseConverter:
                 tokens = tokens[1:]
             return self.__convert_alter_table_add_column(db_name, table_name, tokens)
 
+        if op_name == 'drop':
+            tokens = tokens[4:]
+            if tokens[0].lower() == 'column':
+                tokens = tokens[1:]
+            return self.__convert_alter_table_drop_column(db_name, table_name, tokens)
+
         raise Exception('not implement')
 
     def __convert_alter_table_add_column(self, db_name, table_name, tokens):
@@ -178,6 +184,27 @@ class MysqlToClickhouseConverter:
         if column_after is not None:
             query += f' AFTER {column_after}'
 
+        return query
+
+    def __convert_alter_table_drop_column(self, db_name, table_name, tokens):
+        if ',' in ' '.join(tokens):
+            raise Exception('add multiple columns not implemented', tokens)
+
+        if len(tokens) != 1:
+            raise Exception('wrong tokens count', tokens)
+
+        column_name = tokens[0]
+
+        # update table structure
+        if self.db_replicator:
+            table_structure = self.db_replicator.state.tables_structure[table_name]
+            mysql_table_structure: TableStructure = table_structure[0]
+            ch_table_structure: TableStructure = table_structure[1]
+
+            mysql_table_structure.remove_field(field_name=column_name)
+            ch_table_structure.remove_field(field_name=column_name)
+
+        query = f'ALTER TABLE {db_name}.{table_name} DROP COLUMN {column_name}'
         return query
 
     def convert_create_table_query(self, mysql_query):

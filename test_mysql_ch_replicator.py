@@ -103,22 +103,17 @@ CREATE TABLE {TEST_TABLE_NAME} (
     ch.execute_command(f'USE {TEST_DB_NAME}')
 
     assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
-
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 2)
 
     mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES ('Filipp', 50);", commit=True)
-
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
-
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Filipp'")[0]['age'] == 50)
 
 
     mysql.execute(f"ALTER TABLE {TEST_TABLE_NAME} ADD last_name varchar(255); ")
-
     mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age, last_name) VALUES ('Mary', 24, 'Smith');", commit=True)
 
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 4)
-
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Mary'")[0]['last_name'] == 'Smith')
 
 
@@ -133,4 +128,7 @@ CREATE TABLE {TEST_TABLE_NAME} (
     )
 
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 5)
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='John'")[0].get('country') == 'USA')
 
+    mysql.execute(f"ALTER TABLE {TEST_DB_NAME}.{TEST_TABLE_NAME} DROP COLUMN country")
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='John'")[0].get('country') is None)
