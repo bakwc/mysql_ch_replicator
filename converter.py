@@ -24,6 +24,14 @@ def convert_bytes(obj):
         return obj
 
 
+def strip_sql_name(name):
+    if name.startswith('`'):
+        name = name[1:]
+    if name.endswith('`'):
+        name = name[:-1]
+    return name
+
+
 class MysqlToClickhouseConverter:
     def __init__(self, db_replicator: 'DbReplicator' = None):
         self.db_replicator = db_replicator
@@ -125,6 +133,9 @@ class MysqlToClickhouseConverter:
         table_name = tokens[2]
         if table_name.find('.') != -1:
             db_name, table_name = table_name.split('.')
+
+        db_name = strip_sql_name(db_name)
+        table_name = strip_sql_name(table_name)
 
         op_name = tokens[3].lower()
         if op_name == 'add':

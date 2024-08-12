@@ -110,7 +110,7 @@ CREATE TABLE {TEST_TABLE_NAME} (
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Filipp'")[0]['age'] == 50)
 
 
-    mysql.execute(f"ALTER TABLE {TEST_TABLE_NAME} ADD last_name varchar(255); ")
+    mysql.execute(f"ALTER TABLE `{TEST_TABLE_NAME}` ADD `last_name` varchar(255); ")
     mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age, last_name) VALUES ('Mary', 24, 'Smith');", commit=True)
 
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 4)
