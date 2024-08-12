@@ -123,20 +123,37 @@ class MysqlToClickhouseConverter:
             raise Exception('wrong query')
 
         table_name = tokens[2]
+        if table_name.find('.') != -1:
+            db_name, table_name = table_name.split('.')
+
         op_name = tokens[3].lower()
         if op_name == 'add':
-            return self.__convert_alter_table_add_column(db_name, table_name, tokens[4:])
+            tokens = tokens[4:]
+            if tokens[0].lower() == 'column':
+                tokens = tokens[1:]
+            return self.__convert_alter_table_add_column(db_name, table_name, tokens)
 
         raise Exception('not implement')
 
     def __convert_alter_table_add_column(self, db_name, table_name, tokens):
-        if len(tokens) != 2:
+        if len(tokens) < 2:
             raise Exception('wrong tokens count', tokens)
+
+        if ',' in ' '.join(tokens):
+            raise Exception('add multiple columns not implemented', tokens)
+
+        column_after = None
+        if tokens[-2].lower() == 'after':
+            column_after = tokens[-1]
+            tokens = tokens[:-2]
+            if len(tokens) < 2:
+                raise Exception('wrong tokens count', tokens)
 
         column_name = tokens[0]
         column_type_mysql = tokens[1]
-        column_type_ch = self.convert_type(column_type_mysql)
-        column_after = None
+        column_type_mysql_parameters = ' '.join(tokens[2:])
+
+        column_type_ch = self.convert_field_type(column_type_mysql, column_type_mysql_parameters)
 
         # update table structure
         if self.db_replicator:
@@ -147,8 +164,15 @@ class MysqlToClickhouseConverter:
             if column_after is None:
                 column_after = mysql_table_structure.fields[-1].name
 
-            mysql_table_structure.fields.append(TableField(name=column_name, field_type=column_type_mysql))
-            ch_table_structure.fields.append(TableField(name=column_name, field_type=column_type_ch))
+            mysql_table_structure.add_field_after(
+                TableField(name=column_name, field_type=column_type_mysql),
+                column_after,
+            )
+
+            ch_table_structure.add_field_after(
+                TableField(name=column_name, field_type=column_type_ch),
+                column_after,
+            )
 
         query = f'ALTER TABLE {db_name}.{table_name} ADD COLUMN {column_name} {column_type_ch}'
         if column_after is not None:

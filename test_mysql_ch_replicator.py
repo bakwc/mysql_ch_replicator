@@ -121,3 +121,16 @@ CREATE TABLE {TEST_TABLE_NAME} (
 
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Mary'")[0]['last_name'] == 'Smith')
 
+
+    mysql.execute(
+        f"ALTER TABLE {TEST_DB_NAME}.{TEST_TABLE_NAME} "
+        f"ADD COLUMN country VARCHAR(25) DEFAULT '' NOT NULL AFTER name;"
+    )
+
+    mysql.execute(
+        f"INSERT INTO {TEST_TABLE_NAME} (name, age, last_name, country) "
+        f"VALUES ('John', 12, 'Doe', 'USA');", commit=True,
+    )
+
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 5)
+

@@ -50,6 +50,7 @@ class ClickhouseApi:
         return database_list
 
     def execute_command(self, query):
+        #print(' === executing ch query', query)
         self.client.command(query)
 
     def recreate_database(self):
