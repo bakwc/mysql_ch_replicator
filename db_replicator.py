@@ -307,6 +307,9 @@ class DbReplicator:
     def handle_alter_query(self, query, db_name):
         self.upload_records()
         ch_alter_query = self.converter.convert_alter_query(query, db_name)
+        if ch_alter_query is None:
+            print('skip query', query)
+            return
         self.clickhouse_api.execute_command(ch_alter_query)
 
     def handle_create_table_query(self, query):

@@ -156,6 +156,9 @@ class MysqlToClickhouseConverter:
                 tokens = tokens[1:]
             return self.__convert_alter_table_modify_column(db_name, table_name, tokens)
 
+        if op_name == 'alter':
+            return None
+
         raise Exception('not implement')
 
     def __convert_alter_table_add_column(self, db_name, table_name, tokens):
