@@ -10,7 +10,7 @@ from collections import defaultdict
 from config import Settings, MysqlSettings, ClickhouseSettings
 from mysql_api import MySQLApi
 from clickhouse_api import ClickhouseApi
-from converter import MysqlToClickhouseConverter
+from converter import MysqlToClickhouseConverter, strip_sql_name, strip_sql_comments
 from table_structure import TableStructure
 from binlog_replicator import DataReader, LogEvent, EventType
 
@@ -297,8 +297,8 @@ class DbReplicator:
             current_table_records_to_insert.pop(record_id, None)
 
     def handle_query_event(self, event: LogEvent):
-        query = event.records.strip()
-        print(" === handle_query_event", query)
+        print(" === handle_query_event", event.records)
+        query = strip_sql_comments(event.records)
         if query.lower().startswith('alter'):
             self.handle_alter_query(query, event.db_name)
         if query.lower().startswith('create table'):
@@ -320,8 +320,19 @@ class DbReplicator:
         self.state.tables_structure[mysql_structure.table_name] = (mysql_structure, ch_structure)
         self.clickhouse_api.create_table(ch_structure)
 
-    def handle_drop_table_query(self, query):
-        pass
+    def handle_drop_table_query(self, query, db_name):
+        tokens = query.split()
+        if tokens[0].lower() != 'drop' or tokens[1].lower() != 'table':
+            raise Exception('wrong drop table query', query)
+        if len(tokens) != 3:
+            raise Exception('wrong token count', query)
+        table_name = tokens[2]
+        if '.' in table_name:
+            db_name, table_name = table_name.split('.')
+        table_name = strip_sql_name(table_name)
+        db_name = strip_sql_name(db_name)
+        self.state.tables_structure.pop(table_name)
+        self.clickhouse_api.execute_command(f'DROP TABLE {db_name}.{table_name}')
 
     def log_stats_if_required(self):
         curr_time = time.time()

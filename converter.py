@@ -1,4 +1,5 @@
 import json
+import sqlparse
 from pyparsing import Word, alphas, alphanums
 
 from table_structure import TableStructure, TableField
@@ -32,6 +33,10 @@ def strip_sql_name(name):
     if name.endswith('`'):
         name = name[:-1]
     return name
+
+
+def strip_sql_comments(sql_statement):
+    return sqlparse.format(sql_statement, strip_comments=True).strip()
 
 
 class MysqlToClickhouseConverter:

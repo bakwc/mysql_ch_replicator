@@ -171,3 +171,6 @@ CREATE TABLE {TEST_TABLE_NAME} (
 
     mysql.execute(f"INSERT INTO {TEST_TABLE_NAME_3} (name, `age`) VALUES ('Ivan', 42);", commit=True)
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME_3)) == 1)
+
+    mysql.execute(f'DROP TABLE {TEST_TABLE_NAME_3}')
+    assert_wait(lambda: TEST_TABLE_NAME_3 not in ch.get_tables())
