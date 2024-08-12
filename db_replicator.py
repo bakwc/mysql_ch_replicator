@@ -91,15 +91,17 @@ class DbReplicator:
 
     READ_LOG_INTERVAL = 1
 
-    def __init__(self, config: Settings, database: str):
+    def __init__(self, config: Settings, database: str, target_database: str | None = None):
         self.config = config
         self.database = database
+        self.target_database = target_database or database
+
         self.mysql_api = MySQLApi(
-            database=database,
+            database=self.database,
             mysql_settings=config.mysql,
         )
         self.clickhouse_api = ClickhouseApi(
-            database=database,
+            database=self.target_database,
             clickhouse_settings=config.clickhouse,
         )
         self.converter = MysqlToClickhouseConverter(self)
@@ -225,6 +227,9 @@ class DbReplicator:
                 time.sleep(DbReplicator.READ_LOG_INTERVAL)
                 self.upload_records_if_required(table_name=None)
                 continue
+            assert event.db_name == self.database
+            if self.database != self.target_database:
+                event.db_name = self.target_database
             self.handle_event(event)
 
     def handle_event(self, event: LogEvent):
@@ -306,14 +311,9 @@ class DbReplicator:
         if query.lower().startswith('drop table'):
             self.handle_drop_table_query(query, event.db_name)
 
-
     def handle_alter_query(self, query, db_name):
         self.upload_records()
-        ch_alter_query = self.converter.convert_alter_query(query, db_name)
-        if ch_alter_query is None:
-            print('skip query', query)
-            return
-        self.clickhouse_api.execute_command(ch_alter_query)
+        self.converter.convert_alter_query(query, db_name)
 
     def handle_create_table_query(self, query, db_name):
         mysql_structure, ch_structure = self.converter.parse_create_table_query(query)
@@ -329,6 +329,8 @@ class DbReplicator:
         table_name = tokens[2]
         if '.' in table_name:
             db_name, table_name = table_name.split('.')
+            if db_name == self.database:
+                db_name = self.target_database
         table_name = strip_sql_name(table_name)
         db_name = strip_sql_name(db_name)
         self.state.tables_structure.pop(table_name)

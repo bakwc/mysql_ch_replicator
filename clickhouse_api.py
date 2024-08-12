@@ -54,6 +54,7 @@ class ClickhouseApi:
         self.client.command(query)
 
     def recreate_database(self):
+        print(' === creating database', self.database)
         self.execute_command(f'DROP DATABASE IF EXISTS {self.database}')
         self.execute_command(f'CREATE DATABASE {self.database}')
 

@@ -26,6 +26,7 @@ def run_db_replicator(args, config: Settings):
     db_replicator = DbReplicator(
         config=config,
         database=args.db,
+        target_database=getattr(args, 'target_db', None),
     )
     db_replicator.run()
 
@@ -39,7 +40,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("mode", help="run mode", type=str, choices=["binlog_replicator", "db_replicator", "monitoring"])
     parser.add_argument("--config", help="config file path", default='config.yaml', type=str)
-    parser.add_argument("--db", help="database(s) name", type=str)
+    parser.add_argument("--db", help="source database(s) name", type=str)
+    parser.add_argument("--target_db", help="target database(s) name, if not set will be same as source", type=str)
     args = parser.parse_args()
 
     config = Settings()

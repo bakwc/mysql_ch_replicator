@@ -143,31 +143,41 @@ class MysqlToClickhouseConverter:
             db_name, table_name = table_name.split('.')
 
         db_name = strip_sql_name(db_name)
+        if self.db_replicator and db_name == self.db_replicator.database:
+            db_name = self.db_replicator.target_database
+
         table_name = strip_sql_name(table_name)
 
-        op_name = tokens[3].lower()
-        if op_name == 'add':
-            tokens = tokens[4:]
+
+        subqueries = ' '.join(tokens[3:]).split(',')
+
+        for subquery in subqueries:
+            tokens = subquery.split()
+
+            op_name = tokens[0].lower()
+            tokens = tokens[1:]
+
             if tokens[0].lower() == 'column':
                 tokens = tokens[1:]
-            return self.__convert_alter_table_add_column(db_name, table_name, tokens)
 
-        if op_name == 'drop':
-            tokens = tokens[4:]
-            if tokens[0].lower() == 'column':
-                tokens = tokens[1:]
-            return self.__convert_alter_table_drop_column(db_name, table_name, tokens)
+            if op_name == 'add':
+                if tokens[0] == 'constraint':
+                    continue
+                self.__convert_alter_table_add_column(db_name, table_name, tokens)
+                continue
 
-        if op_name == 'modify':
-            tokens = tokens[4:]
-            if tokens[0].lower() == 'modify':
-                tokens = tokens[1:]
-            return self.__convert_alter_table_modify_column(db_name, table_name, tokens)
+            if op_name == 'drop':
+                self.__convert_alter_table_drop_column(db_name, table_name, tokens)
+                continue
 
-        if op_name == 'alter':
-            return None
+            if op_name == 'modify':
+                self.__convert_alter_table_modify_column(db_name, table_name, tokens)
+                continue
 
-        raise Exception('not implement')
+            if op_name == 'alter':
+                continue
+
+            raise Exception('not implement')
 
     def __convert_alter_table_add_column(self, db_name, table_name, tokens):
         if len(tokens) < 2:
@@ -183,7 +193,7 @@ class MysqlToClickhouseConverter:
             if len(tokens) < 2:
                 raise Exception('wrong tokens count', tokens)
 
-        column_name = tokens[0]
+        column_name = strip_sql_name(tokens[0])
         column_type_mysql = tokens[1]
         column_type_mysql_parameters = ' '.join(tokens[2:])
 
@@ -212,7 +222,8 @@ class MysqlToClickhouseConverter:
         if column_after is not None:
             query += f' AFTER {column_after}'
 
-        return query
+        if self.db_replicator:
+            self.db_replicator.clickhouse_api.execute_command(query)
 
     def __convert_alter_table_drop_column(self, db_name, table_name, tokens):
         if ',' in ' '.join(tokens):
@@ -221,7 +232,7 @@ class MysqlToClickhouseConverter:
         if len(tokens) != 1:
             raise Exception('wrong tokens count', tokens)
 
-        column_name = tokens[0]
+        column_name = strip_sql_name(tokens[0])
 
         # update table structure
         if self.db_replicator:
@@ -233,7 +244,8 @@ class MysqlToClickhouseConverter:
             ch_table_structure.remove_field(field_name=column_name)
 
         query = f'ALTER TABLE {db_name}.{table_name} DROP COLUMN {column_name}'
-        return query
+        if self.db_replicator:
+            self.db_replicator.clickhouse_api.execute_command(query)
 
     def __convert_alter_table_modify_column(self, db_name, table_name, tokens):
         if len(tokens) < 2:
@@ -242,7 +254,7 @@ class MysqlToClickhouseConverter:
         if ',' in ' '.join(tokens):
             raise Exception('add multiple columns not implemented', tokens)
 
-        column_name = tokens[0]
+        column_name = strip_sql_name(tokens[0])
         column_type_mysql = tokens[1]
         column_type_mysql_parameters = ' '.join(tokens[2:])
 
@@ -263,7 +275,8 @@ class MysqlToClickhouseConverter:
             )
 
         query = f'ALTER TABLE {db_name}.{table_name} MODIFY COLUMN {column_name} {column_type_ch}'
-        return query
+        if self.db_replicator:
+            self.db_replicator.clickhouse_api.execute_command(query)
 
     def parse_create_table_query(self, mysql_query) -> tuple[TableStructure, TableStructure]:
         mysql_table_structure = self.parse_mysql_table_structure(mysql_query)
@@ -293,8 +306,13 @@ class MysqlToClickhouseConverter:
                         raise Exception('failed to parse ' + required_table_name)
                 inside_create = True
                 continue
+            if line.lower().startswith('unique key'):
+                continue
+            if line.lower().startswith('key'):
+                continue
+            if line.lower().startswith('constraint'):
+                continue
             if line.lower().startswith('primary key'):
-                # PRIMARY KEY (`policyaction_ptr_id`),
                 pattern = 'PRIMARY KEY (' + Word(alphanums + '_`') + ')'
                 result = pattern.parseString(line)
                 structure.primary_key = strip_sql_name(result[1])

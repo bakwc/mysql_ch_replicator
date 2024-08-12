@@ -67,17 +67,17 @@ def prepare_env(
     ch.drop_database(TEST_DB_NAME)
 
 
-def test_e2e():
+def test_e2e_regular():
     cfg = config.Settings()
     cfg.load(CONFIG_FILE)
 
     mysql = mysql_api.MySQLApi(
-        database=None,
+        database=TEST_DB_NAME,
         mysql_settings=cfg.mysql,
     )
 
     ch = clickhouse_api.ClickhouseApi(
-        database=None,
+        database=TEST_DB_NAME,
         clickhouse_settings=cfg.clickhouse,
     )
 
@@ -174,3 +174,57 @@ CREATE TABLE {TEST_TABLE_NAME} (
 
     mysql.execute(f'DROP TABLE {TEST_TABLE_NAME_3}')
     assert_wait(lambda: TEST_TABLE_NAME_3 not in ch.get_tables())
+
+
+def test_e2e_multistatement():
+    cfg = config.Settings()
+    cfg.load(CONFIG_FILE)
+
+    mysql = mysql_api.MySQLApi(
+        database=TEST_DB_NAME,
+        mysql_settings=cfg.mysql,
+    )
+
+    ch = clickhouse_api.ClickhouseApi(
+        database=TEST_DB_NAME,
+        clickhouse_settings=cfg.clickhouse,
+    )
+
+    prepare_env(cfg, mysql, ch)
+
+    mysql.execute(f'''
+CREATE TABLE {TEST_TABLE_NAME} (
+    id int NOT NULL AUTO_INCREMENT,
+    name varchar(255),
+    age int,
+    PRIMARY KEY (id)
+); 
+    ''')
+
+    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES ('Ivan', 42);", commit=True)
+
+    binlog_replicator_runner = BinlogReplicatorRunner()
+    binlog_replicator_runner.run()
+    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME)
+    db_replicator_runner.run()
+
+    assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
+
+    ch.execute_command(f'USE {TEST_DB_NAME}')
+
+    assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1)
+
+    mysql.execute(f"ALTER TABLE `{TEST_TABLE_NAME}` ADD `last_name` varchar(255), ADD COLUMN city varchar(255); ")
+    mysql.execute(
+        f"INSERT INTO {TEST_TABLE_NAME} (name, age, last_name, city) "
+        f"VALUES ('Mary', 24, 'Smith', 'London');", commit=True,
+    )
+
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 2)
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Mary'")[0].get('last_name') == 'Smith')
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Mary'")[0].get('city') == 'London')
+
+    mysql.execute(f"ALTER TABLE {TEST_TABLE_NAME} DROP COLUMN last_name, DROP COLUMN city")
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Mary'")[0].get('last_name') is None)
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Mary'")[0].get('city') is None)
