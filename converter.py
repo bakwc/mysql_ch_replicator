@@ -289,25 +289,31 @@ class MysqlToClickhouseConverter:
         raise Exception('not implement')
 
     def parse_mysql_table_structure(self, create_statement, required_table_name=None):
-        lines = create_statement.split('\n')
-        inside_create = False
-
         structure = TableStructure()
 
-        for line in lines:
-            line = line.strip()
-            if line.startswith('--'):
-                continue
-            if not inside_create:
-                # CREATE TABLE `auth_group` (
-                pattern = 'CREATE TABLE ' + Word(alphanums + '_` ') + '('
-                result = pattern.parseString(line)
-                structure.table_name = strip_sql_name(result[1])
-                if required_table_name is not None:
-                    if structure.table_name != required_table_name:
-                        raise Exception('failed to parse ' + required_table_name)
-                inside_create = True
-                continue
+        tokens = sqlparse.parse(create_statement.replace('\n', ' ').strip())[0].tokens
+        tokens = [t for t in tokens if not t.is_whitespace and not t.is_newline]
+
+        if tokens[0].ttype != sqlparse.tokens.DDL:
+            raise Exception('wrong create statement', create_statement)
+        if tokens[0].normalized.lower() != 'create':
+            raise Exception('wrong create statement', create_statement)
+        if tokens[1].ttype != sqlparse.tokens.Keyword:
+            raise Exception('wrong create statement', create_statement)
+
+        if not isinstance(tokens[2], sqlparse.sql.Identifier):
+            raise Exception('wrong create statement', create_statement)
+
+        structure.table_name = strip_sql_name(tokens[2].normalized)
+
+        if not isinstance(tokens[3], sqlparse.sql.Parenthesis):
+            raise Exception('wrong create statement', create_statement)
+
+        inner_tokens = tokens[3].tokens
+        inner_tokens = ''.join([str(t) for t in inner_tokens[1:-1]]).strip()
+        inner_tokens = [t.strip() for t in inner_tokens.split(',')]
+
+        for line in inner_tokens:
             if line.lower().startswith('unique key'):
                 continue
             if line.lower().startswith('key'):
@@ -319,16 +325,9 @@ class MysqlToClickhouseConverter:
                 result = pattern.parseString(line)
                 structure.primary_key = strip_sql_name(result[1])
                 continue
-            if line.startswith(')'):
-                inside_create = False
-                continue
-
-            if line.endswith(','):
-                line = line[:-1]
 
             definition = line.split(' ')
-            field_name = definition[0]
-            field_name = strip_sql_name(field_name)
+            field_name = strip_sql_name(definition[0])
             field_type = definition[1]
             field_parameters = ''
             if len(definition) > 2:
@@ -339,5 +338,6 @@ class MysqlToClickhouseConverter:
                 field_type=field_type,
                 parameters=field_parameters,
             ))
+
         structure.preprocess()
         return structure
