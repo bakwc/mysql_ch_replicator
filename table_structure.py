@@ -42,3 +42,9 @@ class TableStructure:
                 self.fields[idx] = new_field
                 return
         raise Exception(f'field {new_field.name} not found')
+
+    def has_field(self, field_name):
+        for field in self.fields:
+            if field.name == field_name:
+                return True
+        return False

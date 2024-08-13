@@ -21,7 +21,7 @@ class MySQLApi:
         curr_time = time.time()
         if curr_time - self.last_connect_time < MySQLApi.RECONNECT_INTERVAL:
             return
-        print('(re)connecting to mysql')
+        #print('(re)connecting to mysql')
         self.db = mysql.connector.connect(
             host=self.mysql_settings.host,
             port=self.mysql_settings.port,
@@ -40,7 +40,7 @@ class MySQLApi:
         self.cursor.execute(f'CREATE DATABASE {db_name}')
 
     def execute(self, command, commit=False):
-        print(f'Executing: <{command}>')
+        #print(f'Executing: <{command}>')
         self.cursor.execute(command)
         if commit:
             self.db.commit()

@@ -302,7 +302,7 @@ class DbReplicator:
             current_table_records_to_insert.pop(record_id, None)
 
     def handle_query_event(self, event: LogEvent):
-        print(" === handle_query_event", event.records)
+        #print(" === handle_query_event", event.records)
         query = strip_sql_comments(event.records)
         if query.lower().startswith('alter'):
             self.handle_alter_query(query, event.db_name)

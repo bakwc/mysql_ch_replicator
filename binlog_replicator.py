@@ -262,13 +262,11 @@ class DataWriter:
     def remove_old_files(self, ts_from):
         subdirs = [f.path for f in os.scandir(self.data_dir) if f.is_dir()]
         for db_name in subdirs:
-            print('check for old files', db_name)
             existing_file_nums = get_existing_file_nums(self.data_dir, db_name)[:-1]
             for file_num in existing_file_nums:
                 file_path = os.path.join(self.data_dir, db_name, f'{file_num}.bin')
                 modify_time = os.path.getmtime(file_path)
                 if modify_time <= ts_from:
-                    print('removing', db_name, file_num, file_path)
                     os.remove(file_path)
 
 
@@ -406,7 +404,7 @@ class BinlogReplicator:
 
                 self.update_state_if_required(last_transaction_id)
                 self.clear_old_binlog_if_required()
-                print("last read count", last_read_count)
+                #print("last read count", last_read_count)
                 if last_read_count < 50:
                     time.sleep(BinlogReplicator.READ_LOG_INTERVAL)
 
@@ -424,4 +422,4 @@ class BinlogReplicator:
         self.state.last_seen_transaction = transaction_id
         self.state.save()
         self.last_state_update = curr_time
-        print('saved state', transaction_id, self.state.prev_last_seen_transaction)
+        #print('saved state', transaction_id, self.state.prev_last_seen_transaction)

@@ -35,6 +35,25 @@ def strip_sql_name(name):
     return name
 
 
+def split_high_level(data, token):
+    results = []
+    level = 0
+    curr_data = ''
+    for c in data:
+        if c == token and level == 0:
+            results.append(curr_data.strip())
+            curr_data = ''
+            continue
+        if c == '(':
+            level += 1
+        if c == ')':
+            level -= 1
+        curr_data += c
+    if curr_data:
+        results.append(curr_data.strip())
+    return results
+
+
 def strip_sql_comments(sql_statement):
     return sqlparse.format(sql_statement, strip_comments=True).strip()
 
@@ -59,6 +78,8 @@ class MysqlToClickhouseConverter:
         if mysql_type == 'date':
             return 'Date32'
         if mysql_type == 'tinyint(1)':
+            return 'Bool'
+        if mysql_type == 'bool':
             return 'Bool'
         if mysql_type == 'smallint':
             return 'Int16'
@@ -150,7 +171,8 @@ class MysqlToClickhouseConverter:
 
         table_name = strip_sql_name(table_name)
 
-        subqueries = (' '.join(tokens[3:])).split(',')
+        subqueries = ' '.join(tokens[3:])
+        subqueries = split_high_level(subqueries, ',')
 
         for subquery in subqueries:
             subquery = subquery.strip()
@@ -163,12 +185,14 @@ class MysqlToClickhouseConverter:
                 tokens = tokens[1:]
 
             if op_name == 'add':
-                if tokens[0].lower() == 'constraint':
+                if tokens[0].lower() in ('constraint', 'index', 'foreign'):
                     continue
                 self.__convert_alter_table_add_column(db_name, table_name, tokens)
                 continue
 
             if op_name == 'drop':
+                if tokens[0].lower() in ('constraint', 'index', 'foreign'):
+                    continue
                 self.__convert_alter_table_drop_column(db_name, table_name, tokens)
                 continue
 
@@ -309,9 +333,11 @@ class MysqlToClickhouseConverter:
         if not isinstance(tokens[3], sqlparse.sql.Parenthesis):
             raise Exception('wrong create statement', create_statement)
 
+        #print(' --- processing statement:\n', create_statement, '\n')
+
         inner_tokens = tokens[3].tokens
         inner_tokens = ''.join([str(t) for t in inner_tokens[1:-1]]).strip()
-        inner_tokens = [t.strip() for t in inner_tokens.split(',')]
+        inner_tokens = split_high_level(inner_tokens, ',')
 
         for line in inner_tokens:
             if line.lower().startswith('unique key'):
@@ -326,6 +352,8 @@ class MysqlToClickhouseConverter:
                 structure.primary_key = strip_sql_name(result[1])
                 continue
 
+            #print(" === processing line", line)
+
             definition = line.split(' ')
             field_name = strip_sql_name(definition[0])
             field_type = definition[1]
@@ -338,6 +366,20 @@ class MysqlToClickhouseConverter:
                 field_type=field_type,
                 parameters=field_parameters,
             ))
+            #print(' ---- params:', field_parameters)
+
+
+        if not structure.primary_key:
+            for field in structure.fields:
+                if 'primary key' in field.parameters.lower():
+                    structure.primary_key = field.name
+
+        if not structure.primary_key:
+            if structure.has_field('id'):
+                structure.primary_key = 'id'
+
+        if not structure.primary_key:
+            raise Exception(f'No primary key for table {structure.table_name}, {create_statement}')
 
         structure.preprocess()
         return structure
