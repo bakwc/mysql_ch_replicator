@@ -46,6 +46,8 @@ class MysqlToClickhouseConverter:
     def convert_type(self, mysql_type):
         if mysql_type == 'int':
             return 'Int32'
+        if mysql_type == 'integer':
+            return 'Int32'
         if mysql_type == 'bigint':
             return 'Int64'
         if mysql_type == 'double':
@@ -148,10 +150,10 @@ class MysqlToClickhouseConverter:
 
         table_name = strip_sql_name(table_name)
 
-
-        subqueries = ' '.join(tokens[3:]).split(',')
+        subqueries = (' '.join(tokens[3:])).split(',')
 
         for subquery in subqueries:
+            subquery = subquery.strip()
             tokens = subquery.split()
 
             op_name = tokens[0].lower()
@@ -161,7 +163,7 @@ class MysqlToClickhouseConverter:
                 tokens = tokens[1:]
 
             if op_name == 'add':
-                if tokens[0] == 'constraint':
+                if tokens[0].lower() == 'constraint':
                     continue
                 self.__convert_alter_table_add_column(db_name, table_name, tokens)
                 continue

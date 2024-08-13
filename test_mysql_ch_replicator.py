@@ -65,6 +65,7 @@ def prepare_env(
     mysql.create_database(TEST_DB_NAME)
     mysql.execute(f'USE {TEST_DB_NAME}')
     ch.drop_database(TEST_DB_NAME)
+    assert_wait(lambda: TEST_DB_NAME not in ch.get_databases())
 
 
 def test_e2e_regular():
@@ -228,3 +229,11 @@ CREATE TABLE {TEST_TABLE_NAME} (
     mysql.execute(f"ALTER TABLE {TEST_TABLE_NAME} DROP COLUMN last_name, DROP COLUMN city")
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Mary'")[0].get('last_name') is None)
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Mary'")[0].get('city') is None)
+
+    mysql.execute(
+        f"CREATE TABLE {TEST_TABLE_NAME_2} "
+        f"(id int NOT NULL AUTO_INCREMENT, name varchar(255), age int, "
+        f"PRIMARY KEY (id));"
+    )
+
+    assert_wait(lambda: TEST_TABLE_NAME_2 in ch.get_tables())
