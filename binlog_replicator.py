@@ -18,6 +18,7 @@ from pymysqlreplication.event import QueryEvent
 from pymysql.err import OperationalError
 
 from config import MysqlSettings, BinlogReplicatorSettings
+from utils import GracefulKiller
 
 
 logger = getLogger(__name__)
@@ -269,6 +270,10 @@ class DataWriter:
                 if modify_time <= ts_from:
                     os.remove(file_path)
 
+    def close_all(self):
+        for file_writer in self.db_file_writers.values():
+            file_writer.close()
+
 
 class State:
 
@@ -347,7 +352,10 @@ class BinlogReplicator:
 
     def run(self):
         last_transaction_id = None
-        while True:
+
+        killer = GracefulKiller()
+
+        while not killer.kill_now:
             try:
                 last_read_count = 0
                 for event in self.stream:
@@ -412,9 +420,14 @@ class BinlogReplicator:
                 print('=== operational error', e)
                 time.sleep(15)
 
-    def update_state_if_required(self, transaction_id):
+        logger.info('stopping binlog_replicator')
+        self.data_writer.close_all()
+        self.update_state_if_required(last_transaction_id, force=True)
+        logger.info('stopped')
+
+    def update_state_if_required(self, transaction_id, force: bool = False):
         curr_time = time.time()
-        if curr_time - self.last_state_update < BinlogReplicator.SAVE_UPDATE_INTERVAL:
+        if curr_time - self.last_state_update < BinlogReplicator.SAVE_UPDATE_INTERVAL and not force:
             return
         if not os.path.exists(self.replicator_settings.data_dir):
             os.mkdir(self.replicator_settings.data_dir)

@@ -13,6 +13,7 @@ from clickhouse_api import ClickhouseApi
 from converter import MysqlToClickhouseConverter, strip_sql_name, strip_sql_comments
 from table_structure import TableStructure
 from binlog_replicator import DataReader, LogEvent, EventType
+from utils import GracefulKiller
 
 
 logger = getLogger(__name__)
@@ -165,8 +166,10 @@ class DbReplicator:
         logger.info(f'initial replication - swapping database')
         if self.target_database in self.clickhouse_api.get_databases():
             self.clickhouse_api.execute_command(
-                f'RENAME DATABASE {self.target_database} TO {self.target_database}_old, '
-                f'{self.target_database_tmp} TO {self.target_database}',
+                f'RENAME DATABASE {self.target_database} TO {self.target_database}_old',
+            )
+            self.clickhouse_api.execute_command(
+                f'RENAME DATABASE {self.target_database_tmp} TO {self.target_database}',
             )
             self.clickhouse_api.drop_database(f'{self.target_database}_old')
         else:
@@ -237,7 +240,10 @@ class DbReplicator:
         self.state.status = Status.RUNNING_REALTIME_REPLICATION
         self.state.save()
         self.data_reader.set_position(self.state.last_processed_transaction)
-        while True:
+
+        killer = GracefulKiller()
+
+        while not killer.kill_now:
             event = self.data_reader.read_next_event()
             if event is None:
                 time.sleep(DbReplicator.READ_LOG_INTERVAL)
@@ -247,6 +253,12 @@ class DbReplicator:
             if self.database != self.target_database:
                 event.db_name = self.target_database
             self.handle_event(event)
+
+        logger.info('stopping db_replicator')
+        self.upload_records()
+        self.save_state_if_required(force=True)
+        logger.info('stopped')
+
 
     def handle_event(self, event: LogEvent):
         if self.state.last_processed_transaction_non_uploaded is not None:
@@ -271,9 +283,9 @@ class DbReplicator:
         self.save_state_if_required()
         self.log_stats_if_required()
 
-    def save_state_if_required(self):
+    def save_state_if_required(self, force=False):
         curr_time = time.time()
-        if curr_time - self.last_save_state_time < DbReplicator.SAVE_STATE_INTERVAL:
+        if curr_time - self.last_save_state_time < DbReplicator.SAVE_STATE_INTERVAL and not force:
             return
         self.last_save_state_time = curr_time
         self.state.tables_last_record_version = self.clickhouse_api.tables_last_record_version

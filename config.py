@@ -31,7 +31,7 @@ class Settings:
         self.mysql = MysqlSettings()
         self.clickhouse = ClickhouseSettings()
         self.binlog_replicator = BinlogReplicatorSettings()
-        self.databases = []
+        self.databases = ''
 
     def load(self, settings_file):
         data = open(settings_file, 'r').read()
@@ -40,5 +40,5 @@ class Settings:
         self.mysql = MysqlSettings(**data['mysql'])
         self.clickhouse = ClickhouseSettings(**data['clickhouse'])
         self.databases = data['databases']
-        assert isinstance(self.databases, list)
+        assert isinstance(self.databases, str)
         self.binlog_replicator = BinlogReplicatorSettings(**data['binlog_replicator'])

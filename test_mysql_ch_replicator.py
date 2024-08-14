@@ -1,11 +1,12 @@
 import os
 import shutil
-import subprocess
 import time
 
 import config
 import mysql_api
 import clickhouse_api
+
+from runner import BinlogReplicatorRunner, DbReplicatorRunner, RunAllRunner
 
 
 CONFIG_FILE = 'config.yaml'
@@ -24,35 +25,6 @@ def assert_wait(condition, max_wait_time=15.0, retry_interval=0.05):
     assert condition()
 
 
-class ProcessRunner:
-    def __init__(self, cmd):
-        self.cmd = cmd
-        self.process = None
-
-    def run(self):
-        cmd = self.cmd.split()
-        self.process = subprocess.Popen(cmd)
-
-    def stop(self):
-        if self.process is not None:
-            self.process.kill()
-            self.process.wait()
-            self.process = None
-
-    def __del__(self):
-        self.stop()
-
-
-class BinlogReplicatorRunner(ProcessRunner):
-    def __init__(self):
-        super().__init__('python3 main.py --config config.yaml binlog_replicator')
-
-
-class DbReplicatorRunner(ProcessRunner):
-    def __init__(self, db_name):
-        super().__init__(f'python3 main.py --config config.yaml --db {db_name} db_replicator')
-
-
 def prepare_env(
         cfg: config.Settings,
         mysql: mysql_api.MySQLApi,
@@ -63,7 +35,7 @@ def prepare_env(
     os.mkdir(cfg.binlog_replicator.data_dir)
     mysql.drop_database(TEST_DB_NAME)
     mysql.create_database(TEST_DB_NAME)
-    mysql.execute(f'USE {TEST_DB_NAME}')
+    mysql.set_database(TEST_DB_NAME)
     ch.drop_database(TEST_DB_NAME)
     assert_wait(lambda: TEST_DB_NAME not in ch.get_databases())
 
@@ -73,7 +45,7 @@ def test_e2e_regular():
     cfg.load(CONFIG_FILE)
 
     mysql = mysql_api.MySQLApi(
-        database=TEST_DB_NAME,
+        database=None,
         mysql_settings=cfg.mysql,
     )
 
@@ -182,7 +154,7 @@ def test_e2e_multistatement():
     cfg.load(CONFIG_FILE)
 
     mysql = mysql_api.MySQLApi(
-        database=TEST_DB_NAME,
+        database=None,
         mysql_settings=cfg.mysql,
     )
 
@@ -237,3 +209,46 @@ CREATE TABLE {TEST_TABLE_NAME} (
     )
 
     assert_wait(lambda: TEST_TABLE_NAME_2 in ch.get_tables())
+
+
+def test_runner():
+    cfg = config.Settings()
+    cfg.load(CONFIG_FILE)
+
+    mysql = mysql_api.MySQLApi(
+        database=None,
+        mysql_settings=cfg.mysql,
+    )
+
+    ch = clickhouse_api.ClickhouseApi(
+        database=TEST_DB_NAME,
+        clickhouse_settings=cfg.clickhouse,
+    )
+
+    prepare_env(cfg, mysql, ch)
+
+    mysql.execute(f'''
+CREATE TABLE {TEST_TABLE_NAME} (
+    id int NOT NULL AUTO_INCREMENT,
+    name varchar(255),
+    age int,
+    PRIMARY KEY (id)
+); 
+    ''')
+
+    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES ('Ivan', 42);", commit=True)
+    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES ('Peter', 33);", commit=True)
+
+    run_all_runner = RunAllRunner(TEST_DB_NAME)
+    run_all_runner.run()
+
+    assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
+
+    ch.execute_command(f'USE {TEST_DB_NAME}')
+
+    assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 2)
+
+    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES ('Filipp', 50);", commit=True)
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Filipp'")[0]['age'] == 50)

@@ -45,6 +45,18 @@ class MySQLApi:
         if commit:
             self.db.commit()
 
+    def set_database(self, database):
+        self.database = database
+        self.cursor = self.db.cursor()
+        self.cursor.execute(f'USE {self.database}')
+
+    def get_databases(self):
+        self.reconnect_if_required()
+        self.cursor.execute('SHOW DATABASES')
+        res = self.cursor.fetchall()
+        tables = [x[0] for x in res]
+        return tables
+
     def get_tables(self):
         self.reconnect_if_required()
         self.cursor.execute('SHOW TABLES')
