@@ -1,7 +1,13 @@
+import time
 import clickhouse_connect
+
+from logging import getLogger
 
 from config import ClickhouseSettings
 from table_structure import TableStructure, TableField
+
+
+logger = getLogger(__name__)
 
 
 CREATE_TABLE_QUERY = '''
@@ -23,6 +29,9 @@ DELETE FROM {db_name}.{table_name} WHERE {field_name} IN ({field_values})
 
 
 class ClickhouseApi:
+    MAX_RETRIES = 5
+    RETRY_INTERVAL = 30
+
     def __init__(self, database: str, clickhouse_settings: ClickhouseSettings):
         self.database = database
         self.clickhouse_settings = clickhouse_settings
@@ -51,7 +60,16 @@ class ClickhouseApi:
 
     def execute_command(self, query):
         #print(' === executing ch query', query)
-        self.client.command(query)
+
+        for attempt in range(ClickhouseApi.MAX_RETRIES):
+            try:
+                self.client.command(query)
+                break
+            except clickhouse_connect.driver.exceptions.OperationalError as e:
+                logger.error(f'error executing command {query}: {e}', exc_info=e)
+                if attempt == ClickhouseApi.MAX_RETRIES - 1:
+                    raise e
+                time.sleep(ClickhouseApi.RETRY_INTERVAL)
 
     def recreate_database(self):
         #print(' === creating database', self.database)
@@ -105,7 +123,15 @@ class ClickhouseApi:
         if '.' not in full_table_name:
             full_table_name = f'{self.database}.{table_name}'
 
-        self.client.insert(table=full_table_name, data=records_to_insert)
+        for attempt in range(ClickhouseApi.MAX_RETRIES):
+            try:
+                self.client.insert(table=full_table_name, data=records_to_insert)
+                break
+            except clickhouse_connect.driver.exceptions.OperationalError as e:
+                logger.error(f'error inserting data: {e}', exc_info=e)
+                if attempt == ClickhouseApi.MAX_RETRIES - 1:
+                    raise e
+                time.sleep(ClickhouseApi.RETRY_INTERVAL)
 
         self.set_last_used_version(table_name, current_version)
 
