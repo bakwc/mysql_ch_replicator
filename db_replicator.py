@@ -95,6 +95,7 @@ class DbReplicator:
         self.config = config
         self.database = database
         self.target_database = target_database or database
+        self.target_database_tmp = self.target_database + '_tmp'
 
         self.mysql_api = MySQLApi(
             database=self.database,
@@ -125,6 +126,7 @@ class DbReplicator:
             return
 
         logger.info('recreating database')
+        self.clickhouse_api.database = self.target_database_tmp
         self.clickhouse_api.recreate_database()
         self.state.tables = self.mysql_api.get_tables()
         self.state.last_processed_transaction = self.data_reader.get_last_transaction_id()
@@ -150,6 +152,7 @@ class DbReplicator:
         self.clickhouse_api.create_table(clickhouse_structure)
 
     def perform_initial_replication(self):
+        self.clickhouse_api.database = self.target_database_tmp
         logger.info('running initial replication')
         self.state.status = Status.PERFORMING_INITIAL_REPLICATION
         self.state.save()
@@ -159,6 +162,19 @@ class DbReplicator:
                 continue
             self.perform_initial_replication_table(table)
             start_table = None
+        logger.info(f'initial replication - swapping database')
+        if self.target_database in self.clickhouse_api.get_databases():
+            self.clickhouse_api.execute_command(
+                f'RENAME DATABASE {self.target_database} TO {self.target_database}_old, '
+                f'{self.target_database_tmp} TO {self.target_database}',
+            )
+            self.clickhouse_api.drop_database(f'{self.target_database}_old')
+        else:
+            self.clickhouse_api.execute_command(
+                f'RENAME DATABASE {self.target_database_tmp} TO {self.target_database}',
+            )
+        self.clickhouse_api.database = self.target_database
+        logger.info(f'initial replication - done')
 
     def perform_initial_replication_table(self, table_name):
         logger.info(f'running initial replication for table {table_name}')
