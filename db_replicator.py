@@ -55,7 +55,7 @@ class State:
         self.initial_replication_max_primary_key = data['initial_replication_max_primary_key']
         self.tables_structure = data['tables_structure']
         self.tables = data['tables']
-        self.pid = data['pid']
+        self.pid = data.get('pid', None)
 
     def save(self):
         file_name = self.file_name

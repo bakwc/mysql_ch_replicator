@@ -292,7 +292,7 @@ class State:
         data = json.loads(data)
         self.last_seen_transaction = data['last_seen_transaction']
         self.prev_last_seen_transaction = data['prev_last_seen_transaction']
-        self.pid = data['pid']
+        self.pid = data.get('pid', None)
         if self.last_seen_transaction is not None:
             self.last_seen_transaction = tuple(self.last_seen_transaction)
         if self.prev_last_seen_transaction is not None:
