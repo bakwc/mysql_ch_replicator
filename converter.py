@@ -93,6 +93,8 @@ class MysqlToClickhouseConverter:
             return 'String'
         if 'json' in mysql_type:
             return 'String'
+        if 'decimal' in mysql_type:
+            return 'Float64'
         if mysql_type.startswith('time'):
             return 'String'
         raise Exception(f'unknown mysql type "{mysql_type}"')

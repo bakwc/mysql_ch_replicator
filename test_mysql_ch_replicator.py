@@ -261,6 +261,7 @@ CREATE TABLE {TEST_TABLE_NAME} (
     id int NOT NULL AUTO_INCREMENT,
     name varchar(255),
     age int,
+    rate decimal(10,4),
     PRIMARY KEY (id)
 ); 
     ''')
@@ -289,8 +290,8 @@ CREATE TABLE {TEST_TABLE_NAME} (
     kill_process(binlog_repl_pid)
     kill_process(db_repl_pid, force=True)
 
-    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES ('John', 11);", commit=True)
+    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, rate) VALUES ('John', 12.5);", commit=True)
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 4)
-    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='John'")[0]['age'] == 11)
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='John'")[0]['rate'] == 12.5)
 
     run_all_runner.stop()
