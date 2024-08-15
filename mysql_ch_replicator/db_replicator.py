@@ -36,7 +36,7 @@ class State:
         self.tables_last_record_version = {}
         self.initial_replication_table = None
         self.initial_replication_max_primary_key = None
-        self.tables_structure: dict[str, tuple[TableStructure, TableStructure]] = {}
+        self.tables_structure: dict = {}
         self.tables = []
         self.pid = None
         self.load()
@@ -76,7 +76,7 @@ class State:
 
 @dataclass
 class Statistics:
-    last_transaction: tuple[str, int] | None = None
+    last_transaction: tuple = None
     events_count: int = 0
     insert_events_count: int = 0
     insert_records_count: int = 0
@@ -95,7 +95,7 @@ class DbReplicator:
 
     READ_LOG_INTERVAL = 1
 
-    def __init__(self, config: Settings, database: str, target_database: str | None = None):
+    def __init__(self, config: Settings, database: str, target_database: str = None):
         self.config = config
         self.database = database
         self.target_database = target_database or database

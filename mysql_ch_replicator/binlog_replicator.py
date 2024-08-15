@@ -38,7 +38,7 @@ class LogEvent:
     transaction_id: tuple[str, int] = 0  # (file_name, log_pos)
     db_name: str = ''
     table_name: str = ''
-    records: list | str | None = None
+    records: object = None
     event_type: int = EventType.UNKNOWN.value
 
 
@@ -73,7 +73,7 @@ class FileReader:
     def close(self):
         self.file.close()
 
-    def read_next_event(self) -> LogEvent | None:
+    def read_next_event(self) -> LogEvent:
 
         # read size if we don't have enough bytes to get size
         if len(self.current_buffer) < 4:
@@ -116,7 +116,7 @@ class DataReader:
     def __init__(self, replicator_settings: BinlogReplicatorSettings, db_name: str):
         self.data_dir = replicator_settings.data_dir
         self.db_name = db_name
-        self.current_file_reader: FileReader | None = None
+        self.current_file_reader: FileReader = None
 
     def get_last_transaction_id(self):
         last_file_name = self.get_last_file_name()
@@ -216,7 +216,7 @@ class DataReader:
                 break
         raise Exception(f'transaction {transaction_id} not found in {file_name}')
 
-    def read_next_event(self) -> LogEvent | None:
+    def read_next_event(self) -> LogEvent:
         if self.current_file_reader is None:
             # no file reader - try to read from the beginning
             existing_file_nums = get_existing_file_nums(self.data_dir, self.db_name)
@@ -248,7 +248,7 @@ class DataWriter:
         if not os.path.exists(self.data_dir):
             os.mkdir(self.data_dir)
         self.records_per_file = replicator_settings.records_per_file
-        self.db_file_writers: dict[str, FileWriter] = {}  # db_name => FileWriter
+        self.db_file_writers: dict = {}  # db_name => FileWriter
 
     def store_event(self, log_event: LogEvent):
         logger.debug(f'store event {log_event.transaction_id}')

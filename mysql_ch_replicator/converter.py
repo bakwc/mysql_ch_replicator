@@ -306,7 +306,7 @@ class MysqlToClickhouseConverter:
         if self.db_replicator:
             self.db_replicator.clickhouse_api.execute_command(query)
 
-    def parse_create_table_query(self, mysql_query) -> tuple[TableStructure, TableStructure]:
+    def parse_create_table_query(self, mysql_query) -> tuple:
         mysql_table_structure = self.parse_mysql_table_structure(mysql_query)
         ch_table_structure = self.convert_table_structure(mysql_table_structure)
         return mysql_table_structure, ch_table_structure

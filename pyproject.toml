@@ -1,13 +1,13 @@
 [tool.poetry]
 name = "mysql-ch-replicator"
-version = "0.0.8"
+version = "0.0.10"
 description = "Tool for replication of MySQL databases to ClickHouse"
 authors = ["Filipp Ozinov <filipp@bakanov.su>"]
 license = "MIT"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = "^3.6"
 pyyaml = ">= 5.0.1"
 pyparsing = ">= 3.0.8"
 clickhouse-connect = ">= 0.7.8"

@@ -32,11 +32,11 @@ class RunAllRunner(ProcessRunner):
 
 
 class Runner:
-    def __init__(self, config: Settings, wait_initial_replication: bool, databases: str | None):
+    def __init__(self, config: Settings, wait_initial_replication: bool, databases: str):
         self.config = config
         self.databases = databases or config.databases
         self.wait_initial_replication = wait_initial_replication
-        self.runners: dict[str:DbReplicatorRunner] = {}
+        self.runners: dict = {}
         self.binlog_runner = None
 
     def is_initial_replication_finished(self, db_name):

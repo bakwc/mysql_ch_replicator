@@ -8,7 +8,7 @@ from .table_structure import TableStructure, TableField
 class MySQLApi:
     RECONNECT_INTERVAL = 3 * 60
 
-    def __init__(self, database: str | None, mysql_settings: MysqlSettings):
+    def __init__(self, database: str, mysql_settings: MysqlSettings):
         self.database = database
         self.mysql_settings = mysql_settings
         self.last_connect_time = 0

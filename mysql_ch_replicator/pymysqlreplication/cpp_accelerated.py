@@ -2,6 +2,7 @@ import platform
 import ctypes
 from ctypes import c_int, c_char_p
 import os
+import platform
 
 MODULE_DIR = os.path.dirname(__file__)
 
@@ -12,6 +13,8 @@ if platform.system() == 'Darwin':
     FILE_PATH = f'{FILE_NAME}.dylib'
 if platform.system() == 'Linux':
     FILE_PATH = f'{FILE_NAME}.so'
+    if platform.machine() == 'x86_64':
+        FILE_PATH = f'{FILE_NAME}_x86_64.so'
 
 FILE_PATH = os.path.join(MODULE_DIR, FILE_PATH)
 

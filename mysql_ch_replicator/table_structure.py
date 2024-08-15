@@ -8,7 +8,7 @@ class TableField:
 
 @dataclass
 class TableStructure:
-    fields: list[TableField] = field(default_factory=list)
+    fields: list = field(default_factory=list)
     primary_key: str = ''
     primary_key_idx: int = 0
     table_name: str = ''
