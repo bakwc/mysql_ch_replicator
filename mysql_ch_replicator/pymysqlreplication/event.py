@@ -5,9 +5,9 @@ import decimal
 import zlib
 import logging
 
-from pymysqlreplication.constants.STATUS_VAR_KEY import *
-from pymysqlreplication.exceptions import StatusVariableMismatch
-from pymysqlreplication.util.bytes import parse_decimal_from_bytes
+from .constants.STATUS_VAR_KEY import *
+from .exceptions import StatusVariableMismatch
+from .util.bytes import parse_decimal_from_bytes
 from typing import Union, Optional
 import json
 

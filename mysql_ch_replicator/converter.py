@@ -2,7 +2,7 @@ import json
 import sqlparse
 from pyparsing import Word, alphas, alphanums
 
-from table_structure import TableStructure, TableField
+from .table_structure import TableStructure, TableField
 
 
 def convert_bytes(obj):

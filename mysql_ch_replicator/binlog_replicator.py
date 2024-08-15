@@ -8,17 +8,19 @@ import json
 from enum import Enum
 from logging import getLogger
 from dataclasses import dataclass
-from pymysqlreplication import BinLogStreamReader
-from pymysqlreplication.row_event import (
+
+from pymysql.err import OperationalError
+
+from .pymysqlreplication import BinLogStreamReader
+from .pymysqlreplication.row_event import (
     DeleteRowsEvent,
     UpdateRowsEvent,
     WriteRowsEvent,
 )
-from pymysqlreplication.event import QueryEvent
-from pymysql.err import OperationalError
+from .pymysqlreplication.event import QueryEvent
 
-from config import MysqlSettings, BinlogReplicatorSettings
-from utils import GracefulKiller
+from .config import MysqlSettings, BinlogReplicatorSettings
+from .utils import GracefulKiller
 
 
 logger = getLogger(__name__)

@@ -7,13 +7,13 @@ from enum import Enum
 from dataclasses import dataclass
 from collections import defaultdict
 
-from config import Settings, MysqlSettings, ClickhouseSettings
-from mysql_api import MySQLApi
-from clickhouse_api import ClickhouseApi
-from converter import MysqlToClickhouseConverter, strip_sql_name, strip_sql_comments
-from table_structure import TableStructure
-from binlog_replicator import DataReader, LogEvent, EventType
-from utils import GracefulKiller
+from .config import Settings, MysqlSettings, ClickhouseSettings
+from .mysql_api import MySQLApi
+from .clickhouse_api import ClickhouseApi
+from .converter import MysqlToClickhouseConverter, strip_sql_name, strip_sql_comments
+from .table_structure import TableStructure
+from .binlog_replicator import DataReader, LogEvent, EventType
+from .utils import GracefulKiller
 
 
 logger = getLogger(__name__)

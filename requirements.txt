@@ -1,7 +1,7 @@
-PyYAML==6.0.1
-pyparsing==3.0.8
-clickhouse_connect==0.7.8
-mysql-connector-python==8.3.0
-pymysql==1.4.6
-packaging==21.3
-sqlparse==0.5.1
+PyYAML>=6.0.1
+pyparsing>=3.0.8
+clickhouse_connect>=0.7.8
+mysql-connector-python>=8.3.0
+pymysql>=1.0.0
+packaging>=21.3
+sqlparse>=0.5.1

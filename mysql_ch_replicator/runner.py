@@ -1,14 +1,15 @@
 import os
 import time
+import sys
 import fnmatch
 
 from logging import getLogger
 
-from config import Settings
-from mysql_api import MySQLApi
-from utils import ProcessRunner, GracefulKiller
+from .config import Settings
+from .mysql_api import MySQLApi
+from .utils import ProcessRunner, GracefulKiller
 
-import db_replicator
+from . import db_replicator
 
 
 logger = getLogger(__name__)
@@ -17,17 +18,17 @@ logger = getLogger(__name__)
 
 class BinlogReplicatorRunner(ProcessRunner):
     def __init__(self):
-        super().__init__('python3 main.py --config config.yaml binlog_replicator')
+        super().__init__(f'{sys.argv[0]} --config config.yaml binlog_replicator')
 
 
 class DbReplicatorRunner(ProcessRunner):
     def __init__(self, db_name):
-        super().__init__(f'python3 main.py --config config.yaml --db {db_name} db_replicator')
+        super().__init__(f'{sys.argv[0]} --config config.yaml --db {db_name} db_replicator')
 
 
 class RunAllRunner(ProcessRunner):
     def __init__(self, db_name):
-        super().__init__(f'python3 main.py --config config.yaml run_all --db {db_name}')
+        super().__init__(f'{sys.argv[0]} --config config.yaml run_all --db {db_name}')
 
 
 class Runner:

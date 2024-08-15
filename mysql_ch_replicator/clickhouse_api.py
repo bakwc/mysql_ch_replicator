@@ -3,8 +3,8 @@ import clickhouse_connect
 
 from logging import getLogger
 
-from config import ClickhouseSettings
-from table_structure import TableStructure, TableField
+from .config import ClickhouseSettings
+from .table_structure import TableStructure, TableField
 
 
 logger = getLogger(__name__)

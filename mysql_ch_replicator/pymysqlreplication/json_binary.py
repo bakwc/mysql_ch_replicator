@@ -1,5 +1,5 @@
-from pymysqlreplication.util.bytes import *
-from pymysqlreplication.constants import FIELD_TYPE
+from .util.bytes import *
+from .constants import FIELD_TYPE
 from enum import Enum
 
 JSONB_TYPE_SMALL_OBJECT = 0x0

@@ -1,8 +1,8 @@
-from pymysqlreplication import constants, event, row_event
-from pymysqlreplication.json_binary import parse_json, JsonDiff, JsonDiffOperation
-from pymysqlreplication.util.bytes import *
-from pymysqlreplication.constants import BINLOG
-from pymysqlreplication.cpp_accelerated import cpp_mysql_to_json
+from . import constants, event, row_event
+from .json_binary import parse_json, JsonDiff, JsonDiffOperation
+from .util.bytes import *
+from .constants import BINLOG
+from .cpp_accelerated import cpp_mysql_to_json
 
 # Constants from PyMYSQL source code
 NULL_COLUMN = 251

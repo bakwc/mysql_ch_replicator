@@ -1,8 +1,8 @@
 import time
 import mysql.connector
 
-from config import MysqlSettings
-from table_structure import TableStructure, TableField
+from .config import MysqlSettings
+from .table_structure import TableStructure, TableField
 
 
 class MySQLApi:

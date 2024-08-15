@@ -3,8 +3,8 @@ import json
 import time
 import pickle
 
-from config import Settings
-from mysql_api import MySQLApi
+from .config import Settings
+from .mysql_api import MySQLApi
 
 
 def bnum(fname):
