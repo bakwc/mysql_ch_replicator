@@ -35,7 +35,7 @@ class EventType(Enum):
 
 @dataclass
 class LogEvent:
-    transaction_id: tuple[str, int] = 0  # (file_name, log_pos)
+    transaction_id: tuple = 0  # (file_name, log_pos)
     db_name: str = ''
     table_name: str = ''
     records: object = None
