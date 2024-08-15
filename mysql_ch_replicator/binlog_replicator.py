@@ -350,7 +350,7 @@ class BinlogReplicator:
         }
         self.data_writer = DataWriter(self.replicator_settings)
         self.state = State(os.path.join(replicator_settings.data_dir, 'state.json'))
-        print(" === start pos", self.state.prev_last_seen_transaction)
+        logger.info(f'state start position: {self.state.prev_last_seen_transaction}')
 
         log_file, log_pos = None, None
         if self.state.prev_last_seen_transaction:

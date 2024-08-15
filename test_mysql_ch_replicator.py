@@ -3,13 +3,13 @@ import shutil
 import time
 import subprocess
 
-import config
-import mysql_api
-import clickhouse_api
-from binlog_replicator import State as BinlogState
-from db_replicator import State as DbReplicatorState
+from mysql_ch_replicator import config
+from mysql_ch_replicator import mysql_api
+from mysql_ch_replicator import clickhouse_api
+from mysql_ch_replicator.binlog_replicator import State as BinlogState
+from mysql_ch_replicator.db_replicator import State as DbReplicatorState
 
-from runner import BinlogReplicatorRunner, DbReplicatorRunner, RunAllRunner
+from mysql_ch_replicator.runner import ProcessRunner
 
 
 CONFIG_FILE = 'config.yaml'
@@ -17,6 +17,21 @@ TEST_DB_NAME = 'replication_test_db'
 TEST_TABLE_NAME = 'test_table'
 TEST_TABLE_NAME_2 = 'test_table_2'
 TEST_TABLE_NAME_3 = 'test_table_3'
+
+
+class BinlogReplicatorRunner(ProcessRunner):
+    def __init__(self):
+        super().__init__(f'./main.py --config config.yaml binlog_replicator')
+
+
+class DbReplicatorRunner(ProcessRunner):
+    def __init__(self, db_name):
+        super().__init__(f'./main.py --config config.yaml --db {db_name} db_replicator')
+
+
+class RunAllRunner(ProcessRunner):
+    def __init__(self, db_name):
+        super().__init__(f'./main.py --config config.yaml run_all --db {db_name}')
 
 
 def kill_process(pid, force=False):
