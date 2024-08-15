@@ -147,6 +147,18 @@ class DataReader:
             return None
         return first_event.transaction_id
 
+    def file_has_transaction(self, file_num, transaction_id) -> bool:
+        file_name = get_file_name_by_num(self.data_dir, self.db_name, file_num)
+        reader = FileReader(file_name)
+        while True:
+            event = reader.read_next_event()
+            if event is None:
+                break
+            if event.transaction_id == transaction_id:
+                reader.close()
+                return True
+        return False
+
     def get_file_with_transaction(self, existing_file_nums, transaction_id):
         matching_file_num = None
         prev_file_num = None
@@ -158,7 +170,16 @@ class DataReader:
             prev_file_num = file_num
         if matching_file_num is None:
             matching_file_num = existing_file_nums[-1]
-        return matching_file_num
+
+        idx = existing_file_nums.index(matching_file_num)
+        for i in range(max(0, idx-10), idx+10):
+            if i >= len(existing_file_nums):
+                break
+            file_num = existing_file_nums[i]
+            if self.file_has_transaction(file_num, transaction_id):
+                return file_num
+
+        raise Exception('transaction not found', transaction_id)
 
     def set_position(self, transaction_id):
         existing_file_nums = get_existing_file_nums(self.data_dir, self.db_name)
