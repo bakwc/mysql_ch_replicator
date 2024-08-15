@@ -1,0 +1,18 @@
+
+mysql:
+  host: 'localhost'
+  port: 8306
+  user: 'root'
+  password: 'root'
+
+clickhouse:
+  host: 'localhost'
+  port: 8323
+  user: 'default'
+  password: 'default'
+
+binlog_replicator:
+  data_dir: '/home/user/binlog/'
+  records_per_file: 100000
+
+databases: 'database_name_pattern_*'
