@@ -1,10 +1,13 @@
 import os
 import shutil
 import time
+import subprocess
 
 import config
 import mysql_api
 import clickhouse_api
+from binlog_replicator import State as BinlogState
+from db_replicator import State as DbReplicatorState
 
 from runner import BinlogReplicatorRunner, DbReplicatorRunner, RunAllRunner
 
@@ -14,6 +17,13 @@ TEST_DB_NAME = 'replication_test_db'
 TEST_TABLE_NAME = 'test_table'
 TEST_TABLE_NAME_2 = 'test_table_2'
 TEST_TABLE_NAME_3 = 'test_table_3'
+
+
+def kill_process(pid, force=False):
+    command = f'kill {pid}'
+    if force:
+        command = f'kill -9 {pid}'
+    subprocess.run(command, shell=True)
 
 
 def assert_wait(condition, max_wait_time=15.0, retry_interval=0.05):
@@ -211,6 +221,25 @@ CREATE TABLE {TEST_TABLE_NAME} (
     assert_wait(lambda: TEST_TABLE_NAME_2 in ch.get_tables())
 
 
+def get_binlog_replicator_pid(cfg: config.Settings):
+    path = os.path.join(
+        cfg.binlog_replicator.data_dir,
+        'state.json',
+    )
+    state = BinlogState(path)
+    return state.pid
+
+
+def get_db_replicator_pid(cfg: config.Settings, db_name: str):
+    path = os.path.join(
+        cfg.binlog_replicator.data_dir,
+        db_name,
+        'state.pckl',
+    )
+    state = DbReplicatorState(path)
+    return state.pid
+
+
 def test_runner():
     cfg = config.Settings()
     cfg.load(CONFIG_FILE)
@@ -252,3 +281,16 @@ CREATE TABLE {TEST_TABLE_NAME} (
     mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES ('Filipp', 50);", commit=True)
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Filipp'")[0]['age'] == 50)
+
+    # Test for restarting dead processes
+    binlog_repl_pid = get_binlog_replicator_pid(cfg)
+    db_repl_pid = get_db_replicator_pid(cfg, TEST_DB_NAME)
+
+    kill_process(binlog_repl_pid)
+    kill_process(db_repl_pid, force=True)
+
+    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES ('John', 11);", commit=True)
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 4)
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='John'")[0]['age'] == 11)
+
+    run_all_runner.stop()

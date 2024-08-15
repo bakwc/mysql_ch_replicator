@@ -38,6 +38,7 @@ class State:
         self.initial_replication_max_primary_key = None
         self.tables_structure: dict[str, tuple[TableStructure, TableStructure]] = {}
         self.tables = []
+        self.pid = None
         self.load()
 
     def load(self):
@@ -54,6 +55,7 @@ class State:
         self.initial_replication_max_primary_key = data['initial_replication_max_primary_key']
         self.tables_structure = data['tables_structure']
         self.tables = data['tables']
+        self.pid = data['pid']
 
     def save(self):
         file_name = self.file_name
@@ -65,6 +67,7 @@ class State:
             'initial_replication_max_primary_key': self.initial_replication_max_primary_key,
             'tables_structure': self.tables_structure,
             'tables': self.tables,
+            'pid': os.getpid(),
         })
         with open(file_name + '.tmp', 'wb') as f:
             f.write(data)

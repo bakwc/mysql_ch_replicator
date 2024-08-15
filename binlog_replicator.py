@@ -281,6 +281,7 @@ class State:
         self.file_name = file_name
         self.last_seen_transaction = None
         self.prev_last_seen_transaction = None
+        self.pid = None
         self.load()
 
     def load(self):
@@ -291,6 +292,7 @@ class State:
         data = json.loads(data)
         self.last_seen_transaction = data['last_seen_transaction']
         self.prev_last_seen_transaction = data['prev_last_seen_transaction']
+        self.pid = data['pid']
         if self.last_seen_transaction is not None:
             self.last_seen_transaction = tuple(self.last_seen_transaction)
         if self.prev_last_seen_transaction is not None:
@@ -301,6 +303,7 @@ class State:
         data = json.dumps({
             'last_seen_transaction': self.last_seen_transaction,
             'prev_last_seen_transaction': self.prev_last_seen_transaction,
+            'pid': os.getpid(),
         })
         with open(file_name + '.tmp', 'wt') as f:
             f.write(data)

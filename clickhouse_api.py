@@ -42,6 +42,7 @@ class ClickhouseApi:
             password=clickhouse_settings.password,
         )
         self.tables_last_record_version = {}  # table_name => last used row version
+        self.execute_command('SET final = 1;')
 
     def get_tables(self):
         result = self.client.query('SHOW TABLES')
