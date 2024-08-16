@@ -1,0 +1,18 @@
+name: Test and deploy
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+    tags:
+      - *
+
+jobs:
+  run_tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: run_tests
+        run: >
+          docker compose -f docker-compose-tests.yaml up --force-recreate --no-deps --wait -d &&
+          sudo docker exec -w /app/ -it `docker ps | grep python | awk '{print $1;}'` python3 -m pytest -v -s test_mysql_ch_replicator.py
