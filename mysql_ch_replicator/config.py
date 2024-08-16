@@ -32,11 +32,13 @@ class Settings:
         self.clickhouse = ClickhouseSettings()
         self.binlog_replicator = BinlogReplicatorSettings()
         self.databases = ''
+        self.settings_file = ''
 
     def load(self, settings_file):
         data = open(settings_file, 'r').read()
         data = yaml.safe_load(data)
 
+        self.settings_file = settings_file
         self.mysql = MysqlSettings(**data['mysql'])
         self.clickhouse = ClickhouseSettings(**data['clickhouse'])
         self.databases = data['databases']

@@ -12,7 +12,7 @@ from mysql_ch_replicator.db_replicator import State as DbReplicatorState
 from mysql_ch_replicator.runner import ProcessRunner
 
 
-CONFIG_FILE = 'config.yaml'
+CONFIG_FILE = 'tests_config.yaml'
 TEST_DB_NAME = 'replication_test_db'
 TEST_TABLE_NAME = 'test_table'
 TEST_TABLE_NAME_2 = 'test_table_2'
@@ -21,17 +21,17 @@ TEST_TABLE_NAME_3 = 'test_table_3'
 
 class BinlogReplicatorRunner(ProcessRunner):
     def __init__(self):
-        super().__init__(f'./main.py --config config.yaml binlog_replicator')
+        super().__init__(f'./main.py --config {CONFIG_FILE} binlog_replicator')
 
 
 class DbReplicatorRunner(ProcessRunner):
     def __init__(self, db_name):
-        super().__init__(f'./main.py --config config.yaml --db {db_name} db_replicator')
+        super().__init__(f'./main.py --config {CONFIG_FILE} --db {db_name} db_replicator')
 
 
 class RunAllRunner(ProcessRunner):
     def __init__(self, db_name):
-        super().__init__(f'./main.py --config config.yaml run_all --db {db_name}')
+        super().__init__(f'./main.py --config {CONFIG_FILE} run_all --db {db_name}')
 
 
 def kill_process(pid, force=False):

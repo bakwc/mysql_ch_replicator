@@ -17,18 +17,18 @@ logger = getLogger(__name__)
 
 
 class BinlogReplicatorRunner(ProcessRunner):
-    def __init__(self):
-        super().__init__(f'{sys.argv[0]} --config config.yaml binlog_replicator')
+    def __init__(self, config_file):
+        super().__init__(f'{sys.argv[0]} --config {config_file} binlog_replicator')
 
 
 class DbReplicatorRunner(ProcessRunner):
-    def __init__(self, db_name):
-        super().__init__(f'{sys.argv[0]} --config config.yaml --db {db_name} db_replicator')
+    def __init__(self, db_name, config_file):
+        super().__init__(f'{sys.argv[0]} --config {config_file} --db {db_name} db_replicator')
 
 
 class RunAllRunner(ProcessRunner):
-    def __init__(self, db_name):
-        super().__init__(f'{sys.argv[0]} --config config.yaml run_all --db {db_name}')
+    def __init__(self, db_name, config_file):
+        super().__init__(f'{sys.argv[0]} --config {config_file} run_all --db {db_name}')
 
 
 class Runner:
@@ -63,7 +63,7 @@ class Runner:
 
         killer = GracefulKiller()
 
-        self.binlog_runner = BinlogReplicatorRunner()
+        self.binlog_runner = BinlogReplicatorRunner(self.config.settings_file)
         self.binlog_runner.run()
 
         # First - continue replication for DBs that already finished initial replication
@@ -71,7 +71,7 @@ class Runner:
             if not self.is_initial_replication_finished(db_name=db):
                 continue
             logger.info(f'running replication for {db} (initial replication finished)')
-            runner = self.runners[db] = DbReplicatorRunner(db_name=db)
+            runner = self.runners[db] = DbReplicatorRunner(db_name=db, config_file=self.config.settings_file)
             runner.run()
 
         # Second - run replication for other DBs one by one and wait until initial replication finished
@@ -80,7 +80,7 @@ class Runner:
                 continue
 
             logger.info(f'running replication for {db} (initial replication not finished - waiting)')
-            runner = self.runners[db] = DbReplicatorRunner(db_name=db)
+            runner = self.runners[db] = DbReplicatorRunner(db_name=db, config_file=self.config.settings_file)
             runner.run()
             if not self.wait_initial_replication:
                 continue
