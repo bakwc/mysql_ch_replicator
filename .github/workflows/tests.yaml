@@ -14,5 +14,6 @@ jobs:
     steps:
       - name: run_tests
         run: >
+          cd .. &&
           docker compose -f docker-compose-tests.yaml up --force-recreate --no-deps --wait -d &&
           sudo docker exec -w /app/ -it `docker ps | grep python | awk '{print $1;}'` python3 -m pytest -v -s test_mysql_ch_replicator.py
