@@ -1,3 +1,4 @@
+import datetime
 import time
 import clickhouse_connect
 
@@ -117,6 +118,16 @@ class ClickhouseApi:
 
         records_to_insert = []
         for record in records:
+            new_record = []
+            for e in record:
+                if isinstance(e, datetime.datetime):
+                    try:
+                        e.timestamp()
+                    except ValueError:
+                        e = 0
+                new_record.append(e)
+            record = new_record
+
             records_to_insert.append(tuple(record) + (current_version,))
             current_version += 1
 
