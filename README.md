@@ -1,4 +1,13 @@
 # mysql_ch_replicator
+![tests](https://github.com/bakwc/mysql_ch_replicator/actions/workflows/tests.yaml/badge.svg)
+[![Release][release-image]][releases]
+[![License][license-image]][license]
+
+[release-image]: https://img.shields.io/badge/release-0.0.13-blue.svg?style=flat
+[releases]: https://github.com/bakwc/mysql_ch_replicator/releases
+
+[license-image]: https://img.shields.io/badge/license-MIT-blue.svg?style=flat
+[license]: LICENSE
 
 `mysql_ch_replicator` is a powerful and efficient tool designed for real-time replication of MySQL databases to ClickHouse.
 
