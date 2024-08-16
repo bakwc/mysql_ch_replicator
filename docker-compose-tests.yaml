@@ -28,7 +28,12 @@ services:
 
   replicator:
     image: python:3.12.4-slim-bookworm
-    command: bash -c "pip install -r /app/requirements.txt && tail -f /dev/null"
+    command: bash -c "pip install -r /app/requirements.txt && pip install -r /app/requirements-dev.txt && touch /tmp/ready && tail -f /dev/null"
+    healthcheck:
+      test: [ 'CMD-SHELL', 'test -f /tmp/ready' ]
+      interval: 2s
+      retries: 100
+      start_period: 10s
     network_mode: host
     volumes:
       - ./:/app/
