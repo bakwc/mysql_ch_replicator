@@ -9,6 +9,8 @@
 [license-image]: https://img.shields.io/badge/license-MIT-blue.svg?style=flat
 [license]: LICENSE
 
+![img](https://raw.githubusercontent.com/bakwc/mysql_ch_replicator/master/mysql_ch.jpg)
+
 `mysql_ch_replicator` is a powerful and efficient tool designed for real-time replication of MySQL databases to ClickHouse.
 
 With a focus on high performance, it utilizes batching heavily and uses C++ extension for faster execution. This tool ensures seamless data integration with support for migrations, schema changes, and correct data management.
