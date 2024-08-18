@@ -106,7 +106,7 @@ pip install -r requirements.txt
 
 For running test you will need:
 1. MySQL and ClickHouse server
-2. `config.yaml` that will be used during tests
+2. `tests_config.yaml` that will be used during tests
 3. Run tests with:
 
 ```bash
