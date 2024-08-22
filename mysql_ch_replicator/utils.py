@@ -39,5 +39,9 @@ class ProcessRunner:
             self.process.wait()
             self.process = None
 
+    def wait_complete(self):
+        self.process.wait()
+        self.process = None
+
     def __del__(self):
         self.stop()

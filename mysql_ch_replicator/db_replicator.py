@@ -95,11 +95,12 @@ class DbReplicator:
 
     READ_LOG_INTERVAL = 1
 
-    def __init__(self, config: Settings, database: str, target_database: str = None):
+    def __init__(self, config: Settings, database: str, target_database: str = None, initial_only: bool = False):
         self.config = config
         self.database = database
         self.target_database = target_database or database
         self.target_database_tmp = self.target_database + '_tmp'
+        self.initial_only = initial_only
 
         self.mysql_api = MySQLApi(
             database=self.database,
@@ -237,6 +238,10 @@ class DbReplicator:
             self.save_state_if_required()
 
     def run_realtime_replication(self):
+        if self.initial_only:
+            logger.info('skip running realtime replication, only initial replication was requested')
+            return
+
         self.mysql_api.close()
         self.mysql_api = None
         logger.info(f'running realtime replication from the position: {self.state.last_processed_transaction}')
