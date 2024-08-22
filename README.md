@@ -62,6 +62,8 @@ mysql_ch_replicator --config config.yaml db_replicator --database mysql_db_name 
 ```
 Where `mysql_db_name` is the name of the database you want to copy.
 
+Don't be afraid to interrupt process in the middle. It will save the state and continue copy after restart.
+
 ### Configuration
 
 `mysql_ch_replicator` can be configured through a configuration file. Here is the config example:
