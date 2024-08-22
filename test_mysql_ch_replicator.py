@@ -25,8 +25,11 @@ class BinlogReplicatorRunner(ProcessRunner):
 
 
 class DbReplicatorRunner(ProcessRunner):
-    def __init__(self, db_name):
-        super().__init__(f'./main.py --config {CONFIG_FILE} --db {db_name} db_replicator')
+    def __init__(self, db_name, additional_arguments=None):
+        additional_arguments = additional_arguments or ''
+        if not additional_arguments.startswith(' '):
+            additional_arguments = ' ' + additional_arguments
+        super().__init__(f'./main.py --config {CONFIG_FILE} --db {db_name} db_replicator{additional_arguments}')
 
 
 class RunAllRunner(ProcessRunner):
@@ -310,3 +313,43 @@ CREATE TABLE {TEST_TABLE_NAME} (
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='John'")[0]['rate'] == 12.5)
 
     run_all_runner.stop()
+
+
+def test_initial_only():
+    cfg = config.Settings()
+    cfg.load(CONFIG_FILE)
+
+    mysql = mysql_api.MySQLApi(
+        database=None,
+        mysql_settings=cfg.mysql,
+    )
+
+    ch = clickhouse_api.ClickhouseApi(
+        database=TEST_DB_NAME,
+        clickhouse_settings=cfg.clickhouse,
+    )
+
+    prepare_env(cfg, mysql, ch)
+
+    mysql.execute(f'''
+CREATE TABLE {TEST_TABLE_NAME} (
+    id int NOT NULL AUTO_INCREMENT,
+    name varchar(255),
+    age int,
+    PRIMARY KEY (id)
+); 
+    ''')
+
+    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES ('Ivan', 42);", commit=True)
+    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES ('Peter', 33);", commit=True)
+
+    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, additional_arguments='--initial_only=True')
+    db_replicator_runner.run()
+    db_replicator_runner.wait_complete()
+
+    assert TEST_DB_NAME in ch.get_databases()
+
+    ch.execute_command(f'USE {TEST_DB_NAME}')
+
+    assert TEST_TABLE_NAME in ch.get_tables()
+    assert len(ch.select(TEST_TABLE_NAME)) == 2

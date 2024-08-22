@@ -39,7 +39,7 @@ You may need to also compile C++ components if they're not pre-built for your pl
 
 ### Basic Usage
 
-To start the replication process:
+For realtime data sync from MySQL to ClickHouse:
 
 1. Prepare config file. Use `example_config.yaml` as an example.
 2. Start the replication:
@@ -47,6 +47,20 @@ To start the replication process:
 ```bash
 mysql_ch_replicator --config config.yaml run_all
 ```
+
+This will keep data in ClickHouse updating as you update data in MySQL. It will always be in sync.
+
+### One Time Data Copy
+
+If you just need to copy data once, and don't need continuous synchronization for all changes, you should do following:
+
+1. Prepare config file. Use `example_config.yaml` as an example.
+2. Run one-time data copy:
+
+```bash
+mysql_ch_replicator --config config.yaml db_replicator --database mysql_db_name --initial_only=True
+```
+Where `mysql_db_name` is the name of the database you want to copy.
 
 ### Configuration
 

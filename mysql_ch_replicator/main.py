@@ -36,6 +36,7 @@ def run_db_replicator(args, config: Settings):
         config=config,
         database=args.db,
         target_database=getattr(args, 'target_db', None),
+        initial_only=args.initial_only,
     )
     db_replicator.run()
 
@@ -62,6 +63,10 @@ def main():
     parser.add_argument("--db", help="source database(s) name", type=str)
     parser.add_argument("--target_db", help="target database(s) name, if not set will be same as source", type=str)
     parser.add_argument("--wait_initial_replication", type=bool, default=True)
+    parser.add_argument(
+        "--initial_only", type=bool, default=False,
+        help="don't run realtime replication, run initial replication only",
+    )
     args = parser.parse_args()
 
     config = Settings()
