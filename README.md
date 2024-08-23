@@ -42,7 +42,31 @@ You may need to also compile C++ components if they're not pre-built for your pl
 For realtime data sync from MySQL to ClickHouse:
 
 1. Prepare config file. Use `example_config.yaml` as an example.
-2. Start the replication:
+2. Configure MySQL and ClickHouse servers:
+ - MySQL server configuration file `my.cnf` should include following settings (required to write binary log in raw format, and enable password authentication):
+```ini
+[mysqld]
+# ... other settings ...
+gtid_mode = on
+enforce_gtid_consistency = 1
+default_authentication_plugin = mysql_native_password
+
+```
+
+ - ClickHouse server config `override.xml` should include following settings (it makes clickhouse apply final keyword automatically to handle updates correctly):
+```xml
+<clickhouse>
+    <!-- ... other settings ... -->
+    <profiles>
+        <default>
+            <!-- ... other settings ... -->
+            <final>1</final>
+        </default>
+    </profiles>
+</clickhouse>
+```
+
+3. Start the replication:
 
 ```bash
 mysql_ch_replicator --config config.yaml run_all
