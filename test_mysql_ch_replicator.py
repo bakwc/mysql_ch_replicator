@@ -315,6 +315,10 @@ CREATE TABLE {TEST_TABLE_NAME} (
     mysql.execute(f"DELETE FROM {TEST_TABLE_NAME} WHERE name='John';", commit=True)
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
 
+    mysql.execute(f"UPDATE {TEST_TABLE_NAME} SET age=66 WHERE name='Ivan'", commit=True)
+    time.sleep(4)
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
+
     run_all_runner.stop()
 
 
