@@ -12,6 +12,8 @@ services:
       - CLICKHOUSE_ADMIN_USER=default
       - CLICKHOUSE_HTTP_PORT=9123
     network_mode: host
+    volumes:
+      - tests_override.xml:/bitnami/clickhouse/etc/conf.d/override.xml:ro
 
   mysql_db:
     image: mysql/mysql-server:8.0.32
