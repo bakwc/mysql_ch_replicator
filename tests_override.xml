@@ -1,0 +1,7 @@
+<clickhouse>
+    <profiles>
+        <default>
+            <final>1</final>
+        </default>
+    </profiles>
+</clickhouse>
