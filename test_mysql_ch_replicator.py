@@ -312,6 +312,9 @@ CREATE TABLE {TEST_TABLE_NAME} (
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 4)
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='John'")[0]['rate'] == 12.5)
 
+    mysql.execute(f"DELETE FROM {TEST_TABLE_NAME} WHERE name='John';", commit=True)
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
+
     run_all_runner.stop()
 
 
