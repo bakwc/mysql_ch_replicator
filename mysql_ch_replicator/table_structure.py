@@ -48,3 +48,9 @@ class TableStructure:
             if field.name == field_name:
                 return True
         return False
+
+    def get_field(self, field_name):
+        for field in self.fields:
+            if field.name == field_name:
+                return field
+        return None

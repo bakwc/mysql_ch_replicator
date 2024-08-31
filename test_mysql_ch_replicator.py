@@ -130,7 +130,19 @@ CREATE TABLE {TEST_TABLE_NAME} (
         f"VALUES ('John', 12, 'Doe', 'USA');", commit=True,
     )
 
+    mysql.execute(
+        f"ALTER TABLE {TEST_DB_NAME}.{TEST_TABLE_NAME} "
+        f"CHANGE COLUMN country origin VARCHAR(24) DEFAULT '' NOT NULL",
+    )
+
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 5)
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='John'")[0].get('origin') == 'USA')
+
+    mysql.execute(
+        f"ALTER TABLE {TEST_DB_NAME}.{TEST_TABLE_NAME} "
+        f"CHANGE COLUMN origin country VARCHAR(24) DEFAULT '' NOT NULL",
+    )
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='John'")[0].get('origin') is None)
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='John'")[0].get('country') == 'USA')
 
     mysql.execute(f"ALTER TABLE {TEST_DB_NAME}.{TEST_TABLE_NAME} DROP COLUMN country")

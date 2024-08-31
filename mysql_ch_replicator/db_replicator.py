@@ -274,9 +274,6 @@ class DbReplicator:
                 return
 
         logger.debug(f'processing event {event.transaction_id}')
-        self.stats.events_count += 1
-        self.stats.last_transaction = event.transaction_id
-        self.state.last_processed_transaction_non_uploaded = event.transaction_id
 
         event_handlers = {
             EventType.ADD_EVENT.value: self.handle_insert_event,
@@ -285,6 +282,10 @@ class DbReplicator:
         }
 
         event_handlers[event.event_type](event)
+
+        self.stats.events_count += 1
+        self.stats.last_transaction = event.transaction_id
+        self.state.last_processed_transaction_non_uploaded = event.transaction_id
 
         self.upload_records_if_required(table_name=event.table_name)
 
