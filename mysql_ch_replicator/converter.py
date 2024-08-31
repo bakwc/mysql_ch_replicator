@@ -216,7 +216,7 @@ class MysqlToClickhouseConverter:
 
         column_after = None
         if tokens[-2].lower() == 'after':
-            column_after = tokens[-1]
+            column_after = strip_sql_name(tokens[-1])
             tokens = tokens[:-2]
             if len(tokens) < 2:
                 raise Exception('wrong tokens count', tokens)
@@ -234,7 +234,7 @@ class MysqlToClickhouseConverter:
             ch_table_structure: TableStructure = table_structure[1]
 
             if column_after is None:
-                column_after = mysql_table_structure.fields[-1].name
+                column_after = strip_sql_name(mysql_table_structure.fields[-1].name)
 
             mysql_table_structure.add_field_after(
                 TableField(name=column_name, field_type=column_type_mysql),
