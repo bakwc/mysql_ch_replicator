@@ -3,7 +3,7 @@
 [![Release][release-image]][releases]
 [![License][license-image]][license]
 
-[release-image]: https://img.shields.io/badge/release-0.0.14-blue.svg?style=flat
+[release-image]: https://img.shields.io/badge/release-0.0.15-blue.svg?style=flat
 [releases]: https://github.com/bakwc/mysql_ch_replicator/releases
 
 [license-image]: https://img.shields.io/badge/license-MIT-blue.svg?style=flat
