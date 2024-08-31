@@ -205,7 +205,11 @@ class MysqlToClickhouseConverter:
             if op_name == 'alter':
                 continue
 
-            raise Exception('not implement')
+            if op_name == 'change':
+                self.__convert_alter_table_change_column(db_name, table_name, tokens)
+                continue
+
+            raise Exception(f'operation {op_name} not implement, query: {subquery}')
 
     def __convert_alter_table_add_column(self, db_name, table_name, tokens):
         if len(tokens) < 2:
@@ -305,6 +309,51 @@ class MysqlToClickhouseConverter:
         query = f'ALTER TABLE {db_name}.{table_name} MODIFY COLUMN {column_name} {column_type_ch}'
         if self.db_replicator:
             self.db_replicator.clickhouse_api.execute_command(query)
+
+    def __convert_alter_table_change_column(self, db_name, table_name, tokens):
+        if len(tokens) < 3:
+            raise Exception('wrong tokens count', tokens)
+
+        if ',' in ' '.join(tokens):
+            raise Exception('add multiple columns not implemented', tokens)
+
+        column_name = strip_sql_name(tokens[0])
+        new_column_name = strip_sql_name(tokens[1])
+        column_type_mysql = tokens[2]
+        column_type_mysql_parameters = ' '.join(tokens[3:])
+
+        column_type_ch = self.convert_field_type(column_type_mysql, column_type_mysql_parameters)
+
+        # update table structure
+        if self.db_replicator:
+            table_structure = self.db_replicator.state.tables_structure[table_name]
+            mysql_table_structure: TableStructure = table_structure[0]
+            ch_table_structure: TableStructure = table_structure[1]
+
+            current_column_type_ch = ch_table_structure.get_field(column_name).field_type
+
+            if current_column_type_ch != column_type_ch:
+
+                mysql_table_structure.update_field(
+                    TableField(name=column_name, field_type=column_type_mysql),
+                )
+
+                ch_table_structure.update_field(
+                    TableField(name=column_name, field_type=column_type_ch),
+                )
+
+                query = f'ALTER TABLE {db_name}.{table_name} MODIFY COLUMN {column_name} {column_type_ch}'
+                self.db_replicator.clickhouse_api.execute_command(query)
+
+            if column_name != new_column_name:
+                curr_field_mysql = mysql_table_structure.get_field(column_name)
+                curr_field_clickhouse = ch_table_structure.get_field(column_name)
+
+                curr_field_mysql.name = new_column_name
+                curr_field_clickhouse.name = new_column_name
+
+                query = f'ALTER TABLE {db_name}.{table_name} RENAME COLUMN {column_name} TO {new_column_name}'
+                self.db_replicator.clickhouse_api.execute_command(query)
 
     def parse_create_table_query(self, mysql_query) -> tuple:
         mysql_table_structure = self.parse_mysql_table_structure(mysql_query)
