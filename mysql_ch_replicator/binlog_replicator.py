@@ -20,7 +20,7 @@ from .pymysqlreplication.row_event import (
 )
 from .pymysqlreplication.event import QueryEvent
 
-from .config import MysqlSettings, BinlogReplicatorSettings
+from .config import Settings, BinlogReplicatorSettings
 from .utils import GracefulKiller
 
 
@@ -340,17 +340,18 @@ class BinlogReplicator:
     BINLOG_RETENTION_PERIOD = 12 * 60 * 60
     READ_LOG_INTERVAL = 1
 
-    def __init__(self, mysql_settings: MysqlSettings, replicator_settings: BinlogReplicatorSettings):
-        self.mysql_settings = mysql_settings
-        self.replicator_settings = replicator_settings
+    def __init__(self, settings: Settings):
+        self.settings = settings
+        self.mysql_settings = settings.mysql
+        self.replicator_settings = settings.binlog_replicator
         mysql_settings = {
-            'host': mysql_settings.host,
-            'port': mysql_settings.port,
-            'user': mysql_settings.user,
-            'passwd': mysql_settings.password,
+            'host': self.mysql_settings.host,
+            'port': self.mysql_settings.port,
+            'user': self.mysql_settings.user,
+            'passwd': self.mysql_settings.password,
         }
         self.data_writer = DataWriter(self.replicator_settings)
-        self.state = State(os.path.join(replicator_settings.data_dir, 'state.json'))
+        self.state = State(os.path.join(self.replicator_settings.data_dir, 'state.json'))
         logger.info(f'state start position: {self.state.prev_last_seen_transaction}')
 
         log_file, log_pos = None, None
@@ -401,6 +402,10 @@ class BinlogReplicator:
                     if hasattr(event, 'table'):
                         log_event.table_name = event.table
                     log_event.db_name = event.schema
+
+                    if not self.settings.is_database_matches(log_event.db_name):
+                        continue
+
                     if isinstance(log_event.db_name, bytes):
                         log_event.db_name = log_event.db_name.decode('utf-8')
 

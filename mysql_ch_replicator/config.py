@@ -1,4 +1,5 @@
 import yaml
+import fnmatch
 
 from dataclasses import dataclass
 
@@ -44,3 +45,6 @@ class Settings:
         self.databases = data['databases']
         assert isinstance(self.databases, str)
         self.binlog_replicator = BinlogReplicatorSettings(**data['binlog_replicator'])
+
+    def is_database_matches(self, db_name):
+        return fnmatch.fnmatch(db_name, self.databases)
