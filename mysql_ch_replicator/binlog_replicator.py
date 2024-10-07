@@ -403,11 +403,11 @@ class BinlogReplicator:
                         log_event.table_name = event.table
                     log_event.db_name = event.schema
 
-                    if not self.settings.is_database_matches(log_event.db_name):
-                        continue
-
                     if isinstance(log_event.db_name, bytes):
                         log_event.db_name = log_event.db_name.decode('utf-8')
+
+                    if not self.settings.is_database_matches(log_event.db_name):
+                        continue
 
                     log_event.transaction_id = transaction_id
                     if isinstance(event, UpdateRowsEvent) or isinstance(event, WriteRowsEvent):
