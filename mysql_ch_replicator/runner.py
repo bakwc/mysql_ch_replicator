@@ -1,7 +1,6 @@
 import os
 import time
 import sys
-import fnmatch
 
 from logging import getLogger
 
@@ -59,7 +58,7 @@ class Runner:
             database=None, mysql_settings=self.config.mysql,
         )
         databases = mysql_api.get_databases()
-        databases = [db for db in databases if fnmatch.fnmatch(db, self.databases)]
+        databases = [db for db in databases if self.config.is_database_matches(db)]
 
         killer = GracefulKiller()
 
