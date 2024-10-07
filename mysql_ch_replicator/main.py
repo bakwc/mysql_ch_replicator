@@ -20,8 +20,7 @@ def set_logging_config(tags):
 def run_binlog_replicator(args, config: Settings):
     set_logging_config('binlogrepl')
     binlog_replicator = BinlogReplicator(
-        mysql_settings=config.mysql,
-        replicator_settings=config.binlog_replicator,
+        settings=config,
     )
     binlog_replicator.run()
 
