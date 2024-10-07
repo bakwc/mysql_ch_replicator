@@ -15,4 +15,4 @@ binlog_replicator:
   data_dir: '/app/binlog/'
   records_per_file: 100000
 
-databases: 'database_name_pattern_*'
+databases: '*test*'
