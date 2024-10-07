@@ -4,6 +4,7 @@ import time
 import os
 import os.path
 import json
+import random
 
 from enum import Enum
 from logging import getLogger
@@ -358,7 +359,7 @@ class BinlogReplicator:
 
         self.stream = BinLogStreamReader(
             connection_settings=mysql_settings,
-            server_id=842,
+            server_id=random.randint(1, 2**32-2),
             blocking=False,
             resume_stream=True,
             log_pos=log_pos,
