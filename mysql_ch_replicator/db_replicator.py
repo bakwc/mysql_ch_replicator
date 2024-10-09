@@ -161,7 +161,7 @@ class DbReplicator:
     def prevent_binlog_removal(self):
         if time.time() - self.last_touch_time < self.BINLOG_TOUCH_INTERVAL:
             return
-        binlog_directory = os.path.join(self.config.binlog_replicator.data_dir, self.config.database)
+        binlog_directory = os.path.join(self.config.binlog_replicator.data_dir, self.database)
         logger.info(f'touch binlog {binlog_directory}')
         if not os.path.exists(binlog_directory):
             return
