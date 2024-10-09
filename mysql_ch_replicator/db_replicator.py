@@ -13,7 +13,7 @@ from .clickhouse_api import ClickhouseApi
 from .converter import MysqlToClickhouseConverter, strip_sql_name, strip_sql_comments
 from .table_structure import TableStructure
 from .binlog_replicator import DataReader, LogEvent, EventType
-from .utils import GracefulKiller
+from .utils import GracefulKiller, touch_all_files
 
 
 logger = getLogger(__name__)
@@ -89,6 +89,7 @@ class DbReplicator:
     INITIAL_REPLICATION_BATCH_SIZE = 50000
     SAVE_STATE_INTERVAL = 10
     STATS_DUMP_INTERVAL = 60
+    BINLOG_TOUCH_INTERVAL = 120
 
     DATA_DUMP_INTERVAL = 1
     DATA_DUMP_BATCH_SIZE = 10000
@@ -120,6 +121,7 @@ class DbReplicator:
         self.records_to_insert = defaultdict(dict)  # table_name => {record_id=>record, ...}
         self.records_to_delete = defaultdict(set)  # table_name => {record_id, ...}
         self.last_records_upload_time = 0
+        self.last_touch_time = 0
 
     def run(self):
         if self.state.status == Status.RUNNING_REALTIME_REPLICATION:
@@ -155,6 +157,16 @@ class DbReplicator:
         clickhouse_structure = self.converter.convert_table_structure(mysql_structure)
         self.state.tables_structure[table_name] = (mysql_structure, clickhouse_structure)
         self.clickhouse_api.create_table(clickhouse_structure)
+
+    def prevent_binlog_removal(self):
+        if time.time() - self.last_touch_time < self.BINLOG_TOUCH_INTERVAL:
+            return
+        binlog_directory = os.path.join(self.config.binlog_replicator.data_dir, self.config.database)
+        logger.info(f'touch binlog {binlog_directory}')
+        if not os.path.exists(binlog_directory):
+            return
+        self.last_touch_time = time.time()
+        touch_all_files(binlog_directory)
 
     def perform_initial_replication(self):
         self.clickhouse_api.database = self.target_database_tmp
@@ -236,6 +248,7 @@ class DbReplicator:
 
             self.state.initial_replication_max_primary_key = max_primary_key
             self.save_state_if_required()
+            self.prevent_binlog_removal()
 
     def run_realtime_replication(self):
         if self.initial_only:

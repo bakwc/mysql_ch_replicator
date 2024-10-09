@@ -1,6 +1,9 @@
 import signal
 import subprocess
+import os
+import time
 
+from pathlib import Path
 from logging import getLogger
 
 
@@ -45,3 +48,23 @@ class ProcessRunner:
 
     def __del__(self):
         self.stop()
+
+
+def touch_all_files(directory_path):
+    dir_path = Path(directory_path)
+
+    if not dir_path.exists():
+        raise FileNotFoundError(f"The directory '{directory_path}' does not exist.")
+
+    if not dir_path.is_dir():
+        raise NotADirectoryError(f"The path '{directory_path}' is not a directory.")
+
+    current_time = time.time()
+
+    for item in dir_path.iterdir():
+        if item.is_file():
+            try:
+                # Update the modification and access times
+                os.utime(item, times=(current_time, current_time))
+            except Exception as e:
+                logger.warning(f"Failed to touch {item}: {e}")
