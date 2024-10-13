@@ -401,6 +401,12 @@ class BinlogReplicator:
                     log_event = LogEvent()
                     if hasattr(event, 'table'):
                         log_event.table_name = event.table
+                        if isinstance(log_event.table_name, bytes):
+                            log_event.table_name = log_event.table_name.decode('utf-8')
+
+                        if not self.settings.is_table_matches(log_event.table_name):
+                            continue
+
                     log_event.db_name = event.schema
 
                     if isinstance(log_event.db_name, bytes):

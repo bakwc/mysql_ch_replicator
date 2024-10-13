@@ -110,13 +110,22 @@ binlog_replicator:
   records_per_file: 100000
 
 databases: 'database_name_pattern_*'
+tables: '*'
 ```
 
 
 - `mysql` MySQL connection settings
 - `clickhouse` ClickHouse connection settings
 - `binlog_replicator.data_dir` Directory for store binary log and application state
-- `databases` Databases name pattern to replicate, eg `db_*` will match `db_1` `db_2` `db_test`
+- `databases` Databases name pattern to replicate, e.g. `db_*` will match `db_1` `db_2` `db_test`, list is also supported
+- `tables` (__optional__) - tables to filter, list is also supported
+
+Few more tables / dbs examples:
+
+```yaml
+databases: ['my_database_1', 'my_database_2']
+tables: ['table_1', 'table_2*']
+```
 
 ### Advanced Features
 
@@ -144,13 +153,13 @@ pip install -r requirements.txt
 
 ### Running Tests
 
-For running test you will need:
-1. MySQL and ClickHouse server
-2. `tests_config.yaml` that will be used during tests
-3. Run tests with:
-
+1. Use docker-compose to install all requirements:
 ```bash
-pytest -v -s test_mysql_ch_replicator.py
+sudo docker compose -f docker-compose-tests.yaml up
+```
+2. Run tests with:
+```bash
+sudo docker exec -w /app/ -it mysql_ch_replicator-replicator-1 python3 -m pytest -v -s test_mysql_ch_replicator.py
 ```
 
 ## Contribution

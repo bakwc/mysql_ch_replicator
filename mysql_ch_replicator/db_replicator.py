@@ -136,6 +136,9 @@ class DbReplicator:
         self.clickhouse_api.database = self.target_database_tmp
         self.clickhouse_api.recreate_database()
         self.state.tables = self.mysql_api.get_tables()
+        self.state.tables = [
+            table for table in self.state.tables if self.config.is_table_matches(table)
+        ]
         self.state.last_processed_transaction = self.data_reader.get_last_transaction_id()
         self.state.save()
         logger.info(f'last known transaction {self.state.last_processed_transaction}')
@@ -150,6 +153,8 @@ class DbReplicator:
         self.state.save()
 
     def create_initial_structure_table(self, table_name):
+        if not self.config.is_table_matches(table_name):
+            return
         mysql_create_statement = self.mysql_api.get_table_create_statement(table_name)
         mysql_structure = self.converter.parse_mysql_table_structure(
             mysql_create_statement, required_table_name=table_name,
@@ -197,6 +202,9 @@ class DbReplicator:
 
     def perform_initial_replication_table(self, table_name):
         logger.info(f'running initial replication for table {table_name}')
+
+        if not self.config.is_table_matches(table_name):
+            logger.info(f'skip table {table_name} - not matching any allowed table')
 
         max_primary_key = None
         if self.state.initial_replication_table == table_name:
@@ -294,7 +302,8 @@ class DbReplicator:
             EventType.QUERY.value: self.handle_query_event,
         }
 
-        event_handlers[event.event_type](event)
+        if not event.table_name or self.config.is_table_matches(event.table_name):
+            event_handlers[event.event_type](event)
 
         self.stats.events_count += 1
         self.stats.last_transaction = event.transaction_id
@@ -367,6 +376,8 @@ class DbReplicator:
 
     def handle_create_table_query(self, query, db_name):
         mysql_structure, ch_structure = self.converter.parse_create_table_query(query)
+        if not self.config.is_table_matches(mysql_structure.table_name):
+            return
         self.state.tables_structure[mysql_structure.table_name] = (mysql_structure, ch_structure)
         self.clickhouse_api.create_table(ch_structure)
 
