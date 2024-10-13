@@ -33,6 +33,7 @@ class Settings:
         self.clickhouse = ClickhouseSettings()
         self.binlog_replicator = BinlogReplicatorSettings()
         self.databases = ''
+        self.tables = '*'
         self.settings_file = ''
 
     def load(self, settings_file):
@@ -43,8 +44,26 @@ class Settings:
         self.mysql = MysqlSettings(**data['mysql'])
         self.clickhouse = ClickhouseSettings(**data['clickhouse'])
         self.databases = data['databases']
-        assert isinstance(self.databases, str)
+        self.tables = data.get('tables', '*')
+        assert isinstance(self.databases, str) or isinstance(self.databases, list)
+        assert isinstance(self.tables, str) or isinstance(self.tables, list)
         self.binlog_replicator = BinlogReplicatorSettings(**data['binlog_replicator'])
 
+    @classmethod
+    def is_pattern_matches(cls, substr, pattern):
+        if not pattern or pattern == '*':
+            return True
+        if isinstance(pattern, str):
+            return fnmatch.fnmatch(substr, pattern)
+        if isinstance(pattern, list):
+            for allowed_pattern in pattern:
+                if fnmatch.fnmatch(substr, allowed_pattern):
+                    return True
+            return False
+        raise ValueError()
+
     def is_database_matches(self, db_name):
-        return fnmatch.fnmatch(db_name, self.databases)
+        return self.is_pattern_matches(db_name, self.databases)
+
+    def is_table_matches(self, table_name):
+        return self.is_pattern_matches(table_name, self.tables)
