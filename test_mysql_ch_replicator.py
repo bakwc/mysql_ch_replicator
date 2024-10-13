@@ -20,21 +20,21 @@ TEST_TABLE_NAME_3 = 'test_table_3'
 
 
 class BinlogReplicatorRunner(ProcessRunner):
-    def __init__(self):
-        super().__init__(f'./main.py --config {CONFIG_FILE} binlog_replicator')
+    def __init__(self, cfg_file=CONFIG_FILE):
+        super().__init__(f'./main.py --config {cfg_file} binlog_replicator')
 
 
 class DbReplicatorRunner(ProcessRunner):
-    def __init__(self, db_name, additional_arguments=None):
+    def __init__(self, db_name, additional_arguments=None, cfg_file=CONFIG_FILE):
         additional_arguments = additional_arguments or ''
         if not additional_arguments.startswith(' '):
             additional_arguments = ' ' + additional_arguments
-        super().__init__(f'./main.py --config {CONFIG_FILE} --db {db_name} db_replicator{additional_arguments}')
+        super().__init__(f'./main.py --config {cfg_file} --db {db_name} db_replicator{additional_arguments}')
 
 
 class RunAllRunner(ProcessRunner):
-    def __init__(self, db_name):
-        super().__init__(f'./main.py --config {CONFIG_FILE} run_all --db {db_name}')
+    def __init__(self, cfg_file=CONFIG_FILE):
+        super().__init__(f'./main.py --config {cfg_file} run_all')
 
 
 def kill_process(pid, force=False):
@@ -57,15 +57,16 @@ def prepare_env(
         cfg: config.Settings,
         mysql: mysql_api.MySQLApi,
         ch: clickhouse_api.ClickhouseApi,
+        db_name: str = TEST_DB_NAME
 ):
     if os.path.exists(cfg.binlog_replicator.data_dir):
         shutil.rmtree(cfg.binlog_replicator.data_dir)
     os.mkdir(cfg.binlog_replicator.data_dir)
-    mysql.drop_database(TEST_DB_NAME)
-    mysql.create_database(TEST_DB_NAME)
-    mysql.set_database(TEST_DB_NAME)
-    ch.drop_database(TEST_DB_NAME)
-    assert_wait(lambda: TEST_DB_NAME not in ch.get_databases())
+    mysql.drop_database(db_name)
+    mysql.create_database(db_name)
+    mysql.set_database(db_name)
+    ch.drop_database(db_name)
+    assert_wait(lambda: db_name not in ch.get_databases())
 
 
 def test_e2e_regular():
@@ -299,7 +300,7 @@ CREATE TABLE {TEST_TABLE_NAME} (
     mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES ('Ivan', 42);", commit=True)
     mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES ('Peter', 33);", commit=True)
 
-    run_all_runner = RunAllRunner(TEST_DB_NAME)
+    run_all_runner = RunAllRunner()
     run_all_runner.run()
 
     assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
@@ -372,3 +373,58 @@ CREATE TABLE {TEST_TABLE_NAME} (
 
     assert TEST_TABLE_NAME in ch.get_tables()
     assert len(ch.select(TEST_TABLE_NAME)) == 2
+
+
+def test_database_tables_filtering():
+    cfg = config.Settings()
+    cfg.load('tests_config_databases_tables.yaml')
+
+    mysql = mysql_api.MySQLApi(
+        database=None,
+        mysql_settings=cfg.mysql,
+    )
+
+    ch = clickhouse_api.ClickhouseApi(
+        database='test_db_2',
+        clickhouse_settings=cfg.clickhouse,
+    )
+
+    mysql.drop_database('test_db_3')
+    mysql.create_database('test_db_3')
+    ch.drop_database('test_db_3')
+
+    prepare_env(cfg, mysql, ch, db_name='test_db_2')
+
+    mysql.execute(f'''
+CREATE TABLE test_table_3 (
+    id int NOT NULL AUTO_INCREMENT,
+    name varchar(255),
+    age int,
+    PRIMARY KEY (id)
+); 
+    ''')
+
+    mysql.execute(f'''
+    CREATE TABLE test_table_2 (
+        id int NOT NULL AUTO_INCREMENT,
+        name varchar(255),
+        age int,
+        PRIMARY KEY (id)
+    ); 
+        ''')
+
+    mysql.execute(f"INSERT INTO test_table_3 (name, age) VALUES ('Ivan', 42);", commit=True)
+    mysql.execute(f"INSERT INTO test_table_2 (name, age) VALUES ('Ivan', 42);", commit=True)
+
+    run_all_runner = RunAllRunner(cfg_file='tests_config_databases_tables.yaml')
+    run_all_runner.run()
+
+    assert_wait(lambda: 'test_db_2' in ch.get_databases())
+    assert 'test_db_3' not in ch.get_databases()
+
+    ch.execute_command('USE test_db_2')
+
+    assert_wait(lambda: 'test_table_2' in ch.get_tables())
+    assert_wait(lambda: len(ch.select('test_table_2')) == 1)
+
+    assert 'test_table_3' not in ch.get_tables()
