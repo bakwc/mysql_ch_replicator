@@ -90,11 +90,16 @@ CREATE TABLE {TEST_TABLE_NAME} (
     id int NOT NULL AUTO_INCREMENT,
     name varchar(255),
     age int,
+    field1 text,
+    field2 blob,
     PRIMARY KEY (id)
 ); 
     ''')
 
-    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES ('Ivan', 42);", commit=True)
+    mysql.execute(
+        f"INSERT INTO {TEST_TABLE_NAME} (name, age, field1, field2) VALUES ('Ivan', 42, 'test1', 'test2');",
+        commit=True,
+    )
     mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES ('Peter', 33);", commit=True)
 
     binlog_replicator_runner = BinlogReplicatorRunner()
@@ -119,6 +124,9 @@ CREATE TABLE {TEST_TABLE_NAME} (
 
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 4)
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Mary'")[0]['last_name'] == 'Smith')
+
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="field1='test1'")[0]['name'] == 'Ivan')
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="field2='test2'")[0]['name'] == 'Ivan')
 
 
     mysql.execute(
