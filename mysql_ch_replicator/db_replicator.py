@@ -82,6 +82,7 @@ class Statistics:
     insert_records_count: int = 0
     erase_events_count: int = 0
     erase_records_count: int = 0
+    no_events_count: int = 0
 
 
 class DbReplicator:
@@ -124,6 +125,7 @@ class DbReplicator:
         self.last_touch_time = 0
 
     def run(self):
+        logger.info('launched db_replicator')
         if self.state.status == Status.RUNNING_REALTIME_REPLICATION:
             self.run_realtime_replication()
             return
@@ -226,6 +228,9 @@ class DbReplicator:
         primary_key_index = field_names.index(primary_key)
         primary_key_type = field_types[primary_key_index]
 
+        stats_number_of_records = 0
+        last_stats_dump_time = time.time()
+
         while True:
 
             query_start_value = max_primary_key
@@ -258,6 +263,14 @@ class DbReplicator:
             self.save_state_if_required()
             self.prevent_binlog_removal()
 
+            stats_number_of_records += len(records)
+            curr_time = time.time()
+            if curr_time - last_stats_dump_time >= 60.0:
+                last_stats_dump_time = curr_time
+                logger.info(
+                    f'replicating {table_name}, replicated {stats_number_of_records}, primary key: {max_primary_key}',
+                )
+
     def run_realtime_replication(self):
         if self.initial_only:
             logger.info('skip running realtime replication, only initial replication was requested')
@@ -277,6 +290,8 @@ class DbReplicator:
             if event is None:
                 time.sleep(DbReplicator.READ_LOG_INTERVAL)
                 self.upload_records_if_required(table_name=None)
+                self.stats.no_events_count += 1
+                self.log_stats_if_required()
                 continue
             assert event.db_name == self.database
             if self.database != self.target_database:
@@ -402,7 +417,7 @@ class DbReplicator:
         if curr_time - self.last_dump_stats_time < DbReplicator.STATS_DUMP_INTERVAL:
             return
         self.last_dump_stats_time = curr_time
-        logger.info(f'statistics:\n{json.dumps(self.stats.__dict__, indent=3)}')
+        logger.info(f'statistics:\n{json.dumps(self.stats.__dict__)}')
         self.stats = Statistics()
 
     def upload_records_if_required(self, table_name):
