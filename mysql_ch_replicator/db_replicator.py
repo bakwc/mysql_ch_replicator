@@ -83,6 +83,7 @@ class Statistics:
     erase_events_count: int = 0
     erase_records_count: int = 0
     no_events_count: int = 0
+    cpu_load: float = 0.0
 
 
 class DbReplicator:
@@ -119,6 +120,7 @@ class DbReplicator:
         self.last_save_state_time = 0
         self.stats = Statistics()
         self.last_dump_stats_time = 0
+        self.last_dump_stats_process_time = 0
         self.records_to_insert = defaultdict(dict)  # table_name => {record_id=>record, ...}
         self.records_to_delete = defaultdict(set)  # table_name => {record_id, ...}
         self.last_records_upload_time = 0
@@ -420,7 +422,17 @@ class DbReplicator:
         curr_time = time.time()
         if curr_time - self.last_dump_stats_time < DbReplicator.STATS_DUMP_INTERVAL:
             return
+
+        curr_process_time = time.process_time()
+
+        time_spent = curr_time - self.last_dump_stats_time
+        process_time_spent = curr_process_time - self.last_dump_stats_process_time
+
+        if time_spent > 0.0:
+            self.stats.cpu_load = process_time_spent / time_spent
+
         self.last_dump_stats_time = curr_time
+        self.last_dump_stats_process_time = curr_process_time
         logger.info(f'stats: {json.dumps(self.stats.__dict__)}')
         self.stats = Statistics()
 
