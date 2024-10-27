@@ -385,11 +385,22 @@ class BinlogReplicator:
 
         killer = GracefulKiller()
 
+        last_log_time = time.time()
+        total_processed_events = 0
+
         while not killer.kill_now:
             try:
+                curr_time = time.time()
+                if curr_time - last_log_time > 60:
+                    last_log_time = curr_time
+                    logger.info(
+                        f'last transaction id: {last_transaction_id}, processed events: {total_processed_events}',
+                    )
+
                 last_read_count = 0
                 for event in self.stream:
                     last_read_count += 1
+                    total_processed_events += 1
                     transaction_id = (self.stream.log_file, self.stream.log_pos)
                     last_transaction_id = transaction_id
 
@@ -457,8 +468,11 @@ class BinlogReplicator:
                     time.sleep(BinlogReplicator.READ_LOG_INTERVAL)
 
             except OperationalError as e:
-                print('=== operational error', e)
+                logger.error(f'operational error {str(e)}', exc_info=True)
                 time.sleep(15)
+            except Exception:
+                logger.error(f'unhandled error {str(e)}', exc_info=True)
+                raise
 
         logger.info('stopping binlog_replicator')
         self.data_writer.close_all()
