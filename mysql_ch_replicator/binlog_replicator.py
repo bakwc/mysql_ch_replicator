@@ -285,10 +285,12 @@ class DataWriter:
         return new_file_name
 
     def remove_old_files(self, ts_from):
+        PRESERVE_FILES_COUNT = 5
+
         subdirs = [f.path for f in os.scandir(self.data_dir) if f.is_dir()]
         for db_name in subdirs:
             existing_file_nums = get_existing_file_nums(self.data_dir, db_name)[:-1]
-            for file_num in existing_file_nums:
+            for file_num in existing_file_nums[:-PRESERVE_FILES_COUNT]:
                 file_path = os.path.join(self.data_dir, db_name, f'{file_num}.bin')
                 modify_time = os.path.getmtime(file_path)
                 if modify_time <= ts_from:
