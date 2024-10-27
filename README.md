@@ -50,7 +50,15 @@ For realtime data sync from MySQL to ClickHouse:
 gtid_mode = on
 enforce_gtid_consistency = 1
 default_authentication_plugin = mysql_native_password
+binlog_format = ROW
 
+```
+
+For `AWS RDS` you need to set following settings in `Parameter groups`:
+
+```
+binlog_format                       ROW
+binlog_expire_logs_seconds          86400
 ```
 
  - ClickHouse server config `override.xml` should include following settings (it makes clickhouse apply final keyword automatically to handle updates correctly):
