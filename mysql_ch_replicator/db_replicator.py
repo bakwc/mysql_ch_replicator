@@ -125,28 +125,32 @@ class DbReplicator:
         self.last_touch_time = 0
 
     def run(self):
-        logger.info('launched db_replicator')
-        if self.state.status == Status.RUNNING_REALTIME_REPLICATION:
-            self.run_realtime_replication()
-            return
-        if self.state.status == Status.PERFORMING_INITIAL_REPLICATION:
+        try:
+            logger.info('launched db_replicator')
+            if self.state.status == Status.RUNNING_REALTIME_REPLICATION:
+                self.run_realtime_replication()
+                return
+            if self.state.status == Status.PERFORMING_INITIAL_REPLICATION:
+                self.perform_initial_replication()
+                self.run_realtime_replication()
+                return
+
+            logger.info('recreating database')
+            self.clickhouse_api.database = self.target_database_tmp
+            self.clickhouse_api.recreate_database()
+            self.state.tables = self.mysql_api.get_tables()
+            self.state.tables = [
+                table for table in self.state.tables if self.config.is_table_matches(table)
+            ]
+            self.state.last_processed_transaction = self.data_reader.get_last_transaction_id()
+            self.state.save()
+            logger.info(f'last known transaction {self.state.last_processed_transaction}')
+            self.create_initial_structure()
             self.perform_initial_replication()
             self.run_realtime_replication()
-            return
-
-        logger.info('recreating database')
-        self.clickhouse_api.database = self.target_database_tmp
-        self.clickhouse_api.recreate_database()
-        self.state.tables = self.mysql_api.get_tables()
-        self.state.tables = [
-            table for table in self.state.tables if self.config.is_table_matches(table)
-        ]
-        self.state.last_processed_transaction = self.data_reader.get_last_transaction_id()
-        self.state.save()
-        logger.info(f'last known transaction {self.state.last_processed_transaction}')
-        self.create_initial_structure()
-        self.perform_initial_replication()
-        self.run_realtime_replication()
+        except Exception:
+            logger.error(f'unhandled exception', exc_info=True)
+            raise
 
     def create_initial_structure(self):
         self.state.status = Status.CREATING_INITIAL_STRUCTURES
@@ -417,7 +421,7 @@ class DbReplicator:
         if curr_time - self.last_dump_stats_time < DbReplicator.STATS_DUMP_INTERVAL:
             return
         self.last_dump_stats_time = curr_time
-        logger.info(f'statistics:\n{json.dumps(self.stats.__dict__)}')
+        logger.info(f'stats: {json.dumps(self.stats.__dict__)}')
         self.stats = Statistics()
 
     def upload_records_if_required(self, table_name):
