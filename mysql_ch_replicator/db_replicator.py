@@ -82,6 +82,7 @@ class Statistics:
     insert_records_count: int = 0
     erase_events_count: int = 0
     erase_records_count: int = 0
+    no_events_count: int = 0
 
 
 class DbReplicator:
@@ -289,6 +290,7 @@ class DbReplicator:
             if event is None:
                 time.sleep(DbReplicator.READ_LOG_INTERVAL)
                 self.upload_records_if_required(table_name=None)
+                self.stats.no_events_count += 1
                 self.log_stats_if_required()
                 continue
             assert event.db_name == self.database
@@ -415,7 +417,7 @@ class DbReplicator:
         if curr_time - self.last_dump_stats_time < DbReplicator.STATS_DUMP_INTERVAL:
             return
         self.last_dump_stats_time = curr_time
-        logger.info(f'statistics:\n{json.dumps(self.stats.__dict__, indent=3)}')
+        logger.info(f'statistics:\n{json.dumps(self.stats.__dict__)}')
         self.stats = Statistics()
 
     def upload_records_if_required(self, table_name):
