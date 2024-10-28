@@ -32,6 +32,8 @@ DELETE FROM {db_name}.{table_name} WHERE {field_name} IN ({field_values})
 class ClickhouseApi:
     MAX_RETRIES = 5
     RETRY_INTERVAL = 30
+    CONNECT_TIMEOUT = 30
+    SEND_RECEIVE_TIMEOUT = 120
 
     def __init__(self, database: str, clickhouse_settings: ClickhouseSettings):
         self.database = database
@@ -41,6 +43,8 @@ class ClickhouseApi:
             port=clickhouse_settings.port,
             username=clickhouse_settings.user,
             password=clickhouse_settings.password,
+            connect_timeout=ClickhouseApi.CONNECT_TIMEOUT,
+            send_receive_timeout=ClickhouseApi.SEND_RECEIVE_TIMEOUT,
         )
         self.tables_last_record_version = {}  # table_name => last used row version
         self.execute_command('SET final = 1;')
