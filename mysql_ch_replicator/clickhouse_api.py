@@ -135,7 +135,7 @@ class ClickhouseApi:
                         try:
                             e.timestamp()
                         except (ValueError, AttributeError):
-                            e = 0
+                            e = datetime.datetime(1970, 1, 1)
                 new_record.append(e)
             record = new_record
 
