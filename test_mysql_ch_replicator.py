@@ -88,8 +88,8 @@ def test_e2e_regular():
     mysql.execute(f'''
 CREATE TABLE {TEST_TABLE_NAME} (
     id int NOT NULL AUTO_INCREMENT,
-    name varchar(255),
-    age int,
+    name varchar(255) COMMENT 'Dân tộc, ví dụ: Kinh',
+    age int COMMENT 'CMND Cũ',
     field1 text,
     field2 blob,
     PRIMARY KEY (id)

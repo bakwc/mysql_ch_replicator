@@ -1,5 +1,6 @@
 import json
 import sqlparse
+import re
 from pyparsing import Word, alphas, alphanums
 
 from .table_structure import TableStructure, TableField
@@ -369,7 +370,13 @@ class MysqlToClickhouseConverter:
     def convert_drop_table_query(self, mysql_query):
         raise Exception('not implement')
 
+    def _strip_comments(self, create_statement):
+        pattern = r'\bCOMMENT(?:\s*=\s*|\s+)([\'"])(?:\\.|[^\\])*?\1'
+        return re.sub(pattern, '', create_statement, flags=re.IGNORECASE)
+
     def parse_mysql_table_structure(self, create_statement, required_table_name=None):
+        create_statement = self._strip_comments(create_statement)
+
         structure = TableStructure()
 
         tokens = sqlparse.parse(create_statement.replace('\n', ' ').strip())[0].tokens
