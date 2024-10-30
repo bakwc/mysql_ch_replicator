@@ -117,18 +117,25 @@ class ClickhouseApi:
         })
         self.execute_command(query)
 
-    def insert(self, table_name, records):
+    def insert(self, table_name, records, table_structure: TableStructure = None):
         current_version = self.get_last_used_version(table_name) + 1
 
         records_to_insert = []
         for record in records:
             new_record = []
-            for e in record:
+            for i, e in enumerate(record):
                 if isinstance(e, datetime.datetime):
                     try:
                         e.timestamp()
                     except ValueError:
                         e = 0
+                if table_structure is not None:
+                    field: TableField = table_structure.fields[i]
+                    if 'DateTime' in field.field_type and 'Nullable' not in field.field_type:
+                        try:
+                            e.timestamp()
+                        except (ValueError, AttributeError):
+                            e = 0
                 new_record.append(e)
             record = new_record
 

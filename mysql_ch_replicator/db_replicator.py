@@ -257,7 +257,7 @@ class DbReplicator:
 
             if not records:
                 break
-            self.clickhouse_api.insert(table_name, records)
+            self.clickhouse_api.insert(table_name, records, table_structure=clickhouse_table_structure)
             for record in records:
                 record_primary_key = record[primary_key_index]
                 if max_primary_key is None:
@@ -460,7 +460,8 @@ class DbReplicator:
             records = id_to_records.values()
             if not records:
                 continue
-            self.clickhouse_api.insert(table_name, records)
+            _, ch_table_structure = self.state.tables_structure[table_name]
+            self.clickhouse_api.insert(table_name, records, table_structure=ch_table_structure)
 
         for table_name, keys_to_remove in self.records_to_delete.items():
             if not keys_to_remove:
