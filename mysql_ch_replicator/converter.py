@@ -102,6 +102,14 @@ class MysqlToClickhouseConverter:
             return 'String'
         if 'decimal' in mysql_type:
             return 'Float64'
+        if 'float' in mysql_type:
+            return 'Float32'
+        if 'double' in mysql_type:
+            return 'Float64'
+        if 'integer' in mysql_type:
+            return 'Int32'
+        if 'real' in mysql_type:
+            return 'Float64'
         if mysql_type.startswith('time'):
             return 'String'
         raise Exception(f'unknown mysql type "{mysql_type}"')
