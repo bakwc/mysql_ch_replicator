@@ -73,6 +73,13 @@ class State:
             f.write(data)
         os.rename(file_name + '.tmp', file_name)
 
+    def remove(self):
+        file_name = self.file_name
+        if os.path.exists(file_name):
+            os.remove(file_name)
+        if os.path.exists(file_name + '.tmp'):
+            os.remove(file_name + '.tmp')
+
 
 @dataclass
 class Statistics:
@@ -115,7 +122,7 @@ class DbReplicator:
         )
         self.converter = MysqlToClickhouseConverter(self)
         self.data_reader = DataReader(config.binlog_replicator, database)
-        self.state = State(os.path.join(config.binlog_replicator.data_dir, database, 'state.pckl'))
+        self.state = self.create_state()
         self.clickhouse_api.tables_last_record_version = self.state.tables_last_record_version
         self.last_save_state_time = 0
         self.stats = Statistics()
@@ -126,9 +133,22 @@ class DbReplicator:
         self.last_records_upload_time = 0
         self.last_touch_time = 0
 
+    def create_state(self):
+        return State(os.path.join(self.config.binlog_replicator.data_dir, self.database, 'state.pckl'))
+
     def run(self):
         try:
             logger.info('launched db_replicator')
+
+            if self.state.status != Status.NONE:
+                # ensure target database still exists
+                if self.target_database not in self.clickhouse_api.get_databases():
+                    logger.warning(f'database {self.target_database} missing in CH')
+                    if self.initial_only:
+                        logger.warning('will run replication from scratch')
+                        self.state.remove()
+                        self.state = self.create_state()
+
             if self.state.status == Status.RUNNING_REALTIME_REPLICATION:
                 self.run_realtime_replication()
                 return
@@ -213,6 +233,7 @@ class DbReplicator:
 
         if not self.config.is_table_matches(table_name):
             logger.info(f'skip table {table_name} - not matching any allowed table')
+            return
 
         max_primary_key = None
         if self.state.initial_replication_table == table_name:
@@ -280,6 +301,7 @@ class DbReplicator:
     def run_realtime_replication(self):
         if self.initial_only:
             logger.info('skip running realtime replication, only initial replication was requested')
+            self.state.remove()
             return
 
         self.mysql_api.close()
