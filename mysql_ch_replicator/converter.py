@@ -83,6 +83,8 @@ class MysqlToClickhouseConverter:
             return 'Bool'
         if mysql_type == 'smallint':
             return 'Int16'
+        if 'tinyint' in mysql_type:
+            return 'Int16'
         if 'datetime' in mysql_type:
             return mysql_type.replace('datetime', 'DateTime64')
         if 'longtext' in mysql_type:
