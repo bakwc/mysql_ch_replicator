@@ -491,3 +491,86 @@ CREATE TABLE {TEST_TABLE_NAME} (
         commit=True,
     )
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
+
+
+def test_different_types_1():
+    cfg = config.Settings()
+    cfg.load(CONFIG_FILE)
+
+    mysql = mysql_api.MySQLApi(
+        database=None,
+        mysql_settings=cfg.mysql,
+    )
+
+    ch = clickhouse_api.ClickhouseApi(
+        database=TEST_DB_NAME,
+        clickhouse_settings=cfg.clickhouse,
+    )
+
+    prepare_env(cfg, mysql, ch)
+
+    mysql.execute("SET sql_mode = 'ALLOW_INVALID_DATES';")
+
+    mysql.execute(f'''
+CREATE TABLE {TEST_TABLE_NAME} (
+    `id` int unsigned NOT NULL AUTO_INCREMENT,
+    name varchar(255),
+  `employee` int unsigned NOT NULL,
+  `position` smallint unsigned NOT NULL,
+  `job_title` smallint NOT NULL DEFAULT '0',
+  `department` smallint unsigned NOT NULL DEFAULT '0',
+  `job_level` smallint unsigned NOT NULL DEFAULT '0',
+  `job_grade` smallint unsigned NOT NULL DEFAULT '0',
+  `level` smallint unsigned NOT NULL DEFAULT '0',
+  `team` smallint unsigned NOT NULL DEFAULT '0',
+  `factory` smallint unsigned NOT NULL DEFAULT '0',
+  `ship` smallint unsigned NOT NULL DEFAULT '0',
+  `report_to` int unsigned NOT NULL DEFAULT '0',
+  `line_manager` int unsigned NOT NULL DEFAULT '0',
+  `location` smallint unsigned NOT NULL DEFAULT '0',
+  `customer` int unsigned NOT NULL DEFAULT '0',
+  `effective_date` date NOT NULL DEFAULT '0000-00-00',
+  `status` tinyint unsigned NOT NULL DEFAULT '0',
+  `promotion` tinyint unsigned NOT NULL DEFAULT '0',
+  `promotion_id` int unsigned NOT NULL DEFAULT '0',
+  `note` text CHARACTER SET utf8mb3 COLLATE utf8mb3_unicode_ci NOT NULL,
+  `is_change_probation_time` tinyint unsigned NOT NULL DEFAULT '0',
+  `deleted` tinyint unsigned NOT NULL DEFAULT '0',
+  `created_by` int unsigned NOT NULL DEFAULT '0',
+  `created_by_name` varchar(125) CHARACTER SET utf8mb3 COLLATE utf8mb3_unicode_ci NOT NULL DEFAULT '',
+  `created_date` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+  `modified_by` int unsigned NOT NULL DEFAULT '0',
+  `modified_by_name` varchar(125) CHARACTER SET utf8mb3 COLLATE utf8mb3_unicode_ci NOT NULL DEFAULT '',
+  `modified_date` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+  `entity` int NOT NULL DEFAULT '0',
+  `sent_2_tac` char(1) CHARACTER SET utf8mb3 COLLATE utf8mb3_unicode_ci NOT NULL DEFAULT '0',
+    PRIMARY KEY (id)
+); 
+    ''')
+
+    mysql.execute(
+        f"INSERT INTO {TEST_TABLE_NAME} (name, modified_date) VALUES ('Ivan', '0000-00-00 00:00:00');",
+        commit=True,
+    )
+
+    binlog_replicator_runner = BinlogReplicatorRunner()
+    binlog_replicator_runner.run()
+    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME)
+    db_replicator_runner.run()
+
+    assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
+
+    ch.execute_command(f'USE {TEST_DB_NAME}')
+
+    assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1)
+
+    mysql.execute(
+        f"INSERT INTO {TEST_TABLE_NAME} (name, modified_date) VALUES ('Alex', '0000-00-00 00:00:00');",
+        commit=True,
+    )
+    mysql.execute(
+        f"INSERT INTO {TEST_TABLE_NAME} (name, modified_date) VALUES ('Givi', '2023-01-08 03:11:09');",
+        commit=True,
+    )
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)

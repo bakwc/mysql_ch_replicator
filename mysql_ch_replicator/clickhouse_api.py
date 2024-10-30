@@ -131,7 +131,11 @@ class ClickhouseApi:
                         e = 0
                 if table_structure is not None:
                     field: TableField = table_structure.fields[i]
-                    if 'DateTime' in field.field_type and 'Nullable' not in field.field_type:
+                    is_datetime = (
+                        ('DateTime' in field.field_type) or
+                        ('Date32' in field.field_type)
+                    )
+                    if is_datetime and 'Nullable' not in field.field_type:
                         try:
                             e.timestamp()
                         except (ValueError, AttributeError):
