@@ -124,7 +124,7 @@ tables: '*'
 
 - `mysql` MySQL connection settings
 - `clickhouse` ClickHouse connection settings
-- `binlog_replicator.data_dir` Directory for store binary log and application state
+- `binlog_replicator.data_dir` Create a new empty directory, it will be used by script to store it's state
 - `databases` Databases name pattern to replicate, e.g. `db_*` will match `db_1` `db_2` `db_test`, list is also supported
 - `tables` (__optional__) - tables to filter, list is also supported
 
