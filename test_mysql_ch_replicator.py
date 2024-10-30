@@ -436,3 +436,58 @@ CREATE TABLE test_table_3 (
     assert_wait(lambda: len(ch.select('test_table_2')) == 1)
 
     assert 'test_table_3' not in ch.get_tables()
+
+
+def test_datetime_exception():
+    cfg = config.Settings()
+    cfg.load(CONFIG_FILE)
+
+    mysql = mysql_api.MySQLApi(
+        database=None,
+        mysql_settings=cfg.mysql,
+    )
+
+    ch = clickhouse_api.ClickhouseApi(
+        database=TEST_DB_NAME,
+        clickhouse_settings=cfg.clickhouse,
+    )
+
+    prepare_env(cfg, mysql, ch)
+
+    mysql.execute("SET sql_mode = 'ALLOW_INVALID_DATES';")
+
+    mysql.execute(f'''
+CREATE TABLE {TEST_TABLE_NAME} (
+    id int NOT NULL AUTO_INCREMENT,
+    name varchar(255),
+    modified_date DateTime(3) NOT NULL,
+    PRIMARY KEY (id)
+); 
+    ''')
+
+    mysql.execute(
+        f"INSERT INTO {TEST_TABLE_NAME} (name, modified_date) VALUES ('Ivan', '0000-00-00 00:00:00');",
+        commit=True,
+    )
+
+    binlog_replicator_runner = BinlogReplicatorRunner()
+    binlog_replicator_runner.run()
+    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME)
+    db_replicator_runner.run()
+
+    assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
+
+    ch.execute_command(f'USE {TEST_DB_NAME}')
+
+    assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1)
+
+    mysql.execute(
+        f"INSERT INTO {TEST_TABLE_NAME} (name, modified_date) VALUES ('Alex', '0000-00-00 00:00:00');",
+        commit=True,
+    )
+    mysql.execute(
+        f"INSERT INTO {TEST_TABLE_NAME} (name, modified_date) VALUES ('Givi', '2023-01-08 03:11:09');",
+        commit=True,
+    )
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
