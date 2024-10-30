@@ -382,6 +382,13 @@ CREATE TABLE {TEST_TABLE_NAME} (
     assert TEST_TABLE_NAME in ch.get_tables()
     assert len(ch.select(TEST_TABLE_NAME)) == 2
 
+    ch.execute_command(f'DROP DATABASE {TEST_DB_NAME}')
+
+    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, additional_arguments='--initial_only=True')
+    db_replicator_runner.run()
+    db_replicator_runner.wait_complete()
+    assert TEST_DB_NAME in ch.get_databases()
+
 
 def test_database_tables_filtering():
     cfg = config.Settings()
