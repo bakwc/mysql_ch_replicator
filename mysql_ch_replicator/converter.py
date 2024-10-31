@@ -95,6 +95,10 @@ class MysqlToClickhouseConverter:
             if is_unsigned:
                 return 'UInt8'
             return 'Int8'
+        if 'mediumint' in mysql_type:
+            if is_unsigned:
+                return 'UInt32'
+            return 'Int32'
         if 'datetime' in mysql_type:
             return mysql_type.replace('datetime', 'DateTime64')
         if 'longtext' in mysql_type:
@@ -173,6 +177,8 @@ class MysqlToClickhouseConverter:
                 clickhouse_field_value = 65536 + clickhouse_field_value
             if 'UInt8' in clickhouse_field_type and clickhouse_field_value < 0:
                 clickhouse_field_value = 256 + clickhouse_field_value
+            if 'mediumint' in mysql_field_type.lower() and clickhouse_field_value < 0:
+                clickhouse_field_value = 16777216 + clickhouse_field_value
             clickhouse_record.append(clickhouse_field_value)
         return tuple(clickhouse_record)
 
