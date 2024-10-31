@@ -67,9 +67,9 @@ class MysqlToClickhouseConverter:
 
         is_unsigned = 'unsigned' in parameters.lower()
 
-        print(" === check mysql_type", mysql_type, parameters)
-
         if mysql_type == 'int':
+            if is_unsigned:
+                return 'UInt32'
             return 'Int32'
         if mysql_type == 'integer':
             return 'Int32'
@@ -119,7 +119,9 @@ class MysqlToClickhouseConverter:
             return 'Float32'
         if 'double' in mysql_type:
             return 'Float64'
-        if 'integer' in mysql_type:
+        if 'integer' in mysql_type or 'int(' in mysql_type:
+            if is_unsigned:
+                return 'UInt32'
             return 'Int32'
         if 'real' in mysql_type:
             return 'Float64'
@@ -134,7 +136,6 @@ class MysqlToClickhouseConverter:
         mysql_parameters = mysql_parameters.lower()
         not_null = 'not null' in mysql_parameters
         clickhouse_type = self.convert_type(mysql_type, mysql_parameters)
-        print(" === result type:", clickhouse_type)
         if not not_null:
             clickhouse_type = f'Nullable({clickhouse_type})'
         return clickhouse_type
@@ -179,6 +180,8 @@ class MysqlToClickhouseConverter:
                 clickhouse_field_value = 256 + clickhouse_field_value
             if 'mediumint' in mysql_field_type.lower() and clickhouse_field_value < 0:
                 clickhouse_field_value = 16777216 + clickhouse_field_value
+            if 'UInt32' in clickhouse_field_type and clickhouse_field_value < 0:
+                clickhouse_field_value = 4294967296 + clickhouse_field_value
             clickhouse_record.append(clickhouse_field_value)
         return tuple(clickhouse_record)
 
