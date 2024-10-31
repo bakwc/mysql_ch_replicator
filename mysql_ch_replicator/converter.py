@@ -72,8 +72,12 @@ class MysqlToClickhouseConverter:
                 return 'UInt32'
             return 'Int32'
         if mysql_type == 'integer':
+            if is_unsigned:
+                return 'UInt32'
             return 'Int32'
         if mysql_type == 'bigint':
+            if is_unsigned:
+                return 'UInt64'
             return 'Int64'
         if mysql_type == 'double':
             return 'Float64'
@@ -123,6 +127,10 @@ class MysqlToClickhouseConverter:
             if is_unsigned:
                 return 'UInt32'
             return 'Int32'
+        if 'bigint' in mysql_type:
+            if is_unsigned:
+                return 'UInt64'
+            return 'Int64'
         if 'real' in mysql_type:
             return 'Float64'
         if mysql_type.startswith('time'):
@@ -182,6 +190,8 @@ class MysqlToClickhouseConverter:
                 clickhouse_field_value = 16777216 + clickhouse_field_value
             if 'UInt32' in clickhouse_field_type and clickhouse_field_value < 0:
                 clickhouse_field_value = 4294967296 + clickhouse_field_value
+            if 'UInt64' in clickhouse_field_type and clickhouse_field_value < 0:
+                clickhouse_field_value = 18446744073709551616 + clickhouse_field_value
             clickhouse_record.append(clickhouse_field_value)
         return tuple(clickhouse_record)
 

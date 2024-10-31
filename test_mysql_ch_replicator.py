@@ -611,13 +611,14 @@ CREATE TABLE {TEST_TABLE_NAME} (
     test4 TINYINT UNSIGNED,
     test5 MEDIUMINT UNSIGNED,
     test6 INT UNSIGNED,
+    test7 BIGINT UNSIGNED,
     PRIMARY KEY (id)
 ); 
     ''')
 
     mysql.execute(
-        f"INSERT INTO {TEST_TABLE_NAME} (name, test1, test2, test3, test4, test5, test6) VALUES "
-        f"('Ivan', -20000, 50000, -30, 100, 16777200, 4294967290);",
+        f"INSERT INTO {TEST_TABLE_NAME} (name, test1, test2, test3, test4, test5, test6, test7) VALUES "
+        f"('Ivan', -20000, 50000, -30, 100, 16777200, 4294967290, 18446744073709551586);",
         commit=True,
     )
 
@@ -634,8 +635,8 @@ CREATE TABLE {TEST_TABLE_NAME} (
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1)
 
     mysql.execute(
-        f"INSERT INTO {TEST_TABLE_NAME} (name, test1, test2, test3, test4, test5, test6) VALUES "
-        f"('Peter', -10000, 60000, -120, 250, 16777200, 4294967280);",
+        f"INSERT INTO {TEST_TABLE_NAME} (name, test1, test2, test3, test4, test5, test6, test7) VALUES "
+        f"('Peter', -10000, 60000, -120, 250, 16777200, 4294967280, 18446744073709551586);",
         commit=True,
     )
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 2)
@@ -644,3 +645,4 @@ CREATE TABLE {TEST_TABLE_NAME} (
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME, 'test5=16777200')) == 2)
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME, 'test6=4294967290')) == 1)
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME, 'test6=4294967280')) == 1)
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME, 'test7=18446744073709551586')) == 2)
