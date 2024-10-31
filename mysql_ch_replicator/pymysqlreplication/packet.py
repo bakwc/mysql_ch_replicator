@@ -347,7 +347,7 @@ class BinLogPacketWrapper(object):
             # handle NULL value
             return None
         data = self.read(length)
-        return cpp_mysql_to_json(data)
+        return cpp_mysql_to_json(data).decode('utf-8')
 
         #
         # if is_partial:
