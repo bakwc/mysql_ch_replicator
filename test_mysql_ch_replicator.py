@@ -581,3 +581,60 @@ CREATE TABLE {TEST_TABLE_NAME} (
         commit=True,
     )
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
+
+
+def test_numeric_types_and_limits():
+    cfg = config.Settings()
+    cfg.load(CONFIG_FILE)
+
+    mysql = mysql_api.MySQLApi(
+        database=None,
+        mysql_settings=cfg.mysql,
+    )
+
+    ch = clickhouse_api.ClickhouseApi(
+        database=TEST_DB_NAME,
+        clickhouse_settings=cfg.clickhouse,
+    )
+
+    prepare_env(cfg, mysql, ch)
+
+    mysql.execute("SET sql_mode = 'ALLOW_INVALID_DATES';")
+
+    mysql.execute(f'''
+CREATE TABLE {TEST_TABLE_NAME} (
+    `id` int unsigned NOT NULL AUTO_INCREMENT,
+    name varchar(255),
+    test1 smallint,
+    test2 smallint unsigned,
+    test3 TINYINT,
+    test4 TINYINT UNSIGNED,
+    PRIMARY KEY (id)
+); 
+    ''')
+
+    mysql.execute(
+        f"INSERT INTO {TEST_TABLE_NAME} (name, test1, test2, test3, test4) VALUES ('Ivan', -20000, 50000, -30, 100);",
+        commit=True,
+    )
+
+    binlog_replicator_runner = BinlogReplicatorRunner()
+    binlog_replicator_runner.run()
+    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME)
+    db_replicator_runner.run()
+
+    assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
+
+    ch.execute_command(f'USE {TEST_DB_NAME}')
+
+    assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1)
+
+    mysql.execute(
+        f"INSERT INTO {TEST_TABLE_NAME} (name, test1, test2, test3, test4) VALUES ('Peter', -10000, 60000, -120, 250);",
+        commit=True,
+    )
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 2)
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME, 'test2=60000')) == 1)
+
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME, 'test4=250')) == 1)

@@ -63,7 +63,12 @@ class MysqlToClickhouseConverter:
     def __init__(self, db_replicator: 'DbReplicator' = None):
         self.db_replicator = db_replicator
 
-    def convert_type(self, mysql_type):
+    def convert_type(self, mysql_type, parameters):
+
+        is_unsigned = 'unsigned' in parameters.lower()
+
+        print(" === check mysql_type", mysql_type, parameters)
+
         if mysql_type == 'int':
             return 'Int32'
         if mysql_type == 'integer':
@@ -82,10 +87,14 @@ class MysqlToClickhouseConverter:
             return 'Bool'
         if mysql_type == 'bool':
             return 'Bool'
-        if mysql_type == 'smallint':
+        if 'smallint' in mysql_type:
+            if is_unsigned:
+                return 'UInt16'
             return 'Int16'
         if 'tinyint' in mysql_type:
-            return 'Int16'
+            if is_unsigned:
+                return 'UInt8'
+            return 'Int8'
         if 'datetime' in mysql_type:
             return mysql_type.replace('datetime', 'DateTime64')
         if 'longtext' in mysql_type:
@@ -120,7 +129,8 @@ class MysqlToClickhouseConverter:
         mysql_type = mysql_type.lower()
         mysql_parameters = mysql_parameters.lower()
         not_null = 'not null' in mysql_parameters
-        clickhouse_type = self.convert_type(mysql_type)
+        clickhouse_type = self.convert_type(mysql_type, mysql_parameters)
+        print(" === result type:", clickhouse_type)
         if not not_null:
             clickhouse_type = f'Nullable({clickhouse_type})'
         return clickhouse_type
@@ -159,6 +169,10 @@ class MysqlToClickhouseConverter:
             if mysql_field_type == 'json' and 'String' in clickhouse_field_type:
                 if not isinstance(clickhouse_field_value, str):
                     clickhouse_field_value = json.dumps(convert_bytes(clickhouse_field_value))
+            if 'UInt16' in clickhouse_field_type and clickhouse_field_value < 0:
+                clickhouse_field_value = 65536 + clickhouse_field_value
+            if 'UInt8' in clickhouse_field_type and clickhouse_field_value < 0:
+                clickhouse_field_value = 256 + clickhouse_field_value
             clickhouse_record.append(clickhouse_field_value)
         return tuple(clickhouse_record)
 
