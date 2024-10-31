@@ -112,6 +112,8 @@ class MysqlToClickhouseConverter:
             return 'Float64'
         if mysql_type.startswith('time'):
             return 'String'
+        if 'varbinary' in mysql_type:
+            return 'String'
         raise Exception(f'unknown mysql type "{mysql_type}"')
 
     def convert_field_type(self, mysql_type, mysql_parameters):
