@@ -182,16 +182,19 @@ class MysqlToClickhouseConverter:
             if mysql_field_type == 'json' and 'String' in clickhouse_field_type:
                 if not isinstance(clickhouse_field_value, str):
                     clickhouse_field_value = json.dumps(convert_bytes(clickhouse_field_value))
-            if 'UInt16' in clickhouse_field_type and clickhouse_field_value < 0:
-                clickhouse_field_value = 65536 + clickhouse_field_value
-            if 'UInt8' in clickhouse_field_type and clickhouse_field_value < 0:
-                clickhouse_field_value = 256 + clickhouse_field_value
-            if 'mediumint' in mysql_field_type.lower() and clickhouse_field_value < 0:
-                clickhouse_field_value = 16777216 + clickhouse_field_value
-            if 'UInt32' in clickhouse_field_type and clickhouse_field_value < 0:
-                clickhouse_field_value = 4294967296 + clickhouse_field_value
-            if 'UInt64' in clickhouse_field_type and clickhouse_field_value < 0:
-                clickhouse_field_value = 18446744073709551616 + clickhouse_field_value
+
+            if clickhouse_field_value is not None:
+                if 'UInt16' in clickhouse_field_type and clickhouse_field_value < 0:
+                    clickhouse_field_value = 65536 + clickhouse_field_value
+                if 'UInt8' in clickhouse_field_type and clickhouse_field_value < 0:
+                    clickhouse_field_value = 256 + clickhouse_field_value
+                if 'mediumint' in mysql_field_type.lower() and clickhouse_field_value < 0:
+                    clickhouse_field_value = 16777216 + clickhouse_field_value
+                if 'UInt32' in clickhouse_field_type and clickhouse_field_value < 0:
+                    clickhouse_field_value = 4294967296 + clickhouse_field_value
+                if 'UInt64' in clickhouse_field_type and clickhouse_field_value < 0:
+                    clickhouse_field_value = 18446744073709551616 + clickhouse_field_value
+
             clickhouse_record.append(clickhouse_field_value)
         return tuple(clickhouse_record)
 
