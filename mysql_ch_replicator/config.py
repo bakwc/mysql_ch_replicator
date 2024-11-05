@@ -35,6 +35,8 @@ class ClickhouseSettings:
     port: int = 3306
     user: str = 'root'
     password: str = ''
+    connection_timeout: int = 30
+    send_receive_timeout: int = 120
 
     def validate(self):
         if not isinstance(self.host, str):
@@ -48,6 +50,18 @@ class ClickhouseSettings:
 
         if not isinstance(self.password, str):
             raise ValueError(f'clickhouse password should be string and not {stype(self.password)}')
+
+        if not isinstance(self.connection_timeout, int):
+            raise ValueError(f'clickhouse connection_timeout should be int and not {stype(self.connection_timeout)}')
+
+        if not isinstance(self.send_receive_timeout, int):
+            raise ValueError(f'clickhouse send_receive_timeout should be int and not {stype(self.send_receive_timeout)}')
+
+        if self.connection_timeout <= 0:
+            raise ValueError(f'connection timeout should be at least 1 second')
+
+        if self.send_receive_timeout <= 0:
+            raise ValueError(f'send_receive_timeout timeout should be at least 1 second')
 
 
 @dataclass
