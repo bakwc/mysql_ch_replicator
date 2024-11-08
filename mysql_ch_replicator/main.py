@@ -13,7 +13,7 @@ from .monitoring import Monitoring
 from .runner import Runner
 
 
-def set_logging_config(tags, log_file=None):
+def set_logging_config(tags, log_file=None, log_level_str=None):
 
     handlers = []
     handlers.append(logging.StreamHandler(sys.stderr))
@@ -28,8 +28,21 @@ def set_logging_config(tags, log_file=None):
             )
         )
 
+    log_levels = {
+        'critical': logging.CRITICAL,
+        'error': logging.ERROR,
+        'warning': logging.WARNING,
+        'info': logging.INFO,
+        'debug': logging.DEBUG,
+    }
+
+    log_level = log_levels.get(log_level_str)
+    if log_level is None:
+        print(f'[warning] unknown log level {log_level_str}, setting info')
+        log_level = 'info'
+
     logging.basicConfig(
-        level=logging.INFO,
+        level=log_level,
         format=f'[{tags} %(asctime)s %(levelname)8s] %(message)s',
         handlers=handlers,
     )
@@ -44,7 +57,7 @@ def run_binlog_replicator(args, config: Settings):
         'binlog_replicator.log',
     )
 
-    set_logging_config('binlogrepl', log_file=log_file)
+    set_logging_config('binlogrepl', log_file=log_file, log_level_str=config.log_level)
     binlog_replicator = BinlogReplicator(
         settings=config,
     )
@@ -73,7 +86,7 @@ def run_db_replicator(args, config: Settings):
         'db_replicator.log',
     )
 
-    set_logging_config(f'dbrepl {args.db}', log_file=log_file)
+    set_logging_config(f'dbrepl {args.db}', log_file=log_file, log_level_str=config.log_level)
 
     db_replicator = DbReplicator(
         config=config,
@@ -85,13 +98,13 @@ def run_db_replicator(args, config: Settings):
 
 
 def run_monitoring(args, config: Settings):
-    set_logging_config('monitor')
+    set_logging_config('monitor', log_level_str=config.log_level)
     monitoring = Monitoring(args.db or '', config)
     monitoring.run()
 
 
 def run_all(args, config: Settings):
-    set_logging_config('runner')
+    set_logging_config('runner', log_level_str=config.log_level)
     runner = Runner(config, args.wait_initial_replication, args.db)
     runner.run()
 

@@ -16,3 +16,4 @@ binlog_replicator:
   records_per_file: 100000
 
 databases: '*test*'
+log_level: 'debug'

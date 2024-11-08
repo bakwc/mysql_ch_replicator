@@ -89,6 +89,8 @@ class Settings:
         self.databases = ''
         self.tables = '*'
         self.settings_file = ''
+        self.log_level = 'info'
+        self.debug_log_level = False
 
     def load(self, settings_file):
         data = open(settings_file, 'r').read()
@@ -99,6 +101,7 @@ class Settings:
         self.clickhouse = ClickhouseSettings(**data['clickhouse'])
         self.databases = data['databases']
         self.tables = data.get('tables', '*')
+        self.log_level = data.get('log_level', 'info')
         assert isinstance(self.databases, str) or isinstance(self.databases, list)
         assert isinstance(self.tables, str) or isinstance(self.tables, list)
         self.binlog_replicator = BinlogReplicatorSettings(**data['binlog_replicator'])
@@ -123,7 +126,14 @@ class Settings:
     def is_table_matches(self, table_name):
         return self.is_pattern_matches(table_name, self.tables)
 
+    def validate_log_level(self):
+        if self.log_level not in ['critical', 'error', 'warning', 'info', 'debug']:
+            raise ValueError(f'wrong log level {self.log_level}')
+        if self.log_level == 'debug':
+            self.debug_log_level = True
+
     def validate(self):
         self.mysql.validate()
         self.clickhouse.validate()
         self.binlog_replicator.validate()
+        self.validate_log_level()
