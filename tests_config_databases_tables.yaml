@@ -17,3 +17,5 @@ binlog_replicator:
 
 databases: ['test_db_1*', 'test_db_2']
 tables: ['test_table_1*', 'test_table_2']
+
+log_level: 'debug'

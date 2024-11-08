@@ -112,6 +112,8 @@ clickhouse:
   port: 8323
   user: 'default'
   password: 'default'
+  connection_timeout: 30        # optional
+  send_receive_timeout: 300     # optional
 
 binlog_replicator:
   data_dir: '/home/user/binlog/'
@@ -119,6 +121,8 @@ binlog_replicator:
 
 databases: 'database_name_pattern_*'
 tables: '*'
+
+log_level: 'info'   # optional             
 ```
 
 
@@ -127,6 +131,7 @@ tables: '*'
 - `binlog_replicator.data_dir` Create a new empty directory, it will be used by script to store it's state
 - `databases` Databases name pattern to replicate, e.g. `db_*` will match `db_1` `db_2` `db_test`, list is also supported
 - `tables` (__optional__) - tables to filter, list is also supported
+- `log_level` (__optional__) - log level, default is `info`, you can set to `debug` to get maximum information (allowed values are `debug`, `info`, `warning`, `error`, `critical`)
 
 Few more tables / dbs examples:
 

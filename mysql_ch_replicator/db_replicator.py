@@ -255,6 +255,8 @@ class DbReplicator:
         primary_key_index = field_names.index(primary_key)
         primary_key_type = field_types[primary_key_index]
 
+        logger.debug(f'primary key name: {primary_key}, type: {primary_key_type}')
+
         stats_number_of_records = 0
         last_stats_dump_time = time.time()
 
@@ -270,11 +272,12 @@ class DbReplicator:
                 limit=DbReplicator.INITIAL_REPLICATION_BATCH_SIZE,
                 start_value=query_start_value,
             )
+            logger.debug(f'extracted {len(records)} records from mysql')
 
             records = self.converter.convert_records(records, mysql_table_structure, clickhouse_table_structure)
 
-            # for record in records:
-            #     print(dict(zip(field_names, record)))
+            if self.config.debug_log_level:
+                logger.debug(f'records: {records}')
 
             if not records:
                 break
@@ -295,8 +298,16 @@ class DbReplicator:
             if curr_time - last_stats_dump_time >= 60.0:
                 last_stats_dump_time = curr_time
                 logger.info(
-                    f'replicating {table_name}, replicated {stats_number_of_records}, primary key: {max_primary_key}',
+                    f'replicating {table_name}, '
+                    f'replicated {stats_number_of_records} records, '
+                    f'primary key: {max_primary_key}',
                 )
+
+        logger.info(
+            f'finish replicating {table_name}, '
+            f'replicated {stats_number_of_records} records, '
+            f'primary key: {max_primary_key}',
+        )
 
     def run_realtime_replication(self):
         if self.initial_only:
@@ -337,7 +348,7 @@ class DbReplicator:
             if event.transaction_id <= self.state.last_processed_transaction_non_uploaded:
                 return
 
-        logger.debug(f'processing event {event.transaction_id}')
+        logger.debug(f'processing event {event.transaction_id}, {event.event_type}, {event.table_name}')
 
         event_handlers = {
             EventType.ADD_EVENT.value: self.handle_insert_event,
@@ -366,6 +377,12 @@ class DbReplicator:
         self.state.save()
 
     def handle_insert_event(self, event: LogEvent):
+        if self.config.debug_log_level:
+            logger.debug(
+                f'processing insert event: {event.transaction_id}, '
+                f'table: {event.table_name}, '
+                f'records: {event.records}',
+            )
         self.stats.insert_events_count += 1
         self.stats.insert_records_count += len(event.records)
 
@@ -383,6 +400,12 @@ class DbReplicator:
             current_table_records_to_delete.discard(record_id)
 
     def handle_erase_event(self, event: LogEvent):
+        if self.config.debug_log_level:
+            logger.debug(
+                f'processing erase event: {event.transaction_id}, '
+                f'table: {event.table_name}, '
+                f'records: {event.records}',
+            )
         self.stats.erase_events_count += 1
         self.stats.erase_records_count += len(event.records)
 
@@ -404,7 +427,8 @@ class DbReplicator:
             current_table_records_to_insert.pop(record_id, None)
 
     def handle_query_event(self, event: LogEvent):
-        #print(" === handle_query_event", event.records)
+        if self.config.debug_log_level:
+            logger.debug(f'processing query event: {event.transaction_id}, query: {event.records}')
         query = strip_sql_comments(event.records)
         if query.lower().startswith('alter'):
             self.handle_alter_query(query, event.db_name)
@@ -476,6 +500,9 @@ class DbReplicator:
         self.upload_records()
 
     def upload_records(self):
+        logger.debug(
+            f'upload records, to insert: {len(self.records_to_insert)}, to delete: {len(self.records_to_delete)}',
+        )
         self.last_records_upload_time = time.time()
 
         for table_name, id_to_records in self.records_to_insert.items():
@@ -483,6 +510,8 @@ class DbReplicator:
             if not records:
                 continue
             _, ch_table_structure = self.state.tables_structure[table_name]
+            if self.config.debug_log_level:
+                logger.debug(f'inserting into {table_name}, records: {records}')
             self.clickhouse_api.insert(table_name, records, table_structure=ch_table_structure)
 
         for table_name, keys_to_remove in self.records_to_delete.items():
@@ -490,6 +519,8 @@ class DbReplicator:
                 continue
             table_structure: TableStructure = self.state.tables_structure[table_name][0]
             primary_key_name = table_structure.primary_key
+            if self.config.debug_log_level:
+                logger.debug(f'erasing from {table_name}, primary key: {primary_key_name}, values: {keys_to_remove}')
             self.clickhouse_api.erase(
                 table_name=table_name,
                 field_name=primary_key_name,

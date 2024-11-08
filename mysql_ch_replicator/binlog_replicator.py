@@ -406,6 +406,8 @@ class BinlogReplicator:
 
                     self.update_state_if_required(transaction_id)
 
+                    logger.debug(f'received event {type(event)}, {transaction_id}')
+
                     if type(event) not in (DeleteRowsEvent, UpdateRowsEvent, WriteRowsEvent, QueryEvent):
                         continue
 
@@ -427,6 +429,8 @@ class BinlogReplicator:
 
                     if not self.settings.is_database_matches(log_event.db_name):
                         continue
+
+                    logger.debug(f'event matched {transaction_id}, {log_event.db_name}, {log_event.table_name}')
 
                     log_event.transaction_id = transaction_id
                     if isinstance(event, UpdateRowsEvent) or isinstance(event, WriteRowsEvent):
@@ -458,6 +462,16 @@ class BinlogReplicator:
                                 vals = row["values"]
                                 vals = list(vals.values())
                                 log_event.records.append(vals)
+
+                    if self.settings.debug_log_level:
+                        # records serialization is heavy, only do it with debug log enabled
+                        logger.debug(
+                            f'store event {transaction_id}, '
+                            f'event type: {log_event.event_type}, '
+                            f'database: {log_event.db_name} '
+                            f'table: {log_event.table_name} '
+                            f'records: {log_event.records}',
+                        )
 
                     self.data_writer.store_event(log_event)
 
