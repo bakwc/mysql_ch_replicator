@@ -248,6 +248,10 @@ class DbReplicator:
             self.state.save()
 
         mysql_table_structure, clickhouse_table_structure = self.state.tables_structure[table_name]
+
+        logger.debug(f'mysql table structure: {mysql_table_structure}')
+        logger.debug(f'clickhouse table structure: {clickhouse_table_structure}')
+
         field_names = [field.name for field in clickhouse_table_structure.fields]
         field_types = [field.field_type for field in clickhouse_table_structure.fields]
 
