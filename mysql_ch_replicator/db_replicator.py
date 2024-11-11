@@ -267,7 +267,7 @@ class DbReplicator:
         while True:
 
             query_start_value = max_primary_key
-            if 'Int' not in primary_key_type:
+            if 'int' not in primary_key_type.lower() and query_start_value is not None:
                 query_start_value = f"'{query_start_value}'"
 
             records = self.mysql_api.get_records(
