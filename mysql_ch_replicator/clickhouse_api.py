@@ -187,3 +187,9 @@ class ClickhouseApi:
         for row in rows:
             results.append(dict(zip(columns, row)))
         return results
+
+    def get_system_setting(self, name):
+        results = self.select('system.settings', f"name = '{name}'")
+        if not results:
+            return None
+        return results[0].get('value', None)
