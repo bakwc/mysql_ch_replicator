@@ -136,9 +136,21 @@ class DbReplicator:
     def create_state(self):
         return State(os.path.join(self.config.binlog_replicator.data_dir, self.database, 'state.pckl'))
 
+    def validate_database_settings(self):
+        if not self.initial_only:
+            final_setting = self.clickhouse_api.get_system_setting('final')
+            if final_setting != '1':
+                logger.warning('settings validation failed')
+                logger.warning(
+                    '\n\n\n    !!!  WARNING - MISSING REQUIRED CLICKHOUSE SETTING  (final)  !!!\n\n'
+                    'You need to set <final>1</final> in clickhouse config file\n'
+                    'Otherwise you will get DUPLICATES in your SELECT queries\n\n\n'
+                )
+
     def run(self):
         try:
             logger.info('launched db_replicator')
+            self.validate_database_settings()
 
             if self.state.status != Status.NONE:
                 # ensure target database still exists
