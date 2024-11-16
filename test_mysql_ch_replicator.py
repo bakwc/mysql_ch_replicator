@@ -406,10 +406,42 @@ def test_database_tables_filtering():
     )
 
     mysql.drop_database('test_db_3')
+    mysql.drop_database('test_db_12')
+
     mysql.create_database('test_db_3')
+    mysql.create_database('test_db_12')
+
     ch.drop_database('test_db_3')
+    ch.drop_database('test_db_12')
 
     prepare_env(cfg, mysql, ch, db_name='test_db_2')
+
+    mysql.execute(f'''
+    CREATE TABLE test_table_15 (
+        id int NOT NULL AUTO_INCREMENT,
+        name varchar(255),
+        age int,
+        PRIMARY KEY (id)
+    ); 
+        ''')
+
+    mysql.execute(f'''
+    CREATE TABLE test_table_142 (
+        id int NOT NULL AUTO_INCREMENT,
+        name varchar(255),
+        age int,
+        PRIMARY KEY (id)
+    ); 
+        ''')
+
+    mysql.execute(f'''
+    CREATE TABLE test_table_143 (
+        id int NOT NULL AUTO_INCREMENT,
+        name varchar(255),
+        age int,
+        PRIMARY KEY (id)
+    ); 
+        ''')
 
     mysql.execute(f'''
 CREATE TABLE test_table_3 (
@@ -437,13 +469,19 @@ CREATE TABLE test_table_3 (
 
     assert_wait(lambda: 'test_db_2' in ch.get_databases())
     assert 'test_db_3' not in ch.get_databases()
+    assert 'test_db_12' not in ch.get_databases()
 
     ch.execute_command('USE test_db_2')
 
     assert_wait(lambda: 'test_table_2' in ch.get_tables())
     assert_wait(lambda: len(ch.select('test_table_2')) == 1)
 
+    assert_wait(lambda: 'test_table_143' in ch.get_tables())
+
     assert 'test_table_3' not in ch.get_tables()
+
+    assert 'test_table_15' not in ch.get_tables()
+    assert 'test_table_142' not in ch.get_tables()
 
 
 def test_datetime_exception():
