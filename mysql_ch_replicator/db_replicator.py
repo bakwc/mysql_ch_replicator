@@ -11,7 +11,7 @@ from .config import Settings, MysqlSettings, ClickhouseSettings
 from .mysql_api import MySQLApi
 from .clickhouse_api import ClickhouseApi
 from .converter import MysqlToClickhouseConverter, strip_sql_name, strip_sql_comments
-from .table_structure import TableStructure
+from .table_structure import TableStructure, TableField
 from .binlog_replicator import DataReader, LogEvent, EventType
 from .utils import GracefulKiller, touch_all_files
 
@@ -147,6 +147,17 @@ class DbReplicator:
                     'Otherwise you will get DUPLICATES in your SELECT queries\n\n\n'
                 )
 
+    def validate_mysql_structure(self, mysql_structure: TableStructure):
+        primary_field: TableField = mysql_structure.fields[mysql_structure.primary_key_idx]
+        if 'not null' not in primary_field.parameters.lower():
+            logger.warning('primary key validation failed')
+            logger.warning(
+                f'\n\n\n    !!!  WARNING - PRIMARY KEY NULLABLE (field "{primary_field.name}", table "{mysql_structure.table_name}") !!!\n\n'
+                'There could be errors replicating nullable primary key\n'
+                'Please ensure all tables has NOT NULL parameter for primary key\n'
+                'Or mark tables as skipped, see "exclude_tables" option\n\n\n'
+            )
+
     def run(self):
         try:
             logger.info('launched db_replicator')
@@ -199,6 +210,7 @@ class DbReplicator:
         mysql_structure = self.converter.parse_mysql_table_structure(
             mysql_create_statement, required_table_name=table_name,
         )
+        self.validate_mysql_structure(mysql_structure)
         clickhouse_structure = self.converter.convert_table_structure(mysql_structure)
         self.state.tables_structure[table_name] = (mysql_structure, clickhouse_structure)
         self.clickhouse_api.create_table(clickhouse_structure)
