@@ -122,16 +122,24 @@ binlog_replicator:
 databases: 'database_name_pattern_*'
 tables: '*'
 
+exclude_databases: ['database_10', 'database_*_42']   # optional
+exclude_tables: ['meta_table_*']                      # optional
+
 log_level: 'info'   # optional             
 ```
 
+#### Required settings
 
 - `mysql` MySQL connection settings
 - `clickhouse` ClickHouse connection settings
 - `binlog_replicator.data_dir` Create a new empty directory, it will be used by script to store it's state
 - `databases` Databases name pattern to replicate, e.g. `db_*` will match `db_1` `db_2` `db_test`, list is also supported
-- `tables` (__optional__) - tables to filter, list is also supported
-- `log_level` (__optional__) - log level, default is `info`, you can set to `debug` to get maximum information (allowed values are `debug`, `info`, `warning`, `error`, `critical`)
+
+#### Optional settings
+- `tables` - tables to filter, list is also supported
+- `exclude_databases` - databases to __exclude__, string or list, eg `'table1*'` or `['table2', 'table3*']`. If same database matches `databases` and `exclude_databases`, exclude has higher priority.
+- `exclude_tables` - databases to __exclude__, string or list. If same table matches `tables` and `exclude_tables`, exclude has higher priority.
+- `log_level` - log level, default is `info`, you can set to `debug` to get maximum information (allowed values are `debug`, `info`, `warning`, `error`, `critical`)
 
 Few more tables / dbs examples:
 

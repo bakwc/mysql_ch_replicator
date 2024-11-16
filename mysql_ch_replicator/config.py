@@ -88,6 +88,8 @@ class Settings:
         self.binlog_replicator = BinlogReplicatorSettings()
         self.databases = ''
         self.tables = '*'
+        self.exclude_databases = ''
+        self.exclude_tables = ''
         self.settings_file = ''
         self.log_level = 'info'
         self.debug_log_level = False
@@ -101,6 +103,8 @@ class Settings:
         self.clickhouse = ClickhouseSettings(**data['clickhouse'])
         self.databases = data['databases']
         self.tables = data.get('tables', '*')
+        self.exclude_databases = data.get('exclude_databases', '')
+        self.exclude_tables = data.get('exclude_tables', '')
         self.log_level = data.get('log_level', 'info')
         assert isinstance(self.databases, str) or isinstance(self.databases, list)
         assert isinstance(self.tables, str) or isinstance(self.tables, list)
@@ -121,9 +125,13 @@ class Settings:
         raise ValueError()
 
     def is_database_matches(self, db_name):
+        if self.exclude_databases and self.is_pattern_matches(db_name, self.exclude_databases):
+            return False
         return self.is_pattern_matches(db_name, self.databases)
 
     def is_table_matches(self, table_name):
+        if self.exclude_tables and self.is_pattern_matches(table_name, self.exclude_tables):
+            return False
         return self.is_pattern_matches(table_name, self.tables)
 
     def validate_log_level(self):
