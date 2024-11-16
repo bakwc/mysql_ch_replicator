@@ -99,16 +99,18 @@ class Settings:
         data = yaml.safe_load(data)
 
         self.settings_file = settings_file
-        self.mysql = MysqlSettings(**data['mysql'])
-        self.clickhouse = ClickhouseSettings(**data['clickhouse'])
-        self.databases = data['databases']
-        self.tables = data.get('tables', '*')
-        self.exclude_databases = data.get('exclude_databases', '')
-        self.exclude_tables = data.get('exclude_tables', '')
-        self.log_level = data.get('log_level', 'info')
+        self.mysql = MysqlSettings(**data.pop('mysql'))
+        self.clickhouse = ClickhouseSettings(**data.pop('clickhouse'))
+        self.databases = data.pop('databases')
+        self.tables = data.pop('tables', '*')
+        self.exclude_databases = data.pop('exclude_databases', '')
+        self.exclude_tables = data.pop('exclude_tables', '')
+        self.log_level = data.pop('log_level', 'info')
         assert isinstance(self.databases, str) or isinstance(self.databases, list)
         assert isinstance(self.tables, str) or isinstance(self.tables, list)
-        self.binlog_replicator = BinlogReplicatorSettings(**data['binlog_replicator'])
+        self.binlog_replicator = BinlogReplicatorSettings(**data.pop('binlog_replicator'))
+        if data:
+            raise Exception(f'Unsupported config options: {list(data.keys())}')
         self.validate()
 
     @classmethod
