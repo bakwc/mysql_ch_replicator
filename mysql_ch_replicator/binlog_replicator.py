@@ -411,8 +411,6 @@ class BinlogReplicator:
                     if type(event) not in (DeleteRowsEvent, UpdateRowsEvent, WriteRowsEvent, QueryEvent):
                         continue
 
-                    assert event.packet.log_pos == self.stream.log_pos
-
                     log_event = LogEvent()
                     if hasattr(event, 'table'):
                         log_event.table_name = event.table

@@ -31,6 +31,19 @@ services:
     volumes:
       - ./test_mysql.cnf:/etc/my.cnf:ro
 
+  mariadb_db:
+    image: mariadb:11.5.2
+    environment:
+      - MARIADB_DATABASE=admin
+      - MARIADB_ROOT_HOST=%
+      - MARIADB_ROOT_PASSWORD=admin
+    networks:
+      default:
+    ports:
+      - 9307:3306
+    volumes:
+      - ./test_mariadb.cnf:/etc/mysql/my.cnf:ro  # Adjust path to MariaDB config location if needed
+
   replicator:
     image: python:3.12.4-slim-bookworm
     command: bash -c "pip install -r /app/requirements.txt && pip install -r /app/requirements-dev.txt && touch /tmp/ready && tail -f /dev/null"
