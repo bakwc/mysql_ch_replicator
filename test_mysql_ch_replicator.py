@@ -73,7 +73,7 @@ def prepare_env(
 
 
 @pytest.mark.parametrize('config_file', [
-    #CONFIG_FILE,
+    CONFIG_FILE,
     CONFIG_FILE_MARIADB,
 ])
 def test_e2e_regular(config_file):
