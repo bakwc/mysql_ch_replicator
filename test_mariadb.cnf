@@ -1,0 +1,27 @@
+[client]
+default-character-set = utf8mb4
+
+[mysql]
+default-character-set = utf8mb4
+
+[mysqld]
+# The defaults from /etc/my.cnf
+user = mysql
+
+# Custom settings
+collation-server = utf8mb4_unicode_ci      # Changed to a collation supported by MariaDB
+character-set-server = utf8mb4
+default_authentication_plugin = mysql_native_password
+init_connect = 'SET NAMES utf8mb4'
+skip-host-cache
+skip-name-resolve
+# information_schema_stats_expiry is not available in MariaDB and has been removed.
+
+# Replication settings for MariaDB
+gtid_strict_mode = ON
+gtid_domain_id = 0
+server_id = 1
+log_bin = /var/log/mysql/mysql-bin.log
+binlog_expire_logs_seconds = 864000
+max_binlog_size = 500M
+binlog_format = ROW

@@ -21,13 +21,21 @@ class MySQLApi:
         curr_time = time.time()
         if curr_time - self.last_connect_time < MySQLApi.RECONNECT_INTERVAL:
             return
-        #print('(re)connecting to mysql')
-        self.db = mysql.connector.connect(
+        conn_settings = dict(
             host=self.mysql_settings.host,
             port=self.mysql_settings.port,
             user=self.mysql_settings.user,
             passwd=self.mysql_settings.password,
         )
+        try:
+            self.db = mysql.connector.connect(**conn_settings)
+        except mysql.connector.errors.DatabaseError as e:
+            if 'Unknown collation' in str(e):
+                conn_settings['charset'] = 'utf8mb4'
+                conn_settings['collation'] = 'utf8mb4_general_ci'
+                self.db = mysql.connector.connect(**conn_settings)
+            else:
+                raise
         self.cursor = self.db.cursor()
         if self.database is not None:
             self.cursor.execute(f'USE {self.database}')

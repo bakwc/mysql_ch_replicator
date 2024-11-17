@@ -3,6 +3,7 @@ import shutil
 import time
 import subprocess
 import json
+import pytest
 
 from mysql_ch_replicator import config
 from mysql_ch_replicator import mysql_api
@@ -14,6 +15,7 @@ from mysql_ch_replicator.runner import ProcessRunner
 
 
 CONFIG_FILE = 'tests_config.yaml'
+CONFIG_FILE_MARIADB = 'tests_config_mariadb.yaml'
 TEST_DB_NAME = 'replication_test_db'
 TEST_TABLE_NAME = 'test_table'
 TEST_TABLE_NAME_2 = 'test_table_2'
@@ -70,9 +72,13 @@ def prepare_env(
     assert_wait(lambda: db_name not in ch.get_databases())
 
 
-def test_e2e_regular():
+@pytest.mark.parametrize('config_file', [
+    #CONFIG_FILE,
+    CONFIG_FILE_MARIADB,
+])
+def test_e2e_regular(config_file):
     cfg = config.Settings()
-    cfg.load(CONFIG_FILE)
+    cfg.load(config_file)
 
     mysql = mysql_api.MySQLApi(
         database=None,
@@ -103,9 +109,9 @@ CREATE TABLE {TEST_TABLE_NAME} (
     )
     mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES ('Peter', 33);", commit=True)
 
-    binlog_replicator_runner = BinlogReplicatorRunner()
+    binlog_replicator_runner = BinlogReplicatorRunner(cfg_file=config_file)
     binlog_replicator_runner.run()
-    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME)
+    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file=config_file)
     db_replicator_runner.run()
 
     assert_wait(lambda: TEST_DB_NAME in ch.get_databases())

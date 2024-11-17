@@ -49,9 +49,21 @@ For realtime data sync from MySQL to ClickHouse:
 # ... other settings ...
 gtid_mode = on
 enforce_gtid_consistency = 1
-default_authentication_plugin = mysql_native_password
+binlog_expire_logs_seconds = 864000
+max_binlog_size            = 500M
+binlog_format              = ROW
+```
+ - For MariaDB use following settings:
+```ini
+[mysqld]
+# ... other settings ...
+gtid_strict_mode = ON
+gtid_domain_id = 0
+server_id = 1
+log_bin = /var/log/mysql/mysql-bin.log
+binlog_expire_logs_seconds = 864000
+max_binlog_size = 500M
 binlog_format = ROW
-
 ```
 
 For `AWS RDS` you need to set following settings in `Parameter groups`:
