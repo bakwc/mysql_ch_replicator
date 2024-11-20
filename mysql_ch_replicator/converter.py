@@ -1,3 +1,4 @@
+import struct
 import json
 import sqlparse
 import re
@@ -25,6 +26,58 @@ def convert_bytes(obj):
         return obj.decode('utf-8')
     else:
         return obj
+
+
+def parse_mysql_point(binary):
+    """
+    Parses the binary representation of a MySQL POINT data type
+    and returns a tuple (x, y) representing the coordinates.
+
+    :param binary: The binary data representing the POINT.
+    :return: A tuple (x, y) with the coordinate values.
+    """
+    if binary is None:
+        return 0, 0
+
+    if len(binary) == 21:
+        # No SRID. Proceed as per WKB POINT
+        # Read the byte order
+        byte_order = binary[0]
+        if byte_order == 0:
+            endian = '>'
+        elif byte_order == 1:
+            endian = '<'
+        else:
+            raise ValueError("Invalid byte order in WKB POINT")
+        # Read the WKB Type
+        wkb_type = struct.unpack(endian + 'I', binary[1:5])[0]
+        if wkb_type != 1:  # WKB type 1 means POINT
+            raise ValueError("Not a WKB POINT type")
+        # Read X and Y coordinates
+        x = struct.unpack(endian + 'd', binary[5:13])[0]
+        y = struct.unpack(endian + 'd', binary[13:21])[0]
+    elif len(binary) == 25:
+        # With SRID included
+        # First 4 bytes are the SRID
+        srid = struct.unpack('>I', binary[0:4])[0]  # SRID is big-endian
+        # Next byte is byte order
+        byte_order = binary[4]
+        if byte_order == 0:
+            endian = '>'
+        elif byte_order == 1:
+            endian = '<'
+        else:
+            raise ValueError("Invalid byte order in WKB POINT")
+        # Read the WKB Type
+        wkb_type = struct.unpack(endian + 'I', binary[5:9])[0]
+        if wkb_type != 1:  # WKB type 1 means POINT
+            raise ValueError("Not a WKB POINT type")
+        # Read X and Y coordinates
+        x = struct.unpack(endian + 'd', binary[9:17])[0]
+        y = struct.unpack(endian + 'd', binary[17:25])[0]
+    else:
+        raise ValueError("Invalid binary length for WKB POINT")
+    return (x, y)
 
 
 def strip_sql_name(name):
@@ -64,8 +117,10 @@ class MysqlToClickhouseConverter:
         self.db_replicator = db_replicator
 
     def convert_type(self, mysql_type, parameters):
-
         is_unsigned = 'unsigned' in parameters.lower()
+
+        if mysql_type == 'point':
+            return 'Tuple(x Float32, y Float32)'
 
         if mysql_type == 'int':
             if is_unsigned:
@@ -146,6 +201,8 @@ class MysqlToClickhouseConverter:
         mysql_parameters = mysql_parameters.lower()
         not_null = 'not null' in mysql_parameters
         clickhouse_type = self.convert_type(mysql_type, mysql_parameters)
+        if 'Tuple' in clickhouse_type:
+            not_null = True
         if not not_null:
             clickhouse_type = f'Nullable({clickhouse_type})'
         return clickhouse_type
@@ -196,6 +253,9 @@ class MysqlToClickhouseConverter:
                     clickhouse_field_value = 4294967296 + clickhouse_field_value
                 if 'UInt64' in clickhouse_field_type and clickhouse_field_value < 0:
                     clickhouse_field_value = 18446744073709551616 + clickhouse_field_value
+
+            if 'point' in mysql_field_type:
+                clickhouse_field_value = parse_mysql_point(clickhouse_field_value)
 
             clickhouse_record.append(clickhouse_field_value)
         return tuple(clickhouse_record)
