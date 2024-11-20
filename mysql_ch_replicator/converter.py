@@ -123,14 +123,14 @@ class MysqlToClickhouseConverter:
             return 'Float32'
         if 'double' in mysql_type:
             return 'Float64'
-        if 'integer' in mysql_type or 'int(' in mysql_type:
-            if is_unsigned:
-                return 'UInt32'
-            return 'Int32'
         if 'bigint' in mysql_type:
             if is_unsigned:
                 return 'UInt64'
             return 'Int64'
+        if 'integer' in mysql_type or 'int(' in mysql_type:
+            if is_unsigned:
+                return 'UInt32'
+            return 'Int32'
         if 'real' in mysql_type:
             return 'Float64'
         if mysql_type.startswith('time'):
