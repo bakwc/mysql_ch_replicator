@@ -89,6 +89,8 @@ class MysqlToClickhouseConverter:
             return 'Date32'
         if mysql_type == 'tinyint(1)':
             return 'Bool'
+        if mysql_type == 'bit(1)':
+            return 'Bool'
         if mysql_type == 'bool':
             return 'Bool'
         if 'smallint' in mysql_type:
