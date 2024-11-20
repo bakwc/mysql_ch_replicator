@@ -9,6 +9,7 @@ import os
 from .config import Settings
 from .db_replicator import DbReplicator
 from .binlog_replicator import BinlogReplicator
+from .db_optimizer import DbOptimizer
 from .monitoring import Monitoring
 from .runner import Runner
 
@@ -97,6 +98,24 @@ def run_db_replicator(args, config: Settings):
     db_replicator.run()
 
 
+def run_db_optimizer(args, config: Settings):
+    data_dir = config.binlog_replicator.data_dir
+    if not os.path.exists(data_dir):
+        os.mkdir(data_dir)
+
+    log_file = os.path.join(
+        data_dir,
+        'db_optimizer.log',
+    )
+
+    set_logging_config(f'dbopt {args.db}', log_file=log_file, log_level_str=config.log_level)
+
+    db_optimizer = DbOptimizer(
+        config=config,
+    )
+    db_optimizer.run()
+
+
 def run_monitoring(args, config: Settings):
     set_logging_config('monitor', log_level_str=config.log_level)
     monitoring = Monitoring(args.db or '', config)
@@ -131,6 +150,8 @@ def main():
         run_binlog_replicator(args, config)
     if args.mode == 'db_replicator':
         run_db_replicator(args, config)
+    if args.mode == 'db_optimizer':
+        run_db_optimizer(args, config)
     if args.mode == 'monitoring':
         run_monitoring(args, config)
     if args.mode == 'run_all':

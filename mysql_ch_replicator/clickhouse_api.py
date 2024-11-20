@@ -32,7 +32,8 @@ DELETE FROM {db_name}.{table_name} WHERE {field_name} IN ({field_values})
 class ClickhouseApi:
     MAX_RETRIES = 5
     RETRY_INTERVAL = 30
-    def __init__(self, database: str, clickhouse_settings: ClickhouseSettings):
+
+    def __init__(self, database: str | None, clickhouse_settings: ClickhouseSettings):
         self.database = database
         self.clickhouse_settings = clickhouse_settings
         self.client = clickhouse_connect.get_client(

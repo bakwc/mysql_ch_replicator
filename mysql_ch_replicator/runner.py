@@ -25,6 +25,11 @@ class DbReplicatorRunner(ProcessRunner):
         super().__init__(f'{sys.argv[0]} --config {config_file} --db {db_name} db_replicator')
 
 
+class DbOptimizerRunner(ProcessRunner):
+    def __init__(self, config_file):
+        super().__init__(f'{sys.argv[0]} --config {config_file} db_optimizer')
+
+
 class RunAllRunner(ProcessRunner):
     def __init__(self, db_name, config_file):
         super().__init__(f'{sys.argv[0]} --config {config_file} run_all --db {db_name}')
@@ -37,6 +42,7 @@ class Runner:
         self.wait_initial_replication = wait_initial_replication
         self.runners: dict = {}
         self.binlog_runner = None
+        self.db_optimizer = None
 
     def is_initial_replication_finished(self, db_name):
         state_path = os.path.join(
@@ -64,6 +70,9 @@ class Runner:
 
         self.binlog_runner = BinlogReplicatorRunner(self.config.settings_file)
         self.binlog_runner.run()
+
+        self.db_optimizer = DbOptimizerRunner(self.config.settings_file)
+        self.db_optimizer.run()
 
         # First - continue replication for DBs that already finished initial replication
         for db in databases:
@@ -99,6 +108,10 @@ class Runner:
         if self.binlog_runner is not None:
             logger.info('stopping binlog replication')
             self.binlog_runner.stop()
+
+        if self.db_optimizer is not None:
+            logger.info('stopping db_optimizer')
+            self.db_optimizer.stop()
 
         for db_name, db_replication_runner in self.runners.items():
             logger.info(f'stopping replication for {db_name}')
