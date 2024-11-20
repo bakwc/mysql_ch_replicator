@@ -86,7 +86,7 @@ class ClickhouseApi:
         self.tables_last_record_version[table_name] = last_used_version
 
     def create_table(self, structure: TableStructure):
-        if not structure.primary_key:
+        if not structure.primary_keys:
             raise Exception(f'missing primary key for {structure.table_name}')
 
         primary_key_type = ''

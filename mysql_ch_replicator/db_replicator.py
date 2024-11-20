@@ -148,15 +148,16 @@ class DbReplicator:
                 )
 
     def validate_mysql_structure(self, mysql_structure: TableStructure):
-        primary_field: TableField = mysql_structure.fields[mysql_structure.primary_key_idx]
-        if 'not null' not in primary_field.parameters.lower():
-            logger.warning('primary key validation failed')
-            logger.warning(
-                f'\n\n\n    !!!  WARNING - PRIMARY KEY NULLABLE (field "{primary_field.name}", table "{mysql_structure.table_name}") !!!\n\n'
-                'There could be errors replicating nullable primary key\n'
-                'Please ensure all tables has NOT NULL parameter for primary key\n'
-                'Or mark tables as skipped, see "exclude_tables" option\n\n\n'
-            )
+        pass
+        # primary_field: TableField = mysql_structure.fields[mysql_structure.primary_key_idx]
+        # if 'not null' not in primary_field.parameters.lower():
+        #     logger.warning('primary key validation failed')
+        #     logger.warning(
+        #         f'\n\n\n    !!!  WARNING - PRIMARY KEY NULLABLE (field "{primary_field.name}", table "{mysql_structure.table_name}") !!!\n\n'
+        #         'There could be errors replicating nullable primary key\n'
+        #         'Please ensure all tables has NOT NULL parameter for primary key\n'
+        #         'Or mark tables as skipped, see "exclude_tables" option\n\n\n'
+        #     )
 
     def run(self):
         try:
@@ -279,11 +280,12 @@ class DbReplicator:
         field_names = [field.name for field in clickhouse_table_structure.fields]
         field_types = [field.field_type for field in clickhouse_table_structure.fields]
 
-        primary_key = clickhouse_table_structure.primary_key
-        primary_key_index = field_names.index(primary_key)
-        primary_key_type = field_types[primary_key_index]
+        primary_key = clickhouse_table_structure.primary_keys
+        primary_key_ids = clickhouse_table_structure.primary_key_ids
 
-        logger.debug(f'primary key name: {primary_key}, type: {primary_key_type}')
+        #primary_key_type = field_types[primary_key_index]
+
+        #logger.debug(f'primary key name: {primary_key}, type: {primary_key_type}')
 
         stats_number_of_records = 0
         last_stats_dump_time = time.time()

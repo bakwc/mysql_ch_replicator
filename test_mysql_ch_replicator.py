@@ -226,7 +226,7 @@ CREATE TABLE {TEST_TABLE_NAME} (
     id int NOT NULL AUTO_INCREMENT,
     name varchar(255),
     age int,
-    PRIMARY KEY (id)
+    PRIMARY KEY (id, `name`)
 ); 
     ''')
 
