@@ -17,3 +17,4 @@ binlog_replicator:
 
 databases: '*test*'
 log_level: 'debug'
+optimize_interval: 3
