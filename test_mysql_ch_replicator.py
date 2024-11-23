@@ -694,6 +694,72 @@ CREATE TABLE {TEST_TABLE_NAME} (
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME, 'test7=18446744073709551586')) == 2)
 
 
+def test_different_types_2():
+    cfg = config.Settings()
+    cfg.load(CONFIG_FILE)
+
+    mysql = mysql_api.MySQLApi(
+        database=None,
+        mysql_settings=cfg.mysql,
+    )
+
+    ch = clickhouse_api.ClickhouseApi(
+        database=TEST_DB_NAME,
+        clickhouse_settings=cfg.clickhouse,
+    )
+
+    prepare_env(cfg, mysql, ch)
+
+    mysql.execute("SET sql_mode = 'ALLOW_INVALID_DATES';")
+
+    mysql.execute(f'''
+CREATE TABLE {TEST_TABLE_NAME} (
+    `id` int unsigned NOT NULL AUTO_INCREMENT,
+    test1 bit(1),
+    test2 point,
+    test3 binary(16),
+    PRIMARY KEY (id)
+); 
+    ''')
+
+    mysql.execute(
+        f"INSERT INTO {TEST_TABLE_NAME} (test1, test2, test3) VALUES "
+        f"(0, POINT(10.0, 20.0), 'azaza');",
+        commit=True,
+    )
+
+    binlog_replicator_runner = BinlogReplicatorRunner()
+    binlog_replicator_runner.run()
+    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME)
+    db_replicator_runner.run()
+
+    assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
+
+    ch.execute_command(f'USE {TEST_DB_NAME}')
+
+    assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1)
+
+    mysql.execute(
+        f"INSERT INTO {TEST_TABLE_NAME} (test1, test2) VALUES "
+        f"(1, POINT(15.0, 14.0));",
+        commit=True,
+    )
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 2)
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME, 'test1=True')) == 1)
+
+    assert ch.select(TEST_TABLE_NAME, 'test1=True')[0]['test2']['x'] == 15.0
+    assert ch.select(TEST_TABLE_NAME, 'test1=False')[0]['test2']['y'] == 20.0
+    assert ch.select(TEST_TABLE_NAME, 'test1=False')[0]['test3'] == 'azaza\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+
+    mysql.execute(
+        f"INSERT INTO {TEST_TABLE_NAME} (test1, test2) VALUES "
+        f"(0, NULL);",
+        commit=True,
+    )
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
+
+
 def test_json():
     cfg = config.Settings()
     cfg.load(CONFIG_FILE)
