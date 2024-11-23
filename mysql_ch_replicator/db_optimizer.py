@@ -87,6 +87,7 @@ class DbOptimizer:
             if table not in ch_tables:
                 continue
             self.optimize_table(db_name, table)
+            self.state.save()
 
     def run(self):
         logger.info('running optimizer')
