@@ -133,7 +133,7 @@ def main():
     parser.add_argument(
         "mode", help="run mode",
         type=str,
-        choices=["run_all", "binlog_replicator", "db_replicator", "monitoring"])
+        choices=["run_all", "binlog_replicator", "db_replicator", "monitoring", "db_optimizer"])
     parser.add_argument("--config", help="config file path", default='config.yaml', type=str)
     parser.add_argument("--db", help="source database(s) name", type=str)
     parser.add_argument("--target_db", help="target database(s) name, if not set will be same as source", type=str)

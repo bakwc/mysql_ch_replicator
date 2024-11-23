@@ -3,9 +3,10 @@ import os
 import time
 from logging import getLogger
 
-from config import Settings
-from mysql_api import MySQLApi
-from clickhouse_api import ClickhouseApi
+from .config import Settings
+from .mysql_api import MySQLApi
+from .clickhouse_api import ClickhouseApi
+from .utils import GracefulKiller
 
 
 logger = getLogger(__name__)
@@ -40,7 +41,7 @@ class DbOptimizer:
     def __init__(self, config: Settings):
         self.state = State(os.path.join(
             config.binlog_replicator.data_dir,
-            ''
+            'db_optimizer.bin',
         ))
         self.config = config
         self.mysql_api = MySQLApi(
@@ -72,6 +73,7 @@ class DbOptimizer:
             f'OPTIMIZE TABLE {db_name}.{table_name} FINAL SETTINGS mutations_sync = 2'
         )
         logger.info('Optimize finished')
+        self.state.last_process_time[db_name] = time.time()
 
     def optimize_database(self, db_name):
         self.mysql_api.set_database(db_name)
@@ -87,11 +89,10 @@ class DbOptimizer:
             self.optimize_table(db_name, table)
 
     def run(self):
-        while True:
-            time.sleep(999)
-
+        logger.info('running optimizer')
+        killer = GracefulKiller()
         try:
-            while True:
+            while not killer.kill_now:
                 db_to_optimize = self.select_db_to_optimize()
                 if db_to_optimize is None:
                     time.sleep(min(120, self.config.optimize_interval))
@@ -99,3 +100,4 @@ class DbOptimizer:
                 self.optimize_database(db_name=db_to_optimize)
         except Exception as e:
             logger.error(f'error {e}', exc_info=True)
+        logger.info('optimizer stopped')

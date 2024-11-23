@@ -176,10 +176,12 @@ class ClickhouseApi:
     def create_database(self, db_name):
         self.cursor.execute(f'CREATE DATABASE {db_name}')
 
-    def select(self, table_name, where=None):
+    def select(self, table_name, where=None, final=None):
         query = f'SELECT * FROM {table_name}'
         if where:
             query += f' WHERE {where}'
+        if final is not None:
+            query += f' SETTINGS final = {int(final)};'
         result = self.client.query(query)
         rows = result.result_rows
         columns = result.column_names

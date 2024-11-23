@@ -344,8 +344,19 @@ CREATE TABLE {TEST_TABLE_NAME} (
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
 
     mysql.execute(f"UPDATE {TEST_TABLE_NAME} SET age=66 WHERE name='Ivan'", commit=True)
-    time.sleep(4)
-    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, "name='Ivan'")[0]['age'] == 66)
+
+    mysql.execute(f"UPDATE {TEST_TABLE_NAME} SET age=77 WHERE name='Ivan'", commit=True)
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, "name='Ivan'")[0]['age'] == 77)
+
+    mysql.execute(f"UPDATE {TEST_TABLE_NAME} SET age=88 WHERE name='Ivan'", commit=True)
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, "name='Ivan'")[0]['age'] == 88)
+
+    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES ('Vlad', 99);", commit=True)
+
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 4)
+
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME, final=False)) == 4)
 
     run_all_runner.stop()
 
