@@ -73,7 +73,6 @@ class DbOptimizer:
             f'OPTIMIZE TABLE {db_name}.{table_name} FINAL SETTINGS mutations_sync = 2'
         )
         logger.info('Optimize finished')
-        self.state.last_process_time[db_name] = time.time()
 
     def optimize_database(self, db_name):
         self.mysql_api.set_database(db_name)
@@ -87,7 +86,8 @@ class DbOptimizer:
             if table not in ch_tables:
                 continue
             self.optimize_table(db_name, table)
-            self.state.save()
+        self.state.last_process_time[db_name] = time.time()
+        self.state.save()
 
     def run(self):
         logger.info('running optimizer')
