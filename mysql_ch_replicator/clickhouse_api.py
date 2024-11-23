@@ -32,7 +32,8 @@ DELETE FROM {db_name}.{table_name} WHERE {field_name} IN ({field_values})
 class ClickhouseApi:
     MAX_RETRIES = 5
     RETRY_INTERVAL = 30
-    def __init__(self, database: str, clickhouse_settings: ClickhouseSettings):
+
+    def __init__(self, database: str | None, clickhouse_settings: ClickhouseSettings):
         self.database = database
         self.clickhouse_settings = clickhouse_settings
         self.client = clickhouse_connect.get_client(
@@ -175,10 +176,12 @@ class ClickhouseApi:
     def create_database(self, db_name):
         self.cursor.execute(f'CREATE DATABASE {db_name}')
 
-    def select(self, table_name, where=None):
+    def select(self, table_name, where=None, final=None):
         query = f'SELECT * FROM {table_name}'
         if where:
             query += f' WHERE {where}'
+        if final is not None:
+            query += f' SETTINGS final = {int(final)};'
         result = self.client.query(query)
         rows = result.result_rows
         columns = result.column_names

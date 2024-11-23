@@ -81,6 +81,8 @@ class BinlogReplicatorSettings:
 
 
 class Settings:
+    DEFAULT_LOG_LEVEL = 'info'
+    DEFAULT_OPTIMIZE_INTERVAL = 86400
 
     def __init__(self):
         self.mysql = MysqlSettings()
@@ -93,6 +95,7 @@ class Settings:
         self.settings_file = ''
         self.log_level = 'info'
         self.debug_log_level = False
+        self.optimize_interval = 0
 
     def load(self, settings_file):
         data = open(settings_file, 'r').read()
@@ -105,7 +108,8 @@ class Settings:
         self.tables = data.pop('tables', '*')
         self.exclude_databases = data.pop('exclude_databases', '')
         self.exclude_tables = data.pop('exclude_tables', '')
-        self.log_level = data.pop('log_level', 'info')
+        self.log_level = data.pop('log_level', Settings.DEFAULT_LOG_LEVEL)
+        self.optimize_interval = data.pop('optimize_interval', Settings.DEFAULT_OPTIMIZE_INTERVAL)
         assert isinstance(self.databases, str) or isinstance(self.databases, list)
         assert isinstance(self.tables, str) or isinstance(self.tables, list)
         self.binlog_replicator = BinlogReplicatorSettings(**data.pop('binlog_replicator'))
