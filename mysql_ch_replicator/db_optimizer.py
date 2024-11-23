@@ -69,10 +69,12 @@ class DbOptimizer:
 
     def optimize_table(self, db_name, table_name):
         logger.info(f'Optimizing table {db_name}.{table_name}')
+        t1 = time.time()
         self.clickhouse_api.execute_command(
             f'OPTIMIZE TABLE {db_name}.{table_name} FINAL SETTINGS mutations_sync = 2'
         )
-        logger.info('Optimize finished')
+        t2 = time.time()
+        logger.info(f'Optimize finished in {int(t2-t1)} seconds')
 
     def optimize_database(self, db_name):
         self.mysql_api.set_database(db_name)
