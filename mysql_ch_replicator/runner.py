@@ -58,6 +58,8 @@ class Runner:
             runner.restart_dead_process_if_required()
         if self.binlog_runner is not None:
             self.binlog_runner.restart_dead_process_if_required()
+        if self.db_optimizer is not None:
+            self.db_optimizer.restart_dead_process_if_required()
 
     def run(self):
         mysql_api = MySQLApi(
