@@ -137,7 +137,8 @@ tables: '*'
 exclude_databases: ['database_10', 'database_*_42']   # optional
 exclude_tables: ['meta_table_*']                      # optional
 
-log_level: 'info'   # optional             
+log_level: 'info'         # optional       
+optimize_interval: 86400  # optional
 ```
 
 #### Required settings
@@ -152,6 +153,7 @@ log_level: 'info'   # optional
 - `exclude_databases` - databases to __exclude__, string or list, eg `'table1*'` or `['table2', 'table3*']`. If same database matches `databases` and `exclude_databases`, exclude has higher priority.
 - `exclude_tables` - databases to __exclude__, string or list. If same table matches `tables` and `exclude_tables`, exclude has higher priority.
 - `log_level` - log level, default is `info`, you can set to `debug` to get maximum information (allowed values are `debug`, `info`, `warning`, `error`, `critical`)
+- `optimize_interval` - interval (seconds) between automatic `OPTIMIZE table FINAL` calls. Default 86400 (1 day). This is required to perform all merges guaranteed and avoid increasing of used storage and decreasing performance.
 
 Few more tables / dbs examples:
 
