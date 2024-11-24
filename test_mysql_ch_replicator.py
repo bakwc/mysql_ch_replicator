@@ -259,6 +259,9 @@ CREATE TABLE {TEST_TABLE_NAME} (
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Mary'")[0].get('last_name') is None)
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Mary'")[0].get('city') is None)
 
+    mysql.execute(f"DELETE FROM {TEST_TABLE_NAME} WHERE name='Ivan';", commit=True)
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1)
+
     mysql.execute(
         f"CREATE TABLE {TEST_TABLE_NAME_2} "
         f"(id int NOT NULL AUTO_INCREMENT, name varchar(255), age int, "
