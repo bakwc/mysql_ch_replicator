@@ -17,9 +17,9 @@ class MySQLApi:
     def close(self):
         self.db.close()
 
-    def reconnect_if_required(self):
+    def reconnect_if_required(self, force=False):
         curr_time = time.time()
-        if curr_time - self.last_connect_time < MySQLApi.RECONNECT_INTERVAL:
+        if curr_time - self.last_connect_time < MySQLApi.RECONNECT_INTERVAL and not force:
             return
         conn_settings = dict(
             host=self.mysql_settings.host,
@@ -59,7 +59,7 @@ class MySQLApi:
         self.cursor.execute(f'USE {self.database}')
 
     def get_databases(self):
-        self.reconnect_if_required()
+        self.reconnect_if_required(True)  # New database appear only after new connection
         self.cursor.execute('SHOW DATABASES')
         res = self.cursor.fetchall()
         tables = [x[0] for x in res]
