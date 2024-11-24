@@ -82,7 +82,7 @@ class ClickhouseApi:
     def set_last_used_version(self, table_name, last_used_version):
         self.tables_last_record_version[table_name] = last_used_version
 
-    def create_table(self, structure: TableStructure):
+    def create_table(self, structure: TableStructure, additional_indexes: list | None = None):
         if not structure.primary_keys:
             raise Exception(f'missing primary key for {structure.table_name}')
 
@@ -103,6 +103,8 @@ class ClickhouseApi:
             indexes.append(
                 f'INDEX idx_id {structure.primary_keys[0]} TYPE bloom_filter GRANULARITY 1',
             )
+        if additional_indexes is not None:
+            indexes += additional_indexes
 
         indexes = ',\n'.join(indexes)
         primary_key = ','.join(structure.primary_keys)
@@ -117,6 +119,7 @@ class ClickhouseApi:
             'partition_by': partition_by,
             'indexes': indexes,
         })
+        print(" === query:", query)
         self.execute_command(query)
 
     def insert(self, table_name, records, table_structure: TableStructure = None):
@@ -195,6 +198,12 @@ class ClickhouseApi:
         for row in rows:
             results.append(dict(zip(columns, row)))
         return results
+
+    def query(self, query: str):
+        return self.client.query(query)
+
+    def show_create_table(self, table_name):
+        return self.client.query(f'SHOW CREATE TABLE {table_name}').result_rows[0][0]
 
     def get_system_setting(self, name):
         results = self.select('system.settings', f"name = '{name}'")

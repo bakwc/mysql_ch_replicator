@@ -30,6 +30,13 @@ class MysqlSettings:
 
 
 @dataclass
+class Index:
+    databases: str | list = '*'
+    tables: str | list = '*'
+    index: str = ''
+
+
+@dataclass
 class ClickhouseSettings:
     host: str = 'localhost'
     port: int = 3306
@@ -98,6 +105,7 @@ class Settings:
         self.debug_log_level = False
         self.optimize_interval = 0
         self.check_db_updated_interval = 0
+        self.indexes: list[Index] = []
 
     def load(self, settings_file):
         data = open(settings_file, 'r').read()
@@ -115,6 +123,11 @@ class Settings:
         self.check_db_updated_interval = data.pop(
             'check_db_updated_interval', Settings.DEFAULT_CHECK_DB_UPDATED_INTERVAL,
         )
+        indexes = data.pop('indexes', [])
+        for index in indexes:
+            self.indexes.append(
+                Index(**index)
+            )
         assert isinstance(self.databases, str) or isinstance(self.databases, list)
         assert isinstance(self.tables, str) or isinstance(self.tables, list)
         self.binlog_replicator = BinlogReplicatorSettings(**data.pop('binlog_replicator'))
@@ -150,6 +163,16 @@ class Settings:
             raise ValueError(f'wrong log level {self.log_level}')
         if self.log_level == 'debug':
             self.debug_log_level = True
+
+    def get_indexes(self, db_name, table_name):
+        results = []
+        for index in self.indexes:
+            if not self.is_pattern_matches(db_name, index.databases):
+                continue
+            if not self.is_pattern_matches(table_name, index.tables):
+                continue
+            results.append(index.index)
+        return results
 
     def validate(self):
         self.mysql.validate()

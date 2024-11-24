@@ -366,7 +366,22 @@ CREATE TABLE {TEST_TABLE_NAME} (
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME, final=False)) == 4)
 
     mysql.create_database(TEST_DB_NAME_2)
-    assert_wait(lambda: TEST_DB_NAME_2 in ch.get_databases(), max_wait_time=5)
+    assert_wait(lambda: TEST_DB_NAME_2 in ch.get_databases())
+
+    mysql.execute(f'''
+    CREATE TABLE test_table_with_index (
+        id int NOT NULL AUTO_INCREMENT,
+        name varchar(255) NOT NULL,
+        age int,
+        rate decimal(10,4),
+        PRIMARY KEY (id)
+    ); 
+        ''')
+
+    assert_wait(lambda: 'test_table_with_index' in ch.get_tables())
+
+    create_query = ch.show_create_table('test_table_with_index')
+    assert 'INDEX name_idx name TYPE ngrambf_v1' in create_query
 
     run_all_runner.stop()
 

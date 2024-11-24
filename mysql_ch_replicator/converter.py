@@ -472,7 +472,7 @@ class MysqlToClickhouseConverter:
                 query = f'ALTER TABLE {db_name}.{table_name} RENAME COLUMN {column_name} TO {new_column_name}'
                 self.db_replicator.clickhouse_api.execute_command(query)
 
-    def parse_create_table_query(self, mysql_query) -> tuple:
+    def parse_create_table_query(self, mysql_query) -> tuple[TableStructure, TableStructure]:
         mysql_table_structure = self.parse_mysql_table_structure(mysql_query)
         ch_table_structure = self.convert_table_structure(mysql_table_structure)
         return mysql_table_structure, ch_table_structure
