@@ -9,13 +9,15 @@ class TableField:
 @dataclass
 class TableStructure:
     fields: list = field(default_factory=list)
-    primary_key: str = ''
-    primary_key_idx: int = 0
+    primary_keys: str = ''
+    primary_key_ids: int = 0
     table_name: str = ''
 
     def preprocess(self):
         field_names = [f.name for f in self.fields]
-        self.primary_key_idx = field_names.index(self.primary_key)
+        self.primary_key_ids = [
+            field_names.index(key) for key in self.primary_keys
+        ]
 
     def add_field_after(self, new_field: TableField, after: str):
 

@@ -148,15 +148,16 @@ class DbReplicator:
                 )
 
     def validate_mysql_structure(self, mysql_structure: TableStructure):
-        primary_field: TableField = mysql_structure.fields[mysql_structure.primary_key_idx]
-        if 'not null' not in primary_field.parameters.lower():
-            logger.warning('primary key validation failed')
-            logger.warning(
-                f'\n\n\n    !!!  WARNING - PRIMARY KEY NULLABLE (field "{primary_field.name}", table "{mysql_structure.table_name}") !!!\n\n'
-                'There could be errors replicating nullable primary key\n'
-                'Please ensure all tables has NOT NULL parameter for primary key\n'
-                'Or mark tables as skipped, see "exclude_tables" option\n\n\n'
-            )
+        for key_idx in mysql_structure.primary_key_ids:
+            primary_field: TableField = mysql_structure.fields[key_idx]
+            if 'not null' not in primary_field.parameters.lower():
+                logger.warning('primary key validation failed')
+                logger.warning(
+                    f'\n\n\n    !!!  WARNING - PRIMARY KEY NULLABLE (field "{primary_field.name}", table "{mysql_structure.table_name}") !!!\n\n'
+                    'There could be errors replicating nullable primary key\n'
+                    'Please ensure all tables has NOT NULL parameter for primary key\n'
+                    'Or mark tables as skipped, see "exclude_tables" option\n\n\n'
+                )
 
     def run(self):
         try:
@@ -276,29 +277,33 @@ class DbReplicator:
         logger.debug(f'mysql table structure: {mysql_table_structure}')
         logger.debug(f'clickhouse table structure: {clickhouse_table_structure}')
 
-        field_names = [field.name for field in clickhouse_table_structure.fields]
         field_types = [field.field_type for field in clickhouse_table_structure.fields]
 
-        primary_key = clickhouse_table_structure.primary_key
-        primary_key_index = field_names.index(primary_key)
-        primary_key_type = field_types[primary_key_index]
+        primary_keys = clickhouse_table_structure.primary_keys
+        primary_key_ids = clickhouse_table_structure.primary_key_ids
+        primary_key_types = [field_types[key_idx] for key_idx in primary_key_ids]
 
-        logger.debug(f'primary key name: {primary_key}, type: {primary_key_type}')
+        #logger.debug(f'primary key name: {primary_key}, type: {primary_key_type}')
 
         stats_number_of_records = 0
         last_stats_dump_time = time.time()
 
         while True:
 
-            query_start_value = max_primary_key
-            if 'int' not in primary_key_type.lower() and query_start_value is not None:
-                query_start_value = f"'{query_start_value}'"
+            query_start_values = max_primary_key
+            if query_start_values is not None:
+                for i in range(len(query_start_values)):
+                    key_type = primary_key_types[i]
+                    value = query_start_values[i]
+                    if 'int' not in key_type.lower():
+                        value = f"'{value}'"
+                        query_start_values[i] = value
 
             records = self.mysql_api.get_records(
                 table_name=table_name,
-                order_by=primary_key,
+                order_by=primary_keys,
                 limit=DbReplicator.INITIAL_REPLICATION_BATCH_SIZE,
-                start_value=query_start_value,
+                start_value=query_start_values,
             )
             logger.debug(f'extracted {len(records)} records from mysql')
 
@@ -311,7 +316,7 @@ class DbReplicator:
                 break
             self.clickhouse_api.insert(table_name, records, table_structure=clickhouse_table_structure)
             for record in records:
-                record_primary_key = record[primary_key_index]
+                record_primary_key = [record[key_idx] for key_idx in primary_key_ids]
                 if max_primary_key is None:
                     max_primary_key = record_primary_key
                 else:
@@ -404,6 +409,16 @@ class DbReplicator:
         self.state.tables_last_record_version = self.clickhouse_api.tables_last_record_version
         self.state.save()
 
+    def _get_record_id(self, ch_table_structure, record: list):
+        result = []
+        for idx in ch_table_structure.primary_key_ids:
+            field_type = ch_table_structure.fields[idx].field_type
+            if field_type == 'String':
+                result.append(f"'{record[idx]}'")
+            else:
+                result.append(record[idx])
+        return ','.join(map(str, result))
+
     def handle_insert_event(self, event: LogEvent):
         if self.config.debug_log_level:
             logger.debug(
@@ -418,12 +433,10 @@ class DbReplicator:
         clickhouse_table_structure = self.state.tables_structure[event.table_name][1]
         records = self.converter.convert_records(event.records, mysql_table_structure, clickhouse_table_structure)
 
-        primary_key_ids = mysql_table_structure.primary_key_idx
-
         current_table_records_to_insert = self.records_to_insert[event.table_name]
         current_table_records_to_delete = self.records_to_delete[event.table_name]
         for record in records:
-            record_id = record[primary_key_ids]
+            record_id = self._get_record_id(clickhouse_table_structure, record)
             current_table_records_to_insert[record_id] = record
             current_table_records_to_delete.discard(record_id)
 
@@ -437,16 +450,9 @@ class DbReplicator:
         self.stats.erase_events_count += 1
         self.stats.erase_records_count += len(event.records)
 
-        table_structure: TableStructure = self.state.tables_structure[event.table_name][0]
         table_structure_ch: TableStructure = self.state.tables_structure[event.table_name][1]
 
-        primary_key_name_idx = table_structure.primary_key_idx
-        field_type_ch = table_structure_ch.fields[primary_key_name_idx].field_type
-
-        if field_type_ch == 'String':
-            keys_to_remove = [f"'{record[primary_key_name_idx]}'" for record in event.records]
-        else:
-            keys_to_remove = [record[primary_key_name_idx] for record in event.records]
+        keys_to_remove = [self._get_record_id(table_structure_ch, record) for record in event.records]
 
         current_table_records_to_insert = self.records_to_insert[event.table_name]
         current_table_records_to_delete = self.records_to_delete[event.table_name]
@@ -546,12 +552,12 @@ class DbReplicator:
             if not keys_to_remove:
                 continue
             table_structure: TableStructure = self.state.tables_structure[table_name][0]
-            primary_key_name = table_structure.primary_key
+            primary_key_names = table_structure.primary_keys
             if self.config.debug_log_level:
-                logger.debug(f'erasing from {table_name}, primary key: {primary_key_name}, values: {keys_to_remove}')
+                logger.debug(f'erasing from {table_name}, primary key: {primary_key_names}, values: {keys_to_remove}')
             self.clickhouse_api.erase(
                 table_name=table_name,
-                field_name=primary_key_name,
+                field_name=primary_key_names,
                 field_values=keys_to_remove,
             )
 

@@ -16,8 +16,7 @@ CREATE TABLE {db_name}.{table_name}
 (
 {fields},
     `_version` UInt64,
-    INDEX _version _version TYPE minmax GRANULARITY 1,
-    INDEX idx_id {primary_key} TYPE bloom_filter GRANULARITY 1
+    {indexes}
 )
 ENGINE = ReplacingMergeTree(_version)
 {partition_by}ORDER BY {primary_key}
@@ -25,7 +24,7 @@ SETTINGS index_granularity = 8192
 '''
 
 DELETE_QUERY = '''
-DELETE FROM {db_name}.{table_name} WHERE {field_name} IN ({field_values})
+DELETE FROM {db_name}.{table_name} WHERE ({field_name}) IN ({field_values})
 '''
 
 
@@ -63,8 +62,6 @@ class ClickhouseApi:
         return database_list
 
     def execute_command(self, query):
-        #print(' === executing ch query', query)
-
         for attempt in range(ClickhouseApi.MAX_RETRIES):
             try:
                 self.client.command(query)
@@ -76,7 +73,6 @@ class ClickhouseApi:
                 time.sleep(ClickhouseApi.RETRY_INTERVAL)
 
     def recreate_database(self):
-        #print(' === creating database', self.database)
         self.execute_command(f'DROP DATABASE IF EXISTS {self.database}')
         self.execute_command(f'CREATE DATABASE {self.database}')
 
@@ -87,15 +83,8 @@ class ClickhouseApi:
         self.tables_last_record_version[table_name] = last_used_version
 
     def create_table(self, structure: TableStructure):
-        if not structure.primary_key:
+        if not structure.primary_keys:
             raise Exception(f'missing primary key for {structure.table_name}')
-
-        primary_key_type = ''
-        for field in structure.fields:
-            if field.name == structure.primary_key:
-                primary_key_type = field.field_type
-        if not primary_key_type:
-            raise Exception(f'failed to get type of primary key {structure.table_name} {structure.primary_key}')
 
         fields = [
             f'    `{field.name}` {field.field_type}' for field in structure.fields
@@ -103,15 +92,30 @@ class ClickhouseApi:
         fields = ',\n'.join(fields)
         partition_by = ''
 
-        if 'int' in primary_key_type.lower():
-            partition_by = f'PARTITION BY intDiv({structure.primary_key}, 4294967)\n'
+        if len(structure.primary_keys) == 1:
+            if 'int' in structure.fields[structure.primary_key_ids[0]].field_type.lower():
+                partition_by = f'PARTITION BY intDiv({structure.primary_keys[0]}, 4294967)\n'
+
+        indexes = [
+            'INDEX _version _version TYPE minmax GRANULARITY 1',
+        ]
+        if len(structure.primary_keys) == 1:
+            indexes.append(
+                f'INDEX idx_id {structure.primary_keys[0]} TYPE bloom_filter GRANULARITY 1',
+            )
+
+        indexes = ',\n'.join(indexes)
+        primary_key = ','.join(structure.primary_keys)
+        if len(structure.primary_keys) > 1:
+            primary_key = f'({primary_key})'
 
         query = CREATE_TABLE_QUERY.format(**{
             'db_name': self.database,
             'table_name': structure.table_name,
             'fields': fields,
-            'primary_key': structure.primary_key,
+            'primary_key': primary_key,
             'partition_by': partition_by,
+            'indexes': indexes,
         })
         self.execute_command(query)
 
@@ -161,6 +165,7 @@ class ClickhouseApi:
         self.set_last_used_version(table_name, current_version)
 
     def erase(self, table_name, field_name, field_values):
+        field_name = ','.join(field_name)
         field_values = ', '.join(list(map(str, field_values)))
         query = DELETE_QUERY.format(**{
             'db_name': self.database,
