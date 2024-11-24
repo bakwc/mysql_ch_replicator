@@ -227,7 +227,7 @@ CREATE TABLE {TEST_TABLE_NAME} (
     id int NOT NULL AUTO_INCREMENT,
     name varchar(255),
     age int,
-    PRIMARY KEY (id)
+    PRIMARY KEY (id, `name`)
 ); 
     ''')
 
@@ -258,6 +258,9 @@ CREATE TABLE {TEST_TABLE_NAME} (
     mysql.execute(f"ALTER TABLE {TEST_TABLE_NAME} DROP COLUMN last_name, DROP COLUMN city")
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Mary'")[0].get('last_name') is None)
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Mary'")[0].get('city') is None)
+
+    mysql.execute(f"DELETE FROM {TEST_TABLE_NAME} WHERE name='Ivan';", commit=True)
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1)
 
     mysql.execute(
         f"CREATE TABLE {TEST_TABLE_NAME_2} "

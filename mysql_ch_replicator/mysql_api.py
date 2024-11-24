@@ -48,7 +48,6 @@ class MySQLApi:
         self.cursor.execute(f'CREATE DATABASE {db_name}')
 
     def execute(self, command, commit=False):
-        #print(f'Executing: <{command}>')
         self.cursor.execute(command)
         if commit:
             self.db.commit()
@@ -88,9 +87,11 @@ class MySQLApi:
 
     def get_records(self, table_name, order_by, limit, start_value=None):
         self.reconnect_if_required()
+        order_by = ','.join(order_by)
         where = ''
         if start_value is not None:
-            where = f'WHERE {order_by} > {start_value} '
+            start_value = ','.join(map(str, start_value))
+            where = f'WHERE ({order_by}) > ({start_value}) '
         query = f'SELECT * FROM {table_name} {where}ORDER BY {order_by} LIMIT {limit}'
         self.cursor.execute(query)
         res = self.cursor.fetchall()

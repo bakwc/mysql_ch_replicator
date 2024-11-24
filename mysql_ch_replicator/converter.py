@@ -2,7 +2,7 @@ import struct
 import json
 import sqlparse
 import re
-from pyparsing import Word, alphas, alphanums
+from pyparsing import Suppress, CaselessKeyword, Word, alphas, alphanums, delimitedList
 
 from .table_structure import TableStructure, TableField
 
@@ -218,7 +218,7 @@ class MysqlToClickhouseConverter:
                 name=field.name,
                 field_type=clickhouse_field_type,
             ))
-        clickhouse_structure.primary_key = mysql_structure.primary_key
+        clickhouse_structure.primary_keys = mysql_structure.primary_keys
         clickhouse_structure.preprocess()
         return clickhouse_structure
 
@@ -521,9 +521,22 @@ class MysqlToClickhouseConverter:
             if line.lower().startswith('constraint'):
                 continue
             if line.lower().startswith('primary key'):
-                pattern = 'PRIMARY KEY (' + Word(alphanums + '_`') + ')'
+                # Define identifier to match column names, handling backticks and unquoted names
+                identifier = (Suppress('`') + Word(alphas + alphanums + '_') + Suppress('`')) | Word(
+                    alphas + alphanums + '_')
+
+                # Build the parsing pattern
+                pattern = CaselessKeyword('PRIMARY') + CaselessKeyword('KEY') + Suppress('(') + delimitedList(
+                    identifier)('column_names') + Suppress(')')
+
+                # Parse the line
                 result = pattern.parseString(line)
-                structure.primary_key = strip_sql_name(result[1])
+
+                # Extract and process the primary key column names
+                primary_keys = [strip_sql_name(name) for name in result['column_names']]
+
+                structure.primary_keys = primary_keys
+
                 continue
 
             #print(" === processing line", line)
@@ -543,16 +556,16 @@ class MysqlToClickhouseConverter:
             #print(' ---- params:', field_parameters)
 
 
-        if not structure.primary_key:
+        if not structure.primary_keys:
             for field in structure.fields:
                 if 'primary key' in field.parameters.lower():
-                    structure.primary_key = field.name
+                    structure.primary_keys.append(field.name)
 
-        if not structure.primary_key:
+        if not structure.primary_keys:
             if structure.has_field('id'):
-                structure.primary_key = 'id'
+                structure.primary_keys = ['id']
 
-        if not structure.primary_key:
+        if not structure.primary_keys:
             raise Exception(f'No primary key for table {structure.table_name}, {create_statement}')
 
         structure.preprocess()
