@@ -214,7 +214,8 @@ class DbReplicator:
         self.validate_mysql_structure(mysql_structure)
         clickhouse_structure = self.converter.convert_table_structure(mysql_structure)
         self.state.tables_structure[table_name] = (mysql_structure, clickhouse_structure)
-        self.clickhouse_api.create_table(clickhouse_structure)
+        indexes = self.config.get_indexes(self.database, table_name)
+        self.clickhouse_api.create_table(clickhouse_structure, additional_indexes=indexes)
 
     def prevent_binlog_removal(self):
         if time.time() - self.last_touch_time < self.BINLOG_TOUCH_INTERVAL:
@@ -480,7 +481,8 @@ class DbReplicator:
         if not self.config.is_table_matches(mysql_structure.table_name):
             return
         self.state.tables_structure[mysql_structure.table_name] = (mysql_structure, ch_structure)
-        self.clickhouse_api.create_table(ch_structure)
+        indexes = self.config.get_indexes(self.database, ch_structure.table_name)
+        self.clickhouse_api.create_table(ch_structure, additional_indexes=indexes)
 
     def handle_drop_table_query(self, query, db_name):
         tokens = query.split()
