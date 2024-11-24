@@ -17,6 +17,7 @@ from mysql_ch_replicator.runner import ProcessRunner
 CONFIG_FILE = 'tests_config.yaml'
 CONFIG_FILE_MARIADB = 'tests_config_mariadb.yaml'
 TEST_DB_NAME = 'replication_test_db'
+TEST_DB_NAME_2 = 'replication_test_db_2'
 TEST_TABLE_NAME = 'test_table'
 TEST_TABLE_NAME_2 = 'test_table_2'
 TEST_TABLE_NAME_3 = 'test_table_3'
@@ -300,6 +301,9 @@ def test_runner():
         clickhouse_settings=cfg.clickhouse,
     )
 
+    mysql.drop_database(TEST_DB_NAME_2)
+    ch.drop_database(TEST_DB_NAME_2)
+
     prepare_env(cfg, mysql, ch)
 
     mysql.execute(f'''
@@ -357,6 +361,9 @@ CREATE TABLE {TEST_TABLE_NAME} (
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 4)
 
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME, final=False)) == 4)
+
+    mysql.create_database(TEST_DB_NAME_2)
+    assert_wait(lambda: TEST_DB_NAME_2 in ch.get_databases(), max_wait_time=5)
 
     run_all_runner.stop()
 
