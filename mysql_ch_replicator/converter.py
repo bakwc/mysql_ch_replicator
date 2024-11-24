@@ -521,10 +521,6 @@ class MysqlToClickhouseConverter:
             if line.lower().startswith('constraint'):
                 continue
             if line.lower().startswith('primary key'):
-                # pattern = 'PRIMARY KEY (' + Word(alphanums + '_`') + ')'
-                # result = pattern.parseString(line)
-                # structure.primary_key = strip_sql_name(result[1])
-
                 # Define identifier to match column names, handling backticks and unquoted names
                 identifier = (Suppress('`') + Word(alphas + alphanums + '_') + Suppress('`')) | Word(
                     alphas + alphanums + '_')

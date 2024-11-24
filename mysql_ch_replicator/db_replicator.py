@@ -148,16 +148,16 @@ class DbReplicator:
                 )
 
     def validate_mysql_structure(self, mysql_structure: TableStructure):
-        pass
-        # primary_field: TableField = mysql_structure.fields[mysql_structure.primary_key_idx]
-        # if 'not null' not in primary_field.parameters.lower():
-        #     logger.warning('primary key validation failed')
-        #     logger.warning(
-        #         f'\n\n\n    !!!  WARNING - PRIMARY KEY NULLABLE (field "{primary_field.name}", table "{mysql_structure.table_name}") !!!\n\n'
-        #         'There could be errors replicating nullable primary key\n'
-        #         'Please ensure all tables has NOT NULL parameter for primary key\n'
-        #         'Or mark tables as skipped, see "exclude_tables" option\n\n\n'
-        #     )
+        for key_idx in mysql_structure.primary_key_ids:
+            primary_field: TableField = mysql_structure.fields[key_idx]
+            if 'not null' not in primary_field.parameters.lower():
+                logger.warning('primary key validation failed')
+                logger.warning(
+                    f'\n\n\n    !!!  WARNING - PRIMARY KEY NULLABLE (field "{primary_field.name}", table "{mysql_structure.table_name}") !!!\n\n'
+                    'There could be errors replicating nullable primary key\n'
+                    'Please ensure all tables has NOT NULL parameter for primary key\n'
+                    'Or mark tables as skipped, see "exclude_tables" option\n\n\n'
+                )
 
     def run(self):
         try:
