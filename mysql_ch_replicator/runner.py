@@ -40,7 +40,7 @@ class Runner:
         self.config = config
         self.databases = databases or config.databases
         self.wait_initial_replication = wait_initial_replication
-        self.runners: dict = {}
+        self.runners: dict[str: DbReplicatorRunner] = {}
         self.binlog_runner = None
         self.db_optimizer = None
 
@@ -60,6 +60,26 @@ class Runner:
             self.binlog_runner.restart_dead_process_if_required()
         if self.db_optimizer is not None:
             self.db_optimizer.restart_dead_process_if_required()
+
+    def check_databases_updated(self, mysql_api: MySQLApi):
+        logger.debug('check if databases were created / removed in mysql')
+        databases = mysql_api.get_databases()
+        logger.info(f'mysql databases: {databases}')
+        databases = [db for db in databases if self.config.is_database_matches(db)]
+        logger.info(f'mysql databases filtered: {databases}')
+        for db in databases:
+            if db in self.runners:
+                continue
+            logger.info(f'running replication for {db} (database created in mysql)')
+            runner = self.runners[db] = DbReplicatorRunner(db_name=db, config_file=self.config.settings_file)
+            runner.run()
+
+        for db in self.runners.keys():
+            if db in databases:
+                continue
+            logger.info(f'stop replication for {db} (database removed from mysql)')
+            self.runners[db].stop()
+            self.runners.pop(db)
 
     def run(self):
         mysql_api = MySQLApi(
@@ -101,9 +121,13 @@ class Runner:
 
         logger.info('all replicators launched')
 
+        last_check_db_updated = time.time()
         while not killer.kill_now:
             time.sleep(1)
             self.restart_dead_processes()
+            if time.time() - last_check_db_updated > self.config.check_db_updated_interval:
+                self.check_databases_updated(mysql_api=mysql_api)
+                last_check_db_updated = time.time()
 
         logger.info('stopping runner')
 
