@@ -140,10 +140,11 @@ tables: '*'
 exclude_databases: ['database_10', 'database_*_42']   # optional
 exclude_tables: ['meta_table_*']                      # optional
 
-log_level: 'info'         # optional       
-optimize_interval: 86400  # optional
+log_level: 'info'               # optional       
+optimize_interval: 86400        # optional
+auto_restart_interval: 3600     # optional
 
-indexes:                  # optional
+indexes:                        # optional
   - databases: '*'
     tables: ['test_table']
     index: 'INDEX name_idx name TYPE ngrambf_v1(5, 65536, 4, 0) GRANULARITY 1'
@@ -163,6 +164,7 @@ indexes:                  # optional
 - `exclude_tables` - databases to __exclude__, string or list. If same table matches `tables` and `exclude_tables`, exclude has higher priority.
 - `log_level` - log level, default is `info`, you can set to `debug` to get maximum information (allowed values are `debug`, `info`, `warning`, `error`, `critical`)
 - `optimize_interval` - interval (seconds) between automatic `OPTIMIZE table FINAL` calls. Default 86400 (1 day). This is required to perform all merges guaranteed and avoid increasing of used storage and decreasing performance.
+- `auto_restart_interval` - interval (seconds) between automatic db_replicator restart. Default 3600 (1 hour). This is done to reduce memory usage.
 - `indexes` - you may want to add some indexes to accelerate performance, eg. ngram index for full-test search, etc. To apply indexes you need to start replication from scratch.
 
 Few more tables / dbs examples:
