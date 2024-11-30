@@ -86,6 +86,16 @@ binlog_expire_logs_seconds          86400
 </clickhouse>
 ```
 
+**!!! Double check final setting is applyed !!!**
+
+Execute the following command in clickhouse:
+
+`SELECT name, value, changed FROM system.settings WHERE name = 'final'`
+Setting should be set to 1. If not, you should:
+ * double check the override is applyed
+ * try to modify `users.xml` instead
+
+
 3. Start the replication:
 
 ```bash
