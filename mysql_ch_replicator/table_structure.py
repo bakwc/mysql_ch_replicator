@@ -12,6 +12,7 @@ class TableStructure:
     primary_keys: str = ''
     primary_key_ids: int = 0
     table_name: str = ''
+    charset: str = ''
 
     def preprocess(self):
         field_names = [f.name for f in self.fields]

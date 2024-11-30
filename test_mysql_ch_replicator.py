@@ -318,8 +318,9 @@ CREATE TABLE {TEST_TABLE_NAME} (
     KEY `IDX_age` (`age`),
     FULLTEXT KEY `IDX_name` (`name`),
     PRIMARY KEY (id)
-); 
+) ENGINE=InnoDB AUTO_INCREMENT=2478808 DEFAULT CHARSET=latin1; 
     ''')
+
 
     mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES ('Ivan', 42);", commit=True)
     mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES ('Peter', 33);", commit=True)
@@ -366,6 +367,16 @@ CREATE TABLE {TEST_TABLE_NAME} (
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 4)
 
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME, final=False)) == 4)
+
+    mysql.execute(
+        command=f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES (%s, %s);",
+        args=(b'H\xe4llo'.decode('latin-1'), 1912),
+        commit=True,
+    )
+
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 5)
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, "age=1912")[0]['name'] == 'Hällo')
+
 
     mysql.create_database(TEST_DB_NAME_2)
     assert_wait(lambda: TEST_DB_NAME_2 in ch.get_databases())
