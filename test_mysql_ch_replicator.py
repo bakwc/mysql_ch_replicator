@@ -315,6 +315,8 @@ CREATE TABLE {TEST_TABLE_NAME} (
     name varchar(255),
     age int,
     rate decimal(10,4),
+    KEY `IDX_age` (`age`),
+    FULLTEXT KEY `IDX_name` (`name`),
     PRIMARY KEY (id)
 ); 
     ''')
