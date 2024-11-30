@@ -119,7 +119,6 @@ class ClickhouseApi:
             'partition_by': partition_by,
             'indexes': indexes,
         })
-        print(" === query:", query)
         self.execute_command(query)
 
     def insert(self, table_name, records, table_structure: TableStructure = None):
