@@ -92,7 +92,7 @@ Execute the following command in clickhouse:
 
 `SELECT name, value, changed FROM system.settings WHERE name = 'final'`
 Setting should be set to 1. If not, you should:
- * double check the override is applyed
+ * double check the `override.xml` is applied
  * try to modify `users.xml` instead
 
 
