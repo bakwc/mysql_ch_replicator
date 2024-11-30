@@ -132,6 +132,7 @@ class DbReplicator:
         self.records_to_delete = defaultdict(set)  # table_name => {record_id, ...}
         self.last_records_upload_time = 0
         self.last_touch_time = 0
+        self.start_time = time.time()
 
     def create_state(self):
         return State(os.path.join(self.config.binlog_replicator.data_dir, self.database, 'state.pckl'))
@@ -359,6 +360,12 @@ class DbReplicator:
         killer = GracefulKiller()
 
         while not killer.kill_now:
+            if self.config.auto_restart_interval:
+                curr_time = time.time()
+                if curr_time - self.start_time >= self.config.auto_restart_interval:
+                    logger.info('process restart (check auto_restart_interval config option)')
+                    break
+
             event = self.data_reader.read_next_event()
             if event is None:
                 time.sleep(DbReplicator.READ_LOG_INTERVAL)
