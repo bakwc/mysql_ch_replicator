@@ -86,7 +86,7 @@ binlog_expire_logs_seconds          86400
 </clickhouse>
 ```
 
-**!!! Double check final setting is applyed !!!**
+**!!! Double check final setting is applied !!!**
 
 Execute the following command in clickhouse:
 
