@@ -47,8 +47,11 @@ class MySQLApi:
     def create_database(self, db_name):
         self.cursor.execute(f'CREATE DATABASE {db_name}')
 
-    def execute(self, command, commit=False):
-        self.cursor.execute(command)
+    def execute(self, command, commit=False, args=None):
+        if args:
+            self.cursor.execute(command, args)
+        else:
+            self.cursor.execute(command)
         if commit:
             self.db.commit()
 

@@ -222,19 +222,31 @@ class MysqlToClickhouseConverter:
         clickhouse_structure.preprocess()
         return clickhouse_structure
 
-    def convert_records(self, mysql_records, mysql_structure: TableStructure, clickhouse_structure: TableStructure):
+    def convert_records(
+            self, mysql_records, mysql_structure: TableStructure, clickhouse_structure: TableStructure,
+            only_primary: bool = False,
+    ):
         mysql_field_types = [field.field_type for field in mysql_structure.fields]
         clickhouse_filed_types = [field.field_type for field in clickhouse_structure.fields]
 
         clickhouse_records = []
         for mysql_record in mysql_records:
-            clickhouse_record = self.convert_record(mysql_record, mysql_field_types, clickhouse_filed_types)
+            clickhouse_record = self.convert_record(
+                mysql_record, mysql_field_types, clickhouse_filed_types, mysql_structure, only_primary,
+            )
             clickhouse_records.append(clickhouse_record)
         return clickhouse_records
 
-    def convert_record(self, mysql_record, mysql_field_types, clickhouse_field_types):
+    def convert_record(
+            self, mysql_record, mysql_field_types, clickhouse_field_types, mysql_structure: TableStructure,
+            only_primary: bool,
+    ):
         clickhouse_record = []
         for idx, mysql_field_value in enumerate(mysql_record):
+            if only_primary and idx not in mysql_structure.primary_key_ids:
+                clickhouse_record.append(mysql_field_value)
+                continue
+
             clickhouse_field_value = mysql_field_value
             mysql_field_type = mysql_field_types[idx]
             clickhouse_field_type = clickhouse_field_types[idx]
@@ -255,6 +267,13 @@ class MysqlToClickhouseConverter:
                     clickhouse_field_value = 4294967296 + clickhouse_field_value
                 if 'UInt64' in clickhouse_field_type and clickhouse_field_value < 0:
                     clickhouse_field_value = 18446744073709551616 + clickhouse_field_value
+
+                if 'String' in clickhouse_field_type and (
+                        'text' in mysql_field_type or 'char' in mysql_field_type
+                ):
+                    if isinstance(clickhouse_field_value, bytes):
+                        charset = mysql_structure.charset or 'utf-8'
+                        clickhouse_field_value = clickhouse_field_value.decode(charset)
 
             if 'point' in mysql_field_type:
                 clickhouse_field_value = parse_mysql_point(clickhouse_field_value)
@@ -512,6 +531,18 @@ class MysqlToClickhouseConverter:
         inner_tokens = tokens[3].tokens
         inner_tokens = ''.join([str(t) for t in inner_tokens[1:-1]]).strip()
         inner_tokens = split_high_level(inner_tokens, ',')
+
+        prev_token = ''
+        prev_prev_token = ''
+        for line in tokens[4:]:
+            curr_token = line.value
+            if prev_token == '=' and prev_prev_token.lower() == 'charset':
+                structure.charset = curr_token
+            prev_prev_token = prev_token
+            prev_token = curr_token
+
+        if structure.charset.startswith('utf8'):
+            structure.charset = 'utf-8'
 
         for line in inner_tokens:
             if line.lower().startswith('unique key'):

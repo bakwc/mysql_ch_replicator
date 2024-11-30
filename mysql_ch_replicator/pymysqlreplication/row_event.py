@@ -332,7 +332,8 @@ class RowsEvent(BinLogEvent):
         else:
             # MYSQL 5.xx Version  Goes Here
             # We don't know encoding type So apply Default Utf-8
-            string = string.decode(errors=decode_errors)
+            #string = string.decode(errors=decode_errors)
+            pass  # decode it later
         return string
 
     def __read_bit(self, column):
