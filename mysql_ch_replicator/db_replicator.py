@@ -459,8 +459,12 @@ class DbReplicator:
         self.stats.erase_records_count += len(event.records)
 
         table_structure_ch: TableStructure = self.state.tables_structure[event.table_name][1]
+        table_structure_mysql: TableStructure = self.state.tables_structure[event.table_name][0]
 
-        keys_to_remove = [self._get_record_id(table_structure_ch, record) for record in event.records]
+        records = self.converter.convert_records(
+            event.records, table_structure_mysql, table_structure_ch, only_primary=True,
+        )
+        keys_to_remove = [self._get_record_id(table_structure_ch, record) for record in records]
 
         current_table_records_to_insert = self.records_to_insert[event.table_name]
         current_table_records_to_delete = self.records_to_delete[event.table_name]

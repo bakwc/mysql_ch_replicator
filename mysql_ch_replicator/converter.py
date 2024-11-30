@@ -222,21 +222,31 @@ class MysqlToClickhouseConverter:
         clickhouse_structure.preprocess()
         return clickhouse_structure
 
-    def convert_records(self, mysql_records, mysql_structure: TableStructure, clickhouse_structure: TableStructure):
+    def convert_records(
+            self, mysql_records, mysql_structure: TableStructure, clickhouse_structure: TableStructure,
+            only_primary: bool = False,
+    ):
         mysql_field_types = [field.field_type for field in mysql_structure.fields]
         clickhouse_filed_types = [field.field_type for field in clickhouse_structure.fields]
 
         clickhouse_records = []
         for mysql_record in mysql_records:
             clickhouse_record = self.convert_record(
-                mysql_record, mysql_field_types, clickhouse_filed_types, mysql_structure,
+                mysql_record, mysql_field_types, clickhouse_filed_types, mysql_structure, only_primary,
             )
             clickhouse_records.append(clickhouse_record)
         return clickhouse_records
 
-    def convert_record(self, mysql_record, mysql_field_types, clickhouse_field_types, mysql_structure: TableStructure):
+    def convert_record(
+            self, mysql_record, mysql_field_types, clickhouse_field_types, mysql_structure: TableStructure,
+            only_primary: bool,
+    ):
         clickhouse_record = []
         for idx, mysql_field_value in enumerate(mysql_record):
+            if only_primary and idx not in mysql_structure.primary_key_ids:
+                clickhouse_record.append(mysql_field_value)
+                continue
+
             clickhouse_field_value = mysql_field_value
             mysql_field_type = mysql_field_types[idx]
             clickhouse_field_type = clickhouse_field_types[idx]
