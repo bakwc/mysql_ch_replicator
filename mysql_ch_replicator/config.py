@@ -91,6 +91,7 @@ class Settings:
     DEFAULT_LOG_LEVEL = 'info'
     DEFAULT_OPTIMIZE_INTERVAL = 86400
     DEFAULT_CHECK_DB_UPDATED_INTERVAL = 120
+    DEFAULT_AUTO_RESTART_INTERVAL = 3600
 
     def __init__(self):
         self.mysql = MysqlSettings()
@@ -106,6 +107,7 @@ class Settings:
         self.optimize_interval = 0
         self.check_db_updated_interval = 0
         self.indexes: list[Index] = []
+        self.auto_restart_interval = 0
 
     def load(self, settings_file):
         data = open(settings_file, 'r').read()
@@ -122,6 +124,9 @@ class Settings:
         self.optimize_interval = data.pop('optimize_interval', Settings.DEFAULT_OPTIMIZE_INTERVAL)
         self.check_db_updated_interval = data.pop(
             'check_db_updated_interval', Settings.DEFAULT_CHECK_DB_UPDATED_INTERVAL,
+        )
+        self.auto_restart_interval = data.pop(
+            'auto_restart_interval', Settings.DEFAULT_AUTO_RESTART_INTERVAL,
         )
         indexes = data.pop('indexes', [])
         for index in indexes:
