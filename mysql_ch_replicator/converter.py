@@ -7,6 +7,51 @@ from pyparsing import Suppress, CaselessKeyword, Word, alphas, alphanums, delimi
 from .table_structure import TableStructure, TableField
 
 
+CHARSET_MYSQL_TO_PYTHON = {
+    'armscii8': None,          # ARMSCII-8 is not directly supported in Python
+    'ascii': 'ascii',
+    'big5': 'big5',
+    'binary': 'latin1',        # Treat binary data as Latin-1 in Python
+    'cp1250': 'cp1250',
+    'cp1251': 'cp1251',
+    'cp1256': 'cp1256',
+    'cp1257': 'cp1257',
+    'cp850': 'cp850',
+    'cp852': 'cp852',
+    'cp866': 'cp866',
+    'cp932': 'cp932',
+    'dec8': 'latin1',          # DEC8 is similar to Latin-1
+    'eucjpms': 'euc_jp',       # Map to EUC-JP
+    'euckr': 'euc_kr',
+    'gb18030': 'gb18030',
+    'gb2312': 'gb2312',
+    'gbk': 'gbk',
+    'geostd8': None,           # GEOSTD8 is not directly supported in Python
+    'greek': 'iso8859_7',
+    'hebrew': 'iso8859_8',
+    'hp8': None,               # HP8 is not directly supported in Python
+    'keybcs2': None,           # KEYBCS2 is not directly supported in Python
+    'koi8r': 'koi8_r',
+    'koi8u': 'koi8_u',
+    'latin1': 'cp1252',        # MySQL's latin1 corresponds to Windows-1252
+    'latin2': 'iso8859_2',
+    'latin5': 'iso8859_9',
+    'latin7': 'iso8859_13',
+    'macce': 'mac_latin2',
+    'macroman': 'mac_roman',
+    'sjis': 'shift_jis',
+    'swe7': None,              # SWE7 is not directly supported in Python
+    'tis620': 'tis_620',
+    'ucs2': 'utf_16',          # UCS-2 can be mapped to UTF-16
+    'ujis': 'euc_jp',
+    'utf16': 'utf_16',
+    'utf16le': 'utf_16_le',
+    'utf32': 'utf_32',
+    'utf8mb3': 'utf_8',        # Both utf8mb3 and utf8mb4 can be mapped to UTF-8
+    'utf8mb4': 'utf_8',
+}
+
+
 def convert_bytes(obj):
     if isinstance(obj, dict):
         new_obj = {}
@@ -272,7 +317,7 @@ class MysqlToClickhouseConverter:
                         'text' in mysql_field_type or 'char' in mysql_field_type
                 ):
                     if isinstance(clickhouse_field_value, bytes):
-                        charset = mysql_structure.charset or 'utf-8'
+                        charset = mysql_structure.charset_python
                         clickhouse_field_value = clickhouse_field_value.decode(charset)
 
             if 'point' in mysql_field_type:
@@ -541,8 +586,10 @@ class MysqlToClickhouseConverter:
             prev_prev_token = prev_token
             prev_token = curr_token
 
-        if structure.charset.startswith('utf8'):
-            structure.charset = 'utf-8'
+        structure.charset_python = 'utf-8'
+
+        if structure.charset:
+            structure.charset_python = CHARSET_MYSQL_TO_PYTHON[structure.charset]
 
         for line in inner_tokens:
             if line.lower().startswith('unique key'):
