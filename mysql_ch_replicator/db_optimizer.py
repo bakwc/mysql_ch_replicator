@@ -79,6 +79,7 @@ class DbOptimizer:
     def optimize_database(self, db_name):
         self.mysql_api.set_database(db_name)
         tables = self.mysql_api.get_tables()
+        self.mysql_api.close()
         tables = [table for table in tables if self.config.is_table_matches(table)]
 
         self.clickhouse_api.execute_command(f'USE {db_name}')
@@ -97,6 +98,7 @@ class DbOptimizer:
         try:
             while not killer.kill_now:
                 db_to_optimize = self.select_db_to_optimize()
+                self.mysql_api.close()
                 if db_to_optimize is None:
                     time.sleep(min(120, self.config.optimize_interval))
                     continue
