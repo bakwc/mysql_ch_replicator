@@ -317,7 +317,7 @@ class MysqlToClickhouseConverter:
                         'text' in mysql_field_type or 'char' in mysql_field_type
                 ):
                     if isinstance(clickhouse_field_value, bytes):
-                        charset = mysql_structure.charset_python
+                        charset = mysql_structure.charset_python or 'utf-8'
                         clickhouse_field_value = clickhouse_field_value.decode(charset)
 
             if 'point' in mysql_field_type:
