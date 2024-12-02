@@ -97,6 +97,7 @@ class DbOptimizer:
         try:
             while not killer.kill_now:
                 db_to_optimize = self.select_db_to_optimize()
+                self.mysql_api.close()
                 if db_to_optimize is None:
                     time.sleep(min(120, self.config.optimize_interval))
                     continue

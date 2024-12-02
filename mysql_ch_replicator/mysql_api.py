@@ -16,6 +16,7 @@ class MySQLApi:
 
     def close(self):
         self.db.close()
+        self.last_connect_time = 0
 
     def reconnect_if_required(self, force=False):
         curr_time = time.time()
