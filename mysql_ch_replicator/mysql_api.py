@@ -57,6 +57,7 @@ class MySQLApi:
             self.db.commit()
 
     def set_database(self, database):
+        self.reconnect_if_required()
         self.database = database
         self.cursor = self.db.cursor()
         self.cursor.execute(f'USE {self.database}')
