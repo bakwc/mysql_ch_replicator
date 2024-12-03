@@ -71,9 +71,9 @@ class MySQLApi:
 
     def get_tables(self):
         self.reconnect_if_required()
-        self.cursor.execute('SHOW TABLES')
+        self.cursor.execute('SHOW FULL TABLES')
         res = self.cursor.fetchall()
-        tables = [x[0] for x in res]
+        tables = [x[0] for x in res if x[1] == 'BASE TABLE']
         return tables
 
     def get_binlog_files(self):
