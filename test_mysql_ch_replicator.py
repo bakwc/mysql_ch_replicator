@@ -562,12 +562,14 @@ CREATE TABLE {TEST_TABLE_NAME} (
     id int NOT NULL AUTO_INCREMENT,
     name varchar(255),
     modified_date DateTime(3) NOT NULL,
+    test_date date NOT NULL,
     PRIMARY KEY (id)
 ); 
     ''')
 
     mysql.execute(
-        f"INSERT INTO {TEST_TABLE_NAME} (name, modified_date) VALUES ('Ivan', '0000-00-00 00:00:00');",
+        f"INSERT INTO {TEST_TABLE_NAME} (name, modified_date, test_date) "
+        f"VALUES ('Ivan', '0000-00-00 00:00:00', '2015-05-28');",
         commit=True,
     )
 
@@ -584,14 +586,18 @@ CREATE TABLE {TEST_TABLE_NAME} (
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1)
 
     mysql.execute(
-        f"INSERT INTO {TEST_TABLE_NAME} (name, modified_date) VALUES ('Alex', '0000-00-00 00:00:00');",
+        f"INSERT INTO {TEST_TABLE_NAME} (name, modified_date, test_date) "
+        f"VALUES ('Alex', '0000-00-00 00:00:00', '2015-06-02');",
         commit=True,
     )
     mysql.execute(
-        f"INSERT INTO {TEST_TABLE_NAME} (name, modified_date) VALUES ('Givi', '2023-01-08 03:11:09');",
+        f"INSERT INTO {TEST_TABLE_NAME} (name, modified_date, test_date) "
+        f"VALUES ('Givi', '2023-01-08 03:11:09', '2015-06-02');",
         commit=True,
     )
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
+    assert_wait(lambda: str(ch.select(TEST_TABLE_NAME, where="name='Alex'")[0]['test_date']) == '2015-06-02')
+    assert_wait(lambda: str(ch.select(TEST_TABLE_NAME, where="name='Ivan'")[0]['test_date']) == '2015-05-28')
 
 
 def test_different_types_1():

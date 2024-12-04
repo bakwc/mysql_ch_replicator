@@ -129,6 +129,11 @@ class ClickhouseApi:
         for record in records:
             new_record = []
             for i, e in enumerate(record):
+                if isinstance(e, datetime.date) and not isinstance(e, datetime.datetime):
+                    try:
+                        e = datetime.datetime.combine(e, datetime.time())
+                    except ValueError:
+                        e = datetime.datetime(1970, 1, 1)
                 if isinstance(e, datetime.datetime):
                     try:
                         e.timestamp()
