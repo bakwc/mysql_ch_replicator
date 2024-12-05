@@ -315,9 +315,11 @@ CREATE TABLE {TEST_TABLE_NAME} (
     name varchar(255),
     age int,
     rate decimal(10,4),
+    coordinate point,
     KEY `IDX_age` (`age`),
     FULLTEXT KEY `IDX_name` (`name`),
-    PRIMARY KEY (id)
+    PRIMARY KEY (id),
+    SPATIAL KEY `coordinate` (`coordinate`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2478808 DEFAULT CHARSET=latin1; 
     ''')
 
