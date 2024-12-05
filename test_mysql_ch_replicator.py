@@ -315,7 +315,7 @@ CREATE TABLE {TEST_TABLE_NAME} (
     name varchar(255),
     age int,
     rate decimal(10,4),
-    coordinate point,
+    coordinate point NOT NULL,
     KEY `IDX_age` (`age`),
     FULLTEXT KEY `IDX_name` (`name`),
     PRIMARY KEY (id),
@@ -324,8 +324,8 @@ CREATE TABLE {TEST_TABLE_NAME} (
     ''')
 
 
-    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES ('Ivan', 42);", commit=True)
-    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES ('Peter', 33);", commit=True)
+    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age, coordinate) VALUES ('Ivan', 42, POINT(10.0, 20.0));", commit=True)
+    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age, coordinate) VALUES ('Peter', 33, POINT(10.0, 20.0));", commit=True)
 
     run_all_runner = RunAllRunner()
     run_all_runner.run()
@@ -337,7 +337,7 @@ CREATE TABLE {TEST_TABLE_NAME} (
     assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 2)
 
-    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES ('Filipp', 50);", commit=True)
+    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age, coordinate) VALUES ('Filipp', 50, POINT(10.0, 20.0));", commit=True)
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Filipp'")[0]['age'] == 50)
 
@@ -348,7 +348,7 @@ CREATE TABLE {TEST_TABLE_NAME} (
     kill_process(binlog_repl_pid)
     kill_process(db_repl_pid, force=True)
 
-    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, rate) VALUES ('John', 12.5);", commit=True)
+    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, rate, coordinate) VALUES ('John', 12.5, POINT(10.0, 20.0));", commit=True)
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 4)
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='John'")[0]['rate'] == 12.5)
 
@@ -364,14 +364,14 @@ CREATE TABLE {TEST_TABLE_NAME} (
     mysql.execute(f"UPDATE {TEST_TABLE_NAME} SET age=88 WHERE name='Ivan'", commit=True)
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, "name='Ivan'")[0]['age'] == 88)
 
-    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES ('Vlad', 99);", commit=True)
+    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age, coordinate) VALUES ('Vlad', 99, POINT(10.0, 20.0));", commit=True)
 
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 4)
 
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME, final=False)) == 4)
 
     mysql.execute(
-        command=f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES (%s, %s);",
+        command=f"INSERT INTO {TEST_TABLE_NAME} (name, age, coordinate) VALUES (%s, %s, POINT(10.0, 20.0));",
         args=(b'H\xe4llo'.decode('latin-1'), 1912),
         commit=True,
     )
