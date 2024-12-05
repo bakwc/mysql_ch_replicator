@@ -600,6 +600,8 @@ class MysqlToClickhouseConverter:
                 continue
             if line.lower().startswith('fulltext'):
                 continue
+            if line.lower().startswith('spatial'):
+                continue
             if line.lower().startswith('primary key'):
                 # Define identifier to match column names, handling backticks and unquoted names
                 identifier = (Suppress('`') + Word(alphas + alphanums + '_') + Suppress('`')) | Word(
