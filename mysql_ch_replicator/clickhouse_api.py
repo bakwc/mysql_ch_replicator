@@ -174,7 +174,7 @@ class ClickhouseApi:
 
     def erase(self, table_name, field_name, field_values):
         field_name = ','.join(field_name)
-        field_values = ', '.join(list(map(str, field_values)))
+        field_values = ', '.join(f'({v})' for v in field_values)
         query = DELETE_QUERY.format(**{
             'db_name': self.database,
             'table_name': table_name,
