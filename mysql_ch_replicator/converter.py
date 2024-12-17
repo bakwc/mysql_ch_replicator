@@ -211,6 +211,8 @@ class MysqlToClickhouseConverter:
             return 'String'
         if 'varchar' in mysql_type:
             return 'String'
+        if 'enum' in mysql_type:
+            return 'String'
         if 'text' in mysql_type:
             return 'String'
         if 'blob' in mysql_type:
