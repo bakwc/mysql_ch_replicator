@@ -9,7 +9,7 @@ class TableField:
 @dataclass
 class TableStructure:
     fields: list = field(default_factory=list)
-    primary_keys: str = ''
+    primary_keys: list[str] = field(default_factory=list)
     primary_key_ids: int = 0
     table_name: str = ''
     charset: str = ''
