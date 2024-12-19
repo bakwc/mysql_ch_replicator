@@ -14,6 +14,7 @@ class TableStructure:
     table_name: str = ''
     charset: str = ''
     charset_python: str = ''
+    if_not_exists: bool = False
 
     def preprocess(self):
         field_names = [f.name for f in self.fields]
