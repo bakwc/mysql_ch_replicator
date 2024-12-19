@@ -49,6 +49,7 @@ CHARSET_MYSQL_TO_PYTHON = {
     'utf32': 'utf_32',
     'utf8mb3': 'utf_8',        # Both utf8mb3 and utf8mb4 can be mapped to UTF-8
     'utf8mb4': 'utf_8',
+    'utf8': 'utf_8',
 }
 
 
@@ -557,6 +558,16 @@ class MysqlToClickhouseConverter:
 
         tokens = sqlparse.parse(create_statement.replace('\n', ' ').strip())[0].tokens
         tokens = [t for t in tokens if not t.is_whitespace and not t.is_newline]
+
+        # remove "IF NOT EXISTS"
+        if (len(tokens) > 5 and
+                tokens[0].normalized.upper() == 'CREATE' and
+                tokens[1].normalized.upper() == 'TABLE' and
+                tokens[2].normalized.upper() == 'IF' and
+                tokens[3].normalized.upper() == 'NOT' and
+                tokens[4].normalized.upper() == 'EXISTS'):
+            del tokens[2:5]  # Remove the 'IF', 'NOT', 'EXISTS' tokens
+            structure.if_not_exists = True
 
         if tokens[0].ttype != sqlparse.tokens.DDL:
             raise Exception('wrong create statement', create_statement)
