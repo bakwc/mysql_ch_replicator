@@ -10,6 +10,7 @@ from mysql_ch_replicator import mysql_api
 from mysql_ch_replicator import clickhouse_api
 from mysql_ch_replicator.binlog_replicator import State as BinlogState
 from mysql_ch_replicator.db_replicator import State as DbReplicatorState, DbReplicator
+from mysql_ch_replicator.converter import MysqlToClickhouseConverter
 
 from mysql_ch_replicator.runner import ProcessRunner
 
@@ -993,3 +994,13 @@ CREATE TABLE {TEST_TABLE_NAME} (
         commit=True,
     )
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
+
+
+def test_parse_mysql_table_structure():
+    query = "CREATE TABLE IF NOT EXISTS user_preferences_portal (\n\t\t\tid char(36) NOT NULL,\n\t\t\tcategory varchar(50) DEFAULT NULL,\n\t\t\tdeleted tinyint(1) DEFAULT 0,\n\t\t\tdate_entered datetime DEFAULT NULL,\n\t\t\tdate_modified datetime DEFAULT NULL,\n\t\t\tassigned_user_id char(36) DEFAULT NULL,\n\t\t\tcontents longtext DEFAULT NULL\n\t\t ) ENGINE=InnoDB DEFAULT CHARSET=utf8"
+
+    converter = MysqlToClickhouseConverter()
+
+    structure = converter.parse_mysql_table_structure(query)
+
+    assert structure.table_name == 'user_preferences_portal'
