@@ -6,7 +6,7 @@ from logging import getLogger
 from .config import Settings
 from .mysql_api import MySQLApi
 from .clickhouse_api import ClickhouseApi
-from .utils import GracefulKiller
+from .utils import RegularKiller
 
 
 logger = getLogger(__name__)
@@ -94,9 +94,9 @@ class DbOptimizer:
 
     def run(self):
         logger.info('running optimizer')
-        killer = GracefulKiller()
+        RegularKiller('optimizer')
         try:
-            while not killer.kill_now:
+            while True:
                 db_to_optimize = self.select_db_to_optimize()
                 self.mysql_api.close()
                 if db_to_optimize is None:
@@ -105,4 +105,3 @@ class DbOptimizer:
                 self.optimize_database(db_name=db_to_optimize)
         except Exception as e:
             logger.error(f'error {e}', exc_info=True)
-        logger.info('optimizer stopped')

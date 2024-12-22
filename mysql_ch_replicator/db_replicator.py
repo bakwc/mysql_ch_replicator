@@ -13,7 +13,7 @@ from .clickhouse_api import ClickhouseApi
 from .converter import MysqlToClickhouseConverter, strip_sql_name, strip_sql_comments
 from .table_structure import TableStructure, TableField
 from .binlog_replicator import DataReader, LogEvent, EventType
-from .utils import GracefulKiller, touch_all_files
+from .utils import GracefulKiller, touch_all_files, format_floats
 
 
 logger = getLogger(__name__)
@@ -526,7 +526,8 @@ class DbReplicator:
 
         self.last_dump_stats_time = curr_time
         self.last_dump_stats_process_time = curr_process_time
-        logger.info(f'stats: {json.dumps(self.stats.__dict__)}')
+        logger.info(f'stats: {json.dumps(format_floats(self.stats.__dict__))}')
+        logger.info(f'ch_stats: {json.dumps(format_floats(self.clickhouse_api.get_stats()))}')
         self.stats = Statistics()
 
     def upload_records_if_required(self, table_name):

@@ -1,6 +1,7 @@
 import signal
 import subprocess
 import os
+import sys
 import time
 
 from pathlib import Path
@@ -17,6 +18,17 @@ class GracefulKiller:
 
     def exit_gracefully(self, signum, frame):
         self.kill_now = True
+
+
+class RegularKiller:
+    def __init__(self, proc_name):
+        self.proc_name = proc_name
+        signal.signal(signal.SIGINT, self.exit_gracefully)
+        signal.signal(signal.SIGTERM, self.exit_gracefully)
+
+    def exit_gracefully(self, signum, frame):
+        logger.info(f'{self.proc_name} stopped')
+        sys.exit(0)
 
 
 class ProcessRunner:
@@ -68,3 +80,13 @@ def touch_all_files(directory_path):
                 os.utime(item, times=(current_time, current_time))
             except Exception as e:
                 logger.warning(f"Failed to touch {item}: {e}")
+
+
+def format_floats(data):
+    if isinstance(data, dict):
+        return {k: format_floats(v) for k, v in data.items()}
+    elif isinstance(data, list):
+        return [format_floats(v) for v in data]
+    elif isinstance(data, float):
+        return round(data, 3)
+    return data

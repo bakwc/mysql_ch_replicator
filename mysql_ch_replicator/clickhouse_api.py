@@ -3,6 +3,8 @@ import time
 import clickhouse_connect
 
 from logging import getLogger
+from dataclasses import dataclass, field
+from collections import defaultdict
 
 from .config import ClickhouseSettings
 from .table_structure import TableStructure, TableField
@@ -28,6 +30,51 @@ DELETE FROM {db_name}.{table_name} WHERE ({field_name}) IN ({field_values})
 '''
 
 
+@dataclass
+class SingleStats:
+    duration: float = 0.0
+    events: int = 0
+    records: int = 0
+
+    def to_dict(self):
+        return self.__dict__
+
+
+@dataclass
+class InsertEraseStats:
+    inserts: SingleStats = field(default_factory=SingleStats)
+    erases: SingleStats = field(default_factory=SingleStats)
+
+    def to_dict(self):
+        return {
+            'inserts': self.inserts.to_dict(),
+            'erases': self.erases.to_dict(),
+        }
+
+
+@dataclass
+class GeneralStats:
+    general: InsertEraseStats = field(default_factory=InsertEraseStats)
+    table_stats: dict[str, InsertEraseStats] = field(default_factory=lambda: defaultdict(InsertEraseStats))
+
+    def on_event(self, table_name: str, is_insert: bool, duration: float, records: int):
+        targets = []
+        if is_insert:
+            targets.append(self.general.inserts)
+            targets.append(self.table_stats[table_name].inserts)
+
+        for target in targets:
+            target.duration += duration
+            target.events += 1
+            target.records += records
+
+    def to_dict(self):
+        results = {'total': self.general.to_dict()}
+        for table_name, table_stats in self.table_stats.items():
+            results[table_name] = table_stats.to_dict()
+        return results
+
+
 class ClickhouseApi:
     MAX_RETRIES = 5
     RETRY_INTERVAL = 30
@@ -44,7 +91,13 @@ class ClickhouseApi:
             send_receive_timeout=clickhouse_settings.send_receive_timeout,
         )
         self.tables_last_record_version = {}  # table_name => last used row version
+        self.stats = GeneralStats()
         self.execute_command('SET final = 1;')
+
+    def get_stats(self):
+        stats = self.stats.to_dict()
+        self.stats = GeneralStats()
+        return stats
 
     def get_tables(self):
         result = self.client.query('SHOW TABLES')
@@ -160,15 +213,26 @@ class ClickhouseApi:
         if '.' not in full_table_name:
             full_table_name = f'{self.database}.{table_name}'
 
+        duration = 0.0
         for attempt in range(ClickhouseApi.MAX_RETRIES):
             try:
+                t1 = time.time()
                 self.client.insert(table=full_table_name, data=records_to_insert)
+                t2 = time.time()
+                duration += (t2 - t1)
                 break
             except clickhouse_connect.driver.exceptions.OperationalError as e:
                 logger.error(f'error inserting data: {e}', exc_info=e)
                 if attempt == ClickhouseApi.MAX_RETRIES - 1:
                     raise e
                 time.sleep(ClickhouseApi.RETRY_INTERVAL)
+
+        self.stats.on_event(
+            table_name=table_name,
+            duration=duration,
+            is_insert=True,
+            records=len(records_to_insert),
+        )
 
         self.set_last_used_version(table_name, current_version)
 
@@ -181,7 +245,16 @@ class ClickhouseApi:
             'field_name': field_name,
             'field_values': field_values,
         })
+        t1 = time.time()
         self.execute_command(query)
+        t2 = time.time()
+        duration = t2 - t1
+        self.stats.on_event(
+            table_name=table_name,
+            duration=duration,
+            is_insert=True,
+            records=len(field_values),
+        )
 
     def drop_database(self, db_name):
         self.execute_command(f'DROP DATABASE IF EXISTS {db_name}')
