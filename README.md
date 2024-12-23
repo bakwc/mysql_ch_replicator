@@ -82,6 +82,8 @@ binlog_expire_logs_seconds          86400
             <!-- ... other settings ... -->
             <final>1</final>
             <max_query_size>300000000</max_query_size>
+            <max_ast_elements>1000000</max_ast_elements>
+            <max_expanded_ast_elements>1000000</max_expanded_ast_elements>
         </default>
     </profiles>
 </clickhouse>
