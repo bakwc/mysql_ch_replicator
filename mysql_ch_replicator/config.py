@@ -108,6 +108,8 @@ class Settings:
         self.check_db_updated_interval = 0
         self.indexes: list[Index] = []
         self.auto_restart_interval = 0
+        self.http_host = ''
+        self.http_port = 0
 
     def load(self, settings_file):
         data = open(settings_file, 'r').read()
@@ -128,6 +130,9 @@ class Settings:
         self.auto_restart_interval = data.pop(
             'auto_restart_interval', Settings.DEFAULT_AUTO_RESTART_INTERVAL,
         )
+        self.http_host = data.pop('http_host', '')
+        self.http_port = data.pop('http_port', 0)
+
         indexes = data.pop('indexes', [])
         for index in indexes:
             self.indexes.append(

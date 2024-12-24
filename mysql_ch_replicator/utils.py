@@ -41,6 +41,10 @@ class ProcessRunner:
         self.process = subprocess.Popen(cmd)
 
     def restart_dead_process_if_required(self):
+        if self.process is None:
+            logger.warning(f'Restarting stopped process: < {self.cmd} >')
+            self.run()
+            return
         res = self.process.poll()
         if res is None:
             # still running
