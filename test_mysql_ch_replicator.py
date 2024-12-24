@@ -4,6 +4,7 @@ import time
 import subprocess
 import json
 import pytest
+import requests
 
 from mysql_ch_replicator import config
 from mysql_ch_replicator import mysql_api
@@ -376,6 +377,15 @@ CREATE TABLE {TEST_TABLE_NAME} (
         args=(b'H\xe4llo'.decode('latin-1'), 1912),
         commit=True,
     )
+
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 5)
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, "age=1912")[0]['name'] == 'Hällo')
+
+    ch.drop_database(TEST_DB_NAME)
+    ch.drop_database(TEST_DB_NAME_2)
+
+    requests.get('http://localhost:9128/restart_replication')
+    time.sleep(1.0)
 
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 5)
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, "age=1912")[0]['name'] == 'Hällo')
