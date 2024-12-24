@@ -7,7 +7,7 @@ license = "MIT"
 readme = "README.md"
 
 [tool.poetry.dependencies]
-python = "^3.8"
+python = "^3.9"
 pyyaml = ">= 5.0.1"
 pyparsing = ">= 3.0.8"
 clickhouse-connect = ">= 0.7.8"
@@ -15,6 +15,9 @@ mysql-connector-python = ">= 8.3.0"
 pymysql = ">= 1.0.0"
 packaging = ">= 21.3"
 sqlparse = ">= 0.5.1"
+fastapi = "^0.115.6"
+uvicorn = "^0.34.0"
+requests = "^2.32.3"
 
 
 [build-system]
