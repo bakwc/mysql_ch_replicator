@@ -26,6 +26,11 @@ With a focus on high performance, it utilizes batching heavily and uses C++ exte
 - **Multi-Database Handling**: Replicates the binary log once for all databases, optimizing the process compared to `MaterializedMySQL`, which replicates the log separately for each database.
 
 ## Installation
+### Requirements
+ - Linux / MacOS
+ - python3.9 or higher
+
+### Installation
 
 To install `mysql_ch_replicator`, use the following command:
 
@@ -162,6 +167,9 @@ indexes:                        # optional
     tables: ['test_table']
     index: 'INDEX name_idx name TYPE ngrambf_v1(5, 65536, 4, 0) GRANULARITY 1'
 
+http_host: '0.0.0.0'    # optional
+http_port: 9128         # optional
+
 ```
 
 #### Required settings
@@ -179,6 +187,7 @@ indexes:                        # optional
 - `optimize_interval` - interval (seconds) between automatic `OPTIMIZE table FINAL` calls. Default 86400 (1 day). This is required to perform all merges guaranteed and avoid increasing of used storage and decreasing performance.
 - `auto_restart_interval` - interval (seconds) between automatic db_replicator restart. Default 3600 (1 hour). This is done to reduce memory usage.
 - `indexes` - you may want to add some indexes to accelerate performance, eg. ngram index for full-test search, etc. To apply indexes you need to start replication from scratch.
+- `http_host`, `http_port` - http endpoint to control replication, use `/docs` for abailable commands
 
 Few more tables / dbs examples:
 
