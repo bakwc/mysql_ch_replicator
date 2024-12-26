@@ -614,6 +614,8 @@ CREATE TABLE test_table_3 (
     assert 'test_table_15' not in ch.get_tables()
     assert 'test_table_142' not in ch.get_tables()
 
+    run_all_runner.stop()
+
 
 def test_datetime_exception():
     cfg = config.Settings()
