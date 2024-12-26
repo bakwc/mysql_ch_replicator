@@ -351,6 +351,12 @@ class MysqlToClickhouseConverter:
         if table_name.find('.') != -1:
             db_name, table_name = table_name.split('.')
 
+        if self.db_replicator:
+            if not self.db_replicator.config.is_database_matches(db_name):
+                return
+            if not self.db_replicator.config.is_table_matches(table_name):
+                return
+
         db_name = strip_sql_name(db_name)
         if self.db_replicator and db_name == self.db_replicator.database:
             db_name = self.db_replicator.target_database
