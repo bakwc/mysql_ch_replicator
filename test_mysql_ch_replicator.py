@@ -207,6 +207,8 @@ CREATE TABLE {TEST_TABLE_NAME} (
     mysql.execute(f'DROP TABLE {TEST_TABLE_NAME_3}')
     assert_wait(lambda: TEST_TABLE_NAME_3 not in ch.get_tables())
 
+    db_replicator_runner.stop()
+
 
 def test_e2e_multistatement():
     cfg = config.Settings()
@@ -271,6 +273,9 @@ CREATE TABLE {TEST_TABLE_NAME} (
     )
 
     assert_wait(lambda: TEST_TABLE_NAME_2 in ch.get_tables())
+
+    db_replicator_runner.stop()
+    binlog_replicator_runner.stop()
 
 
 def get_binlog_replicator_pid(cfg: config.Settings):
@@ -516,10 +521,14 @@ CREATE TABLE {TEST_TABLE_NAME} (
 
     ch.execute_command(f'DROP DATABASE {TEST_DB_NAME}')
 
+    db_replicator_runner.stop()
+
     db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, additional_arguments='--initial_only=True')
     db_replicator_runner.run()
     db_replicator_runner.wait_complete()
     assert TEST_DB_NAME in ch.get_databases()
+
+    db_replicator_runner.stop()
 
 
 def test_database_tables_filtering():
@@ -677,6 +686,9 @@ CREATE TABLE {TEST_TABLE_NAME} (
     assert_wait(lambda: str(ch.select(TEST_TABLE_NAME, where="name='Alex'")[0]['test_date']) == '2015-06-02')
     assert_wait(lambda: str(ch.select(TEST_TABLE_NAME, where="name='Ivan'")[0]['test_date']) == '2015-05-28')
 
+    db_replicator_runner.stop()
+    binlog_replicator_runner.stop()
+
 
 def test_different_types_1():
     cfg = config.Settings()
@@ -760,6 +772,8 @@ CREATE TABLE {TEST_TABLE_NAME} (
     )
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
 
+    db_replicator_runner.stop()
+    binlog_replicator_runner.stop()
 
 def test_numeric_types_and_limits():
     cfg = config.Settings()
@@ -825,6 +839,9 @@ CREATE TABLE {TEST_TABLE_NAME} (
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME, 'test6=4294967290')) == 1)
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME, 'test6=4294967280')) == 1)
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME, 'test7=18446744073709551586')) == 2)
+
+    db_replicator_runner.stop()
+    binlog_replicator_runner.stop()
 
 
 def test_different_types_2():
@@ -892,6 +909,9 @@ CREATE TABLE {TEST_TABLE_NAME} (
     )
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
 
+    db_replicator_runner.stop()
+    binlog_replicator_runner.stop()
+
 
 def test_json():
     cfg = config.Settings()
@@ -947,6 +967,9 @@ CREATE TABLE {TEST_TABLE_NAME} (
 
     assert json.loads(ch.select(TEST_TABLE_NAME, "name='Ivan'")[0]['data'])['c'] == [1, 2, 3]
     assert json.loads(ch.select(TEST_TABLE_NAME, "name='Peter'")[0]['data'])['c'] == [3, 2, 1]
+
+    db_replicator_runner.stop()
+    binlog_replicator_runner.stop()
 
 
 def test_string_primary_key(monkeypatch):
@@ -1006,6 +1029,9 @@ CREATE TABLE {TEST_TABLE_NAME} (
         commit=True,
     )
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
+
+    db_replicator_runner.stop()
+    binlog_replicator_runner.stop()
 
 
 def test_parse_mysql_table_structure():

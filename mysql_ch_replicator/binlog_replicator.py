@@ -340,7 +340,7 @@ class BinlogReplicator:
     SAVE_UPDATE_INTERVAL = 60
     BINLOG_CLEAN_INTERVAL = 5 * 60
     BINLOG_RETENTION_PERIOD = 12 * 60 * 60
-    READ_LOG_INTERVAL = 1
+    READ_LOG_INTERVAL = 0.3
 
     def __init__(self, settings: Settings):
         self.settings = settings

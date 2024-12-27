@@ -103,7 +103,7 @@ class DbReplicator:
     DATA_DUMP_INTERVAL = 1
     DATA_DUMP_BATCH_SIZE = 100000
 
-    READ_LOG_INTERVAL = 1
+    READ_LOG_INTERVAL = 0.3
 
     def __init__(self, config: Settings, database: str, target_database: str = None, initial_only: bool = False):
         self.config = config
