@@ -585,7 +585,9 @@ class MysqlToClickhouseConverter:
         if not isinstance(tokens[2], sqlparse.sql.Identifier):
             raise Exception('wrong create statement', create_statement)
 
-        structure.table_name = strip_sql_name(tokens[2].normalized)
+        # get_real_name() returns the table name if the token is in the
+        # style `<dbname>.<tablename>`
+        structure.table_name = strip_sql_name(tokens[2].get_real_name())
 
         if not isinstance(tokens[3], sqlparse.sql.Parenthesis):
             raise Exception('wrong create statement', create_statement)
