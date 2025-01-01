@@ -275,7 +275,7 @@ class RowsEvent(BinLogEvent):
                     return None
                 return ret
             self.__none_sources[column.name] = NONE_SOURCE.EMPTY_SET
-            return None
+            return bit_mask
         elif column.type == FIELD_TYPE.BIT:
             return self.__read_bit(column)
         elif column.type == FIELD_TYPE.GEOMETRY:

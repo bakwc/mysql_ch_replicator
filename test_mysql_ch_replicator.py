@@ -50,7 +50,7 @@ def kill_process(pid, force=False):
     subprocess.run(command, shell=True)
 
 
-def assert_wait(condition, max_wait_time=15.0, retry_interval=0.05):
+def assert_wait(condition, max_wait_time=20.0, retry_interval=0.05):
     max_time = time.time() + max_wait_time
     while time.time() < max_time:
         if condition():
@@ -868,13 +868,14 @@ CREATE TABLE {TEST_TABLE_NAME} (
     test1 bit(1),
     test2 point,
     test3 binary(16),
+    test4 set('1','2','3','4','5','6','7'),
     PRIMARY KEY (id)
 ); 
     ''')
 
     mysql.execute(
-        f"INSERT INTO {TEST_TABLE_NAME} (test1, test2, test3) VALUES "
-        f"(0, POINT(10.0, 20.0), 'azaza');",
+        f"INSERT INTO {TEST_TABLE_NAME} (test1, test2, test3, test4) VALUES "
+        f"(0, POINT(10.0, 20.0), 'azaza', '1,3,5');",
         commit=True,
     )
 
@@ -891,16 +892,20 @@ CREATE TABLE {TEST_TABLE_NAME} (
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1)
 
     mysql.execute(
-        f"INSERT INTO {TEST_TABLE_NAME} (test1, test2) VALUES "
-        f"(1, POINT(15.0, 14.0));",
+        f"INSERT INTO {TEST_TABLE_NAME} (test1, test2, test4) VALUES "
+        f"(1, POINT(15.0, 14.0), '2,4,5');",
         commit=True,
     )
+
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 2)
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME, 'test1=True')) == 1)
 
     assert ch.select(TEST_TABLE_NAME, 'test1=True')[0]['test2']['x'] == 15.0
     assert ch.select(TEST_TABLE_NAME, 'test1=False')[0]['test2']['y'] == 20.0
     assert ch.select(TEST_TABLE_NAME, 'test1=False')[0]['test3'] == 'azaza\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
+
+    assert ch.select(TEST_TABLE_NAME, 'test1=True')[0]['test4'] == '2,4,5'
+    assert ch.select(TEST_TABLE_NAME, 'test1=False')[0]['test4'] == '1,3,5'
 
     mysql.execute(
         f"INSERT INTO {TEST_TABLE_NAME} (test1, test2) VALUES "

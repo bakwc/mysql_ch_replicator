@@ -1,10 +1,13 @@
 from dataclasses import dataclass, field
+from typing import Any
+
 
 @dataclass
 class TableField:
     name: str = ''
     field_type: str = ''
     parameters: str = ''
+    additional_data: Any = None
 
 @dataclass
 class TableStructure:

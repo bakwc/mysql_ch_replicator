@@ -244,6 +244,8 @@ class MysqlToClickhouseConverter:
             return 'String'
         if 'binary' in mysql_type:
             return 'String'
+        if 'set(' in mysql_type:
+            return 'String'
         raise Exception(f'unknown mysql type "{mysql_type}"')
 
     def convert_field_type(self, mysql_type, mysql_parameters):
@@ -322,6 +324,21 @@ class MysqlToClickhouseConverter:
                     if isinstance(clickhouse_field_value, bytes):
                         charset = mysql_structure.charset_python or 'utf-8'
                         clickhouse_field_value = clickhouse_field_value.decode(charset)
+
+                if 'set(' in mysql_field_type:
+                    set_values = mysql_structure.fields[idx].additional_data
+                    if isinstance(clickhouse_field_value, int):
+                        bit_mask = clickhouse_field_value
+                        clickhouse_field_value = [
+                            val
+                            for idx, val in enumerate(set_values)
+                            if bit_mask & (1 << idx)
+                        ]
+                    elif isinstance(clickhouse_field_value, set):
+                        clickhouse_field_value = [
+                            v for v in set_values if v in clickhouse_field_value
+                        ]
+                    clickhouse_field_value = ','.join(clickhouse_field_value)
 
             if 'point' in mysql_field_type:
                 clickhouse_field_value = parse_mysql_point(clickhouse_field_value)
@@ -651,10 +668,26 @@ class MysqlToClickhouseConverter:
             if len(definition) > 2:
                 field_parameters = ' '.join(definition[2:])
 
+            additional_data = None
+            if 'set(' in field_type.lower():
+                vals = field_type[len('set('):]
+                close_pos = vals.find(')')
+                vals = vals[:close_pos]
+                vals = vals.split(',')
+                def vstrip(e):
+                    if not e:
+                        return e
+                    if e[0] in '"\'':
+                        return e[1:-1]
+                    return e
+                vals = [vstrip(v) for v in vals]
+                additional_data = vals
+
             structure.fields.append(TableField(
                 name=field_name,
                 field_type=field_type,
                 parameters=field_parameters,
+                additional_data=additional_data,
             ))
             #print(' ---- params:', field_parameters)
 
