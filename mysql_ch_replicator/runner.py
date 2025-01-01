@@ -43,6 +43,9 @@ app = FastAPI()
 
 
 class Runner:
+
+    DB_REPLICATOR_RUN_DELAY = 5
+
     def __init__(self, config: Settings, wait_initial_replication: bool, databases: str):
         self.config = config
         self.databases = databases or config.databases
@@ -149,8 +152,14 @@ class Runner:
         server_thread = threading.Thread(target=self.run_server, daemon=True)
         server_thread.start()
 
+        t1 = time.time()
+        while time.time() - t1 < self.DB_REPLICATOR_RUN_DELAY and not killer.kill_now:
+            time.sleep(0.3)
+
         # First - continue replication for DBs that already finished initial replication
         for db in databases:
+            if killer.kill_now:
+                break
             if not self.is_initial_replication_finished(db_name=db):
                 continue
             logger.info(f'running replication for {db} (initial replication finished)')
@@ -161,6 +170,8 @@ class Runner:
         for db in databases:
             if db in self.runners:
                 continue
+            if killer.kill_now:
+                break
 
             logger.info(f'running replication for {db} (initial replication not finished - waiting)')
             runner = self.runners[db] = DbReplicatorRunner(db_name=db, config_file=self.config.settings_file)
