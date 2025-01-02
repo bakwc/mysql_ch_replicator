@@ -15,9 +15,9 @@ user = mysql
 # Custom settings
 collation-server = utf8mb4_0900_ai_ci
 character-set-server = utf8mb4
-default_authentication_plugin = mysql_native_password
+#default_authentication_plugin = mysql_native_password
 init-connect = 'SET NAMES utf8mb4'
-skip-host-cache
+#skip-host-cache
 skip-name-resolve
 information_schema_stats_expiry = 0
 
@@ -27,3 +27,4 @@ enforce_gtid_consistency = 1
 binlog_expire_logs_seconds = 864000
 max_binlog_size            = 500M
 binlog_format              = ROW #Very important if you want to receive write, update and delete row events
+log-bin                    = mysql-bin

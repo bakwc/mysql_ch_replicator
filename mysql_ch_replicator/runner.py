@@ -100,7 +100,7 @@ class Runner:
     def restart_replication_if_required(self):
         if not self.need_restart_replication:
             return
-        logger.info('\n\n\n ====== restarting replication =====')
+        logger.info('restarting replication')
         for db_name, runner in self.runners.items():
             logger.info(f'stopping runner {db_name}')
             runner.stop()
