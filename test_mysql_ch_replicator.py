@@ -328,7 +328,7 @@ CREATE TABLE {TEST_TABLE_NAME} (
     PRIMARY KEY (id),
     SPATIAL KEY `coordinate` (`coordinate`)
 ) ENGINE=InnoDB AUTO_INCREMENT=2478808 DEFAULT CHARSET=latin1; 
-    ''')
+    ''', commit=True)
 
 
     mysql.execute(f'''
@@ -339,7 +339,7 @@ CREATE TABLE {TEST_TABLE_NAME} (
         rate decimal(10,4),
         PRIMARY KEY (id)
     ); 
-        ''')
+        ''', commit=True)
 
 
     mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age, coordinate) VALUES ('Ivan', 42, POINT(10.0, 20.0));", commit=True)
