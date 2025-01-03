@@ -345,17 +345,20 @@ CREATE TABLE {TEST_TABLE_NAME} (
     mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age, coordinate) VALUES ('Ivan', 42, POINT(10.0, 20.0));", commit=True)
     mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age, coordinate) VALUES ('Peter', 33, POINT(10.0, 20.0));", commit=True)
 
+    mysql.execute(f"INSERT INTO `group` (name, age, rate) VALUES ('Peter', 33, 10.2);", commit=True)
+
     run_all_runner = RunAllRunner()
     run_all_runner.run()
 
     assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
-    assert_wait(lambda: 'group' in ch.get_databases())
+
+    ch.execute_command(f'USE {TEST_DB_NAME};')
+
+    assert_wait(lambda: 'group' in ch.get_tables())
 
     mysql.drop_table('group')
 
     assert_wait(lambda: 'group' not in ch.get_databases())
-
-    ch.execute_command(f'USE {TEST_DB_NAME}')
 
     assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 2)
