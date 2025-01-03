@@ -331,6 +331,17 @@ CREATE TABLE {TEST_TABLE_NAME} (
     ''')
 
 
+    mysql.execute(f'''
+    CREATE TABLE `group` (
+        id int NOT NULL AUTO_INCREMENT,
+        name varchar(255) NOT NULL,
+        age int,
+        rate decimal(10,4),
+        PRIMARY KEY (id)
+    ); 
+        ''')
+
+
     mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age, coordinate) VALUES ('Ivan', 42, POINT(10.0, 20.0));", commit=True)
     mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age, coordinate) VALUES ('Peter', 33, POINT(10.0, 20.0));", commit=True)
 
@@ -338,6 +349,11 @@ CREATE TABLE {TEST_TABLE_NAME} (
     run_all_runner.run()
 
     assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
+    assert_wait(lambda: 'group' in ch.get_databases())
+
+    mysql.drop_table('group')
+
+    assert_wait(lambda: 'group' not in ch.get_databases())
 
     ch.execute_command(f'USE {TEST_DB_NAME}')
 
@@ -395,12 +411,11 @@ CREATE TABLE {TEST_TABLE_NAME} (
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 5)
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, "age=1912")[0]['name'] == 'Hällo')
 
-
     mysql.create_database(TEST_DB_NAME_2)
     assert_wait(lambda: TEST_DB_NAME_2 in ch.get_databases())
 
     mysql.execute(f'''
-    CREATE TABLE test_table_with_index (
+    CREATE TABLE `group` (
         id int NOT NULL AUTO_INCREMENT,
         name varchar(255) NOT NULL,
         age int,
@@ -409,9 +424,9 @@ CREATE TABLE {TEST_TABLE_NAME} (
     ); 
         ''')
 
-    assert_wait(lambda: 'test_table_with_index' in ch.get_tables())
+    assert_wait(lambda: 'group' in ch.get_tables())
 
-    create_query = ch.show_create_table('test_table_with_index')
+    create_query = ch.show_create_table('group')
     assert 'INDEX name_idx name TYPE ngrambf_v1' in create_query
 
     run_all_runner.stop()
