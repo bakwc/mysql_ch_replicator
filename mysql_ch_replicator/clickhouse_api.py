@@ -14,7 +14,7 @@ logger = getLogger(__name__)
 
 
 CREATE_TABLE_QUERY = '''
-CREATE TABLE {db_name}.{table_name}
+CREATE TABLE {if_not_exists} {db_name}.{table_name}
 (
 {fields},
     `_version` UInt64,
@@ -165,6 +165,7 @@ class ClickhouseApi:
             primary_key = f'({primary_key})'
 
         query = CREATE_TABLE_QUERY.format(**{
+            'if_not_exists': 'IF NOT EXISTS' if structure.if_not_exists else '',
             'db_name': self.database,
             'table_name': structure.table_name,
             'fields': fields,

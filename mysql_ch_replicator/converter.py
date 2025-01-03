@@ -262,6 +262,7 @@ class MysqlToClickhouseConverter:
     def convert_table_structure(self, mysql_structure: TableStructure) -> TableStructure:
         clickhouse_structure = TableStructure()
         clickhouse_structure.table_name = mysql_structure.table_name
+        clickhouse_structure.if_not_exists = mysql_structure.if_not_exists
         for field in mysql_structure.fields:
             clickhouse_field_type = self.convert_field_type(field.field_type, field.parameters)
             clickhouse_structure.fields.append(TableField(

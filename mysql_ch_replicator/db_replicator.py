@@ -499,8 +499,16 @@ class DbReplicator:
         tokens = query.split()
         if tokens[0].lower() != 'drop' or tokens[1].lower() != 'table':
             raise Exception('wrong drop table query', query)
+
+        if_exists = (len(tokens) > 4 and
+                tokens[2].lower() == 'if' and
+                tokens[3].lower() == 'exists')
+        if if_exists:
+            del tokens[2:4]  # Remove the 'IF', 'EXISTS' tokens
+
         if len(tokens) != 3:
             raise Exception('wrong token count', query)
+
         table_name = tokens[2]
         if '.' in table_name:
             db_name, table_name = table_name.split('.')
@@ -508,8 +516,9 @@ class DbReplicator:
                 db_name = self.target_database
         table_name = strip_sql_name(table_name)
         db_name = strip_sql_name(db_name)
-        self.state.tables_structure.pop(table_name)
-        self.clickhouse_api.execute_command(f'DROP TABLE {db_name}.{table_name}')
+        if table_name in self.state.tables_structure:
+            self.state.tables_structure.pop(table_name)
+        self.clickhouse_api.execute_command(f'DROP TABLE {"IF EXISTS" if if_exists else ""} {db_name}.{table_name}')
 
     def log_stats_if_required(self):
         curr_time = time.time()
