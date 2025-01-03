@@ -43,7 +43,10 @@ class MySQLApi:
         self.last_connect_time = curr_time
 
     def drop_database(self, db_name):
-        self.cursor.execute(f'DROP DATABASE IF EXISTS {db_name}')
+        self.cursor.execute(f'DROP DATABASE IF EXISTS `{db_name}`')
+
+    def drop_table(self, table_name):
+        self.cursor.execute(f'DROP TABLE IF EXISTS `{table_name}`')
 
     def create_database(self, db_name):
         self.cursor.execute(f'CREATE DATABASE {db_name}')
@@ -85,7 +88,7 @@ class MySQLApi:
 
     def get_table_create_statement(self, table_name) -> str:
         self.reconnect_if_required()
-        self.cursor.execute(f'SHOW CREATE TABLE {table_name}')
+        self.cursor.execute(f'SHOW CREATE TABLE `{table_name}`')
         res = self.cursor.fetchall()
         create_statement = res[0][1].strip()
         return create_statement
@@ -97,7 +100,7 @@ class MySQLApi:
         if start_value is not None:
             start_value = ','.join(map(str, start_value))
             where = f'WHERE ({order_by}) > ({start_value}) '
-        query = f'SELECT * FROM {table_name} {where}ORDER BY {order_by} LIMIT {limit}'
+        query = f'SELECT * FROM `{table_name}` {where}ORDER BY {order_by} LIMIT {limit}'
         self.cursor.execute(query)
         res = self.cursor.fetchall()
         records = [x for x in res]
