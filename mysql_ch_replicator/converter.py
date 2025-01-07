@@ -354,6 +354,24 @@ class MysqlToClickhouseConverter:
         if mysql_query.find(';') != -1:
             raise Exception('multi-query statement not supported')
         return mysql_query
+    
+    def get_db_and_table_name(self, token, db_name):
+        if '.' in token:
+            db_name, table_name = token.split('.')
+        else:
+            table_name = token
+        db_name = strip_sql_name(db_name)
+        table_name = strip_sql_name(table_name)
+        if self.db_replicator:
+            if db_name == self.db_replicator.database:
+                db_name = self.db_replicator.target_database
+            matches_config = (
+                self.db_replicator.config.is_database_matches(db_name)
+                and self.db_replicator.config.is_table_matches(table_name))
+        else:
+            matches_config = True
+
+        return db_name, table_name, matches_config
 
     def convert_alter_query(self, mysql_query, db_name):
         mysql_query = self.__basic_validate_query(mysql_query)
@@ -365,21 +383,10 @@ class MysqlToClickhouseConverter:
         if tokens[1].lower() != 'table':
             raise Exception('wrong query')
 
-        table_name = tokens[2]
-        if table_name.find('.') != -1:
-            db_name, table_name = table_name.split('.')
+        db_name, table_name, matches_config = self.get_db_and_table_name(tokens[2], db_name)
 
-        if self.db_replicator:
-            if not self.db_replicator.config.is_database_matches(db_name):
-                return
-            if not self.db_replicator.config.is_table_matches(table_name):
-                return
-
-        db_name = strip_sql_name(db_name)
-        if self.db_replicator and db_name == self.db_replicator.database:
-            db_name = self.db_replicator.target_database
-
-        table_name = strip_sql_name(table_name)
+        if not matches_config:
+            return
 
         subqueries = ' '.join(tokens[3:])
         subqueries = split_high_level(subqueries, ',')

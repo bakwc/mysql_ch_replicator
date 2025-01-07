@@ -477,14 +477,18 @@ class DbReplicator:
             logger.debug(f'processing query event: {event.transaction_id}, query: {event.records}')
         query = strip_sql_comments(event.records)
         if query.lower().startswith('alter'):
+            self.upload_records()
             self.handle_alter_query(query, event.db_name)
         if query.lower().startswith('create table'):
             self.handle_create_table_query(query, event.db_name)
         if query.lower().startswith('drop table'):
+            self.upload_records()
             self.handle_drop_table_query(query, event.db_name)
+        if query.lower().startswith('rename table'):
+            self.upload_records()
+            self.handle_rename_table_query(query, event.db_name)
 
     def handle_alter_query(self, query, db_name):
-        self.upload_records()
         self.converter.convert_alter_query(query, db_name)
 
     def handle_create_table_query(self, query, db_name):
@@ -509,16 +513,40 @@ class DbReplicator:
         if len(tokens) != 3:
             raise Exception('wrong token count', query)
 
-        table_name = tokens[2]
-        if '.' in table_name:
-            db_name, table_name = table_name.split('.')
-            if db_name == self.database:
-                db_name = self.target_database
-        table_name = strip_sql_name(table_name)
-        db_name = strip_sql_name(db_name)
+        db_name, table_name, matches_config = self.converter.get_db_and_table_name(tokens[2], db_name)
+        if not matches_config:
+            return
+
         if table_name in self.state.tables_structure:
             self.state.tables_structure.pop(table_name)
         self.clickhouse_api.execute_command(f'DROP TABLE {"IF EXISTS" if if_exists else ""} {db_name}.{table_name}')
+
+    def handle_rename_table_query(self, query, db_name):
+        tokens = query.split()
+        if tokens[0].lower() != 'rename' or tokens[1].lower() != 'table':
+            raise Exception('wrong rename table query', query)
+
+        ch_clauses = []
+        for rename_clause in ' '.join(tokens[2:]).split(','):
+            tokens = rename_clause.split()
+
+            if len(tokens) != 3:
+                raise Exception('wrong token count', query)
+            if tokens[1].lower() != 'to':
+                raise Exception('"to" keyword expected', query)
+
+            src_db_name, src_table_name, matches_config = self.converter.get_db_and_table_name(tokens[0], db_name)
+            dest_db_name, dest_table_name, _ = self.converter.get_db_and_table_name(tokens[2], db_name)
+            if not matches_config:
+                return
+
+            if src_db_name != self.target_database or dest_db_name != self.target_database:
+                raise Exception('cross databases table renames not implemented', tokens)
+            if src_table_name in self.state.tables_structure:
+                self.state.tables_structure[dest_table_name] = self.state.tables_structure.pop(src_table_name)
+
+            ch_clauses.append(f"{src_db_name}.{src_table_name} TO {dest_db_name}.{dest_table_name}")
+        self.clickhouse_api.execute_command(f'RENAME TABLE {", ".join(ch_clauses)}')
 
     def log_stats_if_required(self):
         curr_time = time.time()
