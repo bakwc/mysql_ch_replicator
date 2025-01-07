@@ -31,7 +31,7 @@ jobs:
       run: poetry version ${{ env.version }}
 
     - name: Update lock file
-      run: poetry lock --no-update
+      run: poetry lock
 
     - name: Install dependencies
       run: poetry install --no-root
