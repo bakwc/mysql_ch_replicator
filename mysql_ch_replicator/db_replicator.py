@@ -476,14 +476,16 @@ class DbReplicator:
         if self.config.debug_log_level:
             logger.debug(f'processing query event: {event.transaction_id}, query: {event.records}')
         query = strip_sql_comments(event.records)
-        self.upload_records()
         if query.lower().startswith('alter'):
+            self.upload_records()
             self.handle_alter_query(query, event.db_name)
         if query.lower().startswith('create table'):
             self.handle_create_table_query(query, event.db_name)
         if query.lower().startswith('drop table'):
+            self.upload_records()
             self.handle_drop_table_query(query, event.db_name)
         if query.lower().startswith('rename table'):
+            self.upload_records()
             self.handle_rename_table_query(query, event.db_name)
 
     def handle_alter_query(self, query, db_name):
