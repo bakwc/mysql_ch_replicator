@@ -434,11 +434,14 @@ class MysqlToClickhouseConverter:
             raise Exception('add multiple columns not implemented', tokens)
 
         column_after = None
+        column_first = False
         if tokens[-2].lower() == 'after':
             column_after = strip_sql_name(tokens[-1])
             tokens = tokens[:-2]
             if len(tokens) < 2:
                 raise Exception('wrong tokens count', tokens)
+        elif tokens[-1].lower() == 'first':
+            column_first = True
 
         column_name = strip_sql_name(tokens[0])
         column_type_mysql = tokens[1]
@@ -452,21 +455,32 @@ class MysqlToClickhouseConverter:
             mysql_table_structure: TableStructure = table_structure[0]
             ch_table_structure: TableStructure = table_structure[1]
 
-            if column_after is None:
-                column_after = strip_sql_name(mysql_table_structure.fields[-1].name)
+            if column_first:
+                mysql_table_structure.add_field_first(
+                    TableField(name=column_name, field_type=column_type_mysql)
+                )
+                
+                ch_table_structure.add_field_first(
+                    TableField(name=column_name, field_type=column_type_ch)
+                )
+            else:
+                if column_after is None:
+                    column_after = strip_sql_name(mysql_table_structure.fields[-1].name)
 
-            mysql_table_structure.add_field_after(
-                TableField(name=column_name, field_type=column_type_mysql),
-                column_after,
-            )
+                mysql_table_structure.add_field_after(
+                    TableField(name=column_name, field_type=column_type_mysql),
+                    column_after,
+                )
 
-            ch_table_structure.add_field_after(
-                TableField(name=column_name, field_type=column_type_ch),
-                column_after,
-            )
+                ch_table_structure.add_field_after(
+                    TableField(name=column_name, field_type=column_type_ch),
+                    column_after,
+                )
 
         query = f'ALTER TABLE {db_name}.{table_name} ADD COLUMN {column_name} {column_type_ch}'
-        if column_after is not None:
+        if column_first:
+            query += ' FIRST'
+        else:
             query += f' AFTER {column_after}'
 
         if self.db_replicator:

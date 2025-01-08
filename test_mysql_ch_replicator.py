@@ -1173,6 +1173,87 @@ CREATE TABLE `{TEST_DB_NAME}`.`_{TEST_TABLE_NAME}_new` (
     binlog_replicator_runner.stop()
 
 
+def test_add_column_first_after_and_drop_column(monkeypatch):
+    monkeypatch.setattr(DbReplicator, 'INITIAL_REPLICATION_BATCH_SIZE', 1)
+
+    cfg = config.Settings()
+    cfg.load(CONFIG_FILE)
+
+    mysql = mysql_api.MySQLApi(
+        database=None,
+        mysql_settings=cfg.mysql,
+    )
+
+    ch = clickhouse_api.ClickhouseApi(
+        database=TEST_DB_NAME,
+        clickhouse_settings=cfg.clickhouse,
+    )
+
+    prepare_env(cfg, mysql, ch)
+
+    mysql.execute(f'''
+CREATE TABLE {TEST_TABLE_NAME} (
+  `id` int NOT NULL,
+  PRIMARY KEY (`id`)); 
+    ''')
+
+    mysql.execute(
+        f"INSERT INTO {TEST_TABLE_NAME} (id) VALUES (42)",
+        commit=True,
+    )
+
+    binlog_replicator_runner = BinlogReplicatorRunner()
+    binlog_replicator_runner.run()
+    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME)
+    db_replicator_runner.run()
+
+    assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
+
+    ch.execute_command(f'USE {TEST_DB_NAME}')
+
+    assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1)
+
+    # Test adding a column as the new first column, after another column, and dropping a column
+    # These all move the primary key column to a different index and test the table structure is
+    # updated correctly.
+
+    # Test add column first
+    mysql.execute(
+        f"ALTER TABLE {TEST_TABLE_NAME} ADD COLUMN c1 INT FIRST")
+    mysql.execute(
+        f"INSERT INTO {TEST_TABLE_NAME} (id, c1) VALUES (43, 11)",
+        commit=True,
+    )
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME, where="id=43")) == 1)
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="id=43")[0]['c1'] == 11)
+
+    # Test add column after
+    mysql.execute(
+        f"ALTER TABLE {TEST_TABLE_NAME} ADD COLUMN c2 INT AFTER c1")
+    mysql.execute(
+        f"INSERT INTO {TEST_TABLE_NAME} (id, c1, c2) VALUES (44, 111, 222)",
+        commit=True,
+    )
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME, where="id=44")) == 1)
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="id=44")[0]['c1'] == 111)
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="id=44")[0]['c2'] == 222)
+
+    # Test drop column
+    mysql.execute(
+        f"ALTER TABLE {TEST_TABLE_NAME} DROP COLUMN c2")
+    mysql.execute(
+        f"INSERT INTO {TEST_TABLE_NAME} (id, c1) VALUES (45, 1111)",
+        commit=True,
+    )
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME, where="id=45")) == 1)
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="id=45")[0]['c1'] == 1111)
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="id=45")[0].get('c2') is None)
+
+    db_replicator_runner.stop()
+    binlog_replicator_runner.stop()
+
+
 def test_parse_mysql_table_structure():
     query = "CREATE TABLE IF NOT EXISTS user_preferences_portal (\n\t\t\tid char(36) NOT NULL,\n\t\t\tcategory varchar(50) DEFAULT NULL,\n\t\t\tdeleted tinyint(1) DEFAULT 0,\n\t\t\tdate_entered datetime DEFAULT NULL,\n\t\t\tdate_modified datetime DEFAULT NULL,\n\t\t\tassigned_user_id char(36) DEFAULT NULL,\n\t\t\tcontents longtext DEFAULT NULL\n\t\t ) ENGINE=InnoDB DEFAULT CHARSET=utf8"
 
