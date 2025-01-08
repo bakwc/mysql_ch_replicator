@@ -25,6 +25,11 @@ class TableStructure:
             field_names.index(key) for key in self.primary_keys
         ]
 
+    def add_field_first(self, new_field: TableField):
+
+        self.fields.insert(0, new_field)
+        self.preprocess()
+
     def add_field_after(self, new_field: TableField, after: str):
 
         idx_to_insert = None
@@ -36,11 +41,13 @@ class TableStructure:
             raise Exception('field after not found', after)
 
         self.fields.insert(idx_to_insert, new_field)
+        self.preprocess()
 
     def remove_field(self, field_name):
         for idx, field in enumerate(self.fields):
             if field.name == field_name:
                 del self.fields[idx]
+                self.preprocess()
                 return
         raise Exception(f'field {field_name} not found')
 
