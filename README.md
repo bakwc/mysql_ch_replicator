@@ -18,7 +18,7 @@ With a focus on high performance, it utilizes batching heavily and uses C++ exte
 ## Features
 
 - **Real-Time Replication**: Keeps your ClickHouse database in sync with MySQL in real-time.
-- **High Performance**: Utilizes batching and ports slow parts to C++ (e.g., MySQL internal JSON parsing) for optimal performance.
+- **High Performance**: Utilizes batching and ports slow parts to C++ (e.g., MySQL internal JSON parsing) for optimal performance (±20K events / second on a single core).
 - **Supports Migrations/Schema Changes**: Handles adding, altering, and removing tables without breaking the replication process.
 - **Recovery without Downtime**: Allows for preserving old data while performing initial replication, ensuring continuous operation.
 - **Correct Data Removal**: Unlike MaterializedMySQL, `mysql_ch_replicator` ensures physical removal of data.
