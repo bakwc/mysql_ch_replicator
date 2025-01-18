@@ -1,0 +1,21 @@
+
+mysql:
+  host: 'localhost'
+  port: 9307
+  user: 'root'
+  password: 'admin'
+
+clickhouse:
+  host: 'localhost'
+  port: 9123
+  user: 'default'
+  password: 'admin'
+
+binlog_replicator:
+  data_dir: '/root/binlog/'
+  records_per_file: 1000
+
+databases: '*test*'
+log_level: 'info'
+optimize_interval: 3
+check_db_updated_interval: 3

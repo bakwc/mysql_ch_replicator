@@ -473,6 +473,9 @@ class BinlogReplicator:
 
                     self.data_writer.store_event(log_event)
 
+                    if last_read_count > 1000:
+                        break
+
                 self.update_state_if_required(last_transaction_id)
                 self.clear_old_binlog_if_required()
                 #print("last read count", last_read_count)
