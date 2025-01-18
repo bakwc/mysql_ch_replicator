@@ -1,3 +1,4 @@
+import datetime
 import os
 import shutil
 import time
@@ -887,13 +888,14 @@ CREATE TABLE {TEST_TABLE_NAME} (
     test2 point,
     test3 binary(16),
     test4 set('1','2','3','4','5','6','7'),
+    test5 timestamp(0),
     PRIMARY KEY (id)
 ); 
     ''')
 
     mysql.execute(
-        f"INSERT INTO {TEST_TABLE_NAME} (test1, test2, test3, test4) VALUES "
-        f"(0, POINT(10.0, 20.0), 'azaza', '1,3,5');",
+        f"INSERT INTO {TEST_TABLE_NAME} (test1, test2, test3, test4, test5) VALUES "
+        f"(0, POINT(10.0, 20.0), 'azaza', '1,3,5', '2023-08-15 14:30:00');",
         commit=True,
     )
 
@@ -910,8 +912,8 @@ CREATE TABLE {TEST_TABLE_NAME} (
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1)
 
     mysql.execute(
-        f"INSERT INTO {TEST_TABLE_NAME} (test1, test2, test4) VALUES "
-        f"(1, POINT(15.0, 14.0), '2,4,5');",
+        f"INSERT INTO {TEST_TABLE_NAME} (test1, test2, test4, test5) VALUES "
+        f"(1, POINT(15.0, 14.0), '2,4,5', '2023-08-15 14:40:00');",
         commit=True,
     )
 
@@ -924,6 +926,10 @@ CREATE TABLE {TEST_TABLE_NAME} (
 
     assert ch.select(TEST_TABLE_NAME, 'test1=True')[0]['test4'] == '2,4,5'
     assert ch.select(TEST_TABLE_NAME, 'test1=False')[0]['test4'] == '1,3,5'
+
+    value = ch.select(TEST_TABLE_NAME, 'test1=True')[0]['test5']
+    assert isinstance(value, datetime.datetime)
+    assert str(value) == '2023-08-15 14:40:00+00:00'
 
     mysql.execute(
         f"INSERT INTO {TEST_TABLE_NAME} (test1, test2) VALUES "

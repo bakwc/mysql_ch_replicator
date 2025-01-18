@@ -158,6 +158,25 @@ def strip_sql_comments(sql_statement):
     return sqlparse.format(sql_statement, strip_comments=True).strip()
 
 
+def convert_timestamp_to_datetime64(input_str):
+
+    # Define the regex pattern
+    pattern = r'^timestamp(?:\((\d+)\))?$'
+
+    # Attempt to match the pattern
+    match = re.match(pattern, input_str.strip(), re.IGNORECASE)
+
+    if match:
+        # If a precision is provided, include it in the replacement
+        precision = match.group(1)
+        if precision is not None:
+            return f'DateTime64({precision})'
+        else:
+            return 'DateTime64'
+    else:
+        raise ValueError(f"Invalid input string format: '{input_str}'")
+
+
 class MysqlToClickhouseConverter:
     def __init__(self, db_replicator: 'DbReplicator' = None):
         self.db_replicator = db_replicator
@@ -238,6 +257,8 @@ class MysqlToClickhouseConverter:
             return 'Int32'
         if 'real' in mysql_type:
             return 'Float64'
+        if mysql_type.startswith('timestamp'):
+            return convert_timestamp_to_datetime64(mysql_type)
         if mysql_type.startswith('time'):
             return 'String'
         if 'varbinary' in mysql_type:
