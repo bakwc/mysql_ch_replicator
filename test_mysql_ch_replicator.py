@@ -10,7 +10,7 @@ import requests
 from mysql_ch_replicator import config
 from mysql_ch_replicator import mysql_api
 from mysql_ch_replicator import clickhouse_api
-from mysql_ch_replicator.binlog_replicator import State as BinlogState
+from mysql_ch_replicator.binlog_replicator import State as BinlogState, FileReader, EventType
 from mysql_ch_replicator.db_replicator import State as DbReplicatorState, DbReplicator
 from mysql_ch_replicator.converter import MysqlToClickhouseConverter
 
@@ -1268,4 +1268,128 @@ def test_parse_mysql_table_structure():
     structure = converter.parse_mysql_table_structure(query)
 
     assert structure.table_name == 'user_preferences_portal'
+
+
+def get_last_file(directory, extension='.bin'):
+    max_num = -1
+    last_file = None
+    ext_len = len(extension)
+
+    with os.scandir(directory) as it:
+        for entry in it:
+            if entry.is_file() and entry.name.endswith(extension):
+                # Extract the numerical part by removing the extension
+                num_part = entry.name[:-ext_len]
+                try:
+                    num = int(num_part)
+                    if num > max_num:
+                        max_num = num
+                        last_file = entry.name
+                except ValueError:
+                    # Skip files where the name before extension is not an integer
+                    continue
+    return last_file
+
+
+def get_last_insert_from_binlog(cfg: config.Settings, db_name: str):
+    binlog_dir_path = os.path.join(cfg.binlog_replicator.data_dir, db_name)
+    if not os.path.exists(binlog_dir_path):
+        return None
+    last_file = get_last_file(binlog_dir_path)
+    if last_file is None:
+        return None
+    reader = FileReader(os.path.join(binlog_dir_path, last_file))
+    last_insert = None
+    while True:
+        event = reader.read_next_event()
+        if event is None:
+            break
+        if event.event_type != EventType.ADD_EVENT.value:
+            continue
+        for record in event.records:
+            last_insert = record
+    return last_insert
+
+
+@pytest.mark.optional
+def test_performance_dbreplicator():
+    config_file = 'tests_config_perf.yaml'
+    num_records = 100000
+
+    cfg = config.Settings()
+    cfg.load(config_file)
+
+    mysql = mysql_api.MySQLApi(
+        database=None,
+        mysql_settings=cfg.mysql,
+    )
+
+    ch = clickhouse_api.ClickhouseApi(
+        database=TEST_DB_NAME,
+        clickhouse_settings=cfg.clickhouse,
+    )
+
+    prepare_env(cfg, mysql, ch)
+
+    mysql.execute(f'''
+    CREATE TABLE {TEST_TABLE_NAME} (
+        id int NOT NULL AUTO_INCREMENT,
+        name varchar(2048),
+        age int,
+        PRIMARY KEY (id)
+    ); 
+        ''')
+
+    binlog_replicator_runner = BinlogReplicatorRunner(cfg_file=config_file)
+    binlog_replicator_runner.run()
+
+    time.sleep(1)
+
+    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES ('TEST_VALUE_1', 33);", commit=True)
+
+    def _get_last_insert_name():
+        record = get_last_insert_from_binlog(cfg=cfg, db_name=TEST_DB_NAME)
+        if record is None:
+            return None
+        return record[1].decode('utf-8')
+
+    assert_wait(lambda: _get_last_insert_name() == 'TEST_VALUE_1', retry_interval=0.5)
+
+    binlog_replicator_runner.stop()
+
+    time.sleep(1)
+
+    print("populating mysql data")
+
+    base_value = 'a' * 2000
+
+    for i in range(num_records):
+        if i % 2000 == 0:
+            print(f'populated {i} elements')
+        mysql.execute(
+            f"INSERT INTO {TEST_TABLE_NAME} (name, age) "
+            f"VALUES ('TEST_VALUE_{i}_{base_value}', {i});", commit=i % 20 == 0,
+        )
+
+    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES ('TEST_VALUE_FINAL', 0);", commit=True)
+
+    print("running db_replicator")
+    t1 = time.time()
+    binlog_replicator_runner = BinlogReplicatorRunner(cfg_file=config_file)
+    binlog_replicator_runner.run()
+
+    assert_wait(lambda: _get_last_insert_name() == 'TEST_VALUE_FINAL', retry_interval=0.5, max_wait_time=1000)
+    t2 = time.time()
+
+    binlog_replicator_runner.stop()
+
+    time_delta = t2 - t1
+    rps = num_records / time_delta
+
+    print('\n\n')
+    print("*****************************")
+    print("records per second:", int(rps))
+    print("total time (seconds):", round(time_delta, 2))
+    print("*****************************")
+    print('\n\n')
 
