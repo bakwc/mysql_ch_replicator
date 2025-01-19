@@ -45,8 +45,10 @@ services:
       - ./test_mariadb.cnf:/etc/mysql/my.cnf:ro  # Adjust path to MariaDB config location if needed
 
   replicator:
-    image: python:3.12.4-slim-bookworm
-    command: bash -c "pip install -r /app/requirements.txt && pip install -r /app/requirements-dev.txt && touch /tmp/ready && tail -f /dev/null"
+    image: mysql_ch_replicator
+    build:
+      context: .
+    command: bash -c "touch /tmp/ready && tail -f /dev/null"
     healthcheck:
       test: [ 'CMD-SHELL', 'test -f /tmp/ready' ]
       interval: 2s

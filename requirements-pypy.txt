@@ -1,0 +1,4 @@
+pyyaml==6.0.2
+mysql-connector-python==9.1.0
+pymysql==1.1.1
+packaging==24.2
