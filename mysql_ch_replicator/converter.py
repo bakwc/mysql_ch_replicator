@@ -672,7 +672,15 @@ class MysqlToClickhouseConverter:
         if structure.charset:
             structure.charset_python = CHARSET_MYSQL_TO_PYTHON[structure.charset]
 
+        prev_line = ''
         for line in inner_tokens:
+            line = prev_line + line
+            q_count = line.count('`')
+            if q_count % 2 == 1:
+                prev_line = line
+                continue
+            prev_line = ''
+
             if line.lower().startswith('unique key'):
                 continue
             if line.lower().startswith('key'):
