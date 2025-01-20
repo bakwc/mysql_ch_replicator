@@ -7,11 +7,6 @@ import sys
 import os
 
 from .config import Settings
-from .db_replicator import DbReplicator
-from .binlog_replicator import BinlogReplicator
-from .db_optimizer import DbOptimizer
-from .monitoring import Monitoring
-from .runner import Runner
 
 
 def set_logging_config(tags, log_file=None, log_level_str=None):
@@ -50,6 +45,8 @@ def set_logging_config(tags, log_file=None, log_level_str=None):
 
 
 def run_binlog_replicator(args, config: Settings):
+    from .binlog_replicator import BinlogReplicator
+
     if not os.path.exists(config.binlog_replicator.data_dir):
         os.mkdir(config.binlog_replicator.data_dir)
 
@@ -66,6 +63,8 @@ def run_binlog_replicator(args, config: Settings):
 
 
 def run_db_replicator(args, config: Settings):
+    from .db_replicator import DbReplicator
+
     if not args.db:
         raise Exception("need to pass --db argument")
 
@@ -99,6 +98,8 @@ def run_db_replicator(args, config: Settings):
 
 
 def run_db_optimizer(args, config: Settings):
+    from .db_optimizer import DbOptimizer
+
     data_dir = config.binlog_replicator.data_dir
     if not os.path.exists(data_dir):
         os.mkdir(data_dir)
@@ -117,12 +118,16 @@ def run_db_optimizer(args, config: Settings):
 
 
 def run_monitoring(args, config: Settings):
+    from .monitoring import Monitoring
+
     set_logging_config('monitor', log_level_str=config.log_level)
     monitoring = Monitoring(args.db or '', config)
     monitoring.run()
 
 
 def run_all(args, config: Settings):
+    from .runner import Runner
+
     set_logging_config('runner', log_level_str=config.log_level)
     runner = Runner(config, args.wait_initial_replication, args.db)
     runner.run()

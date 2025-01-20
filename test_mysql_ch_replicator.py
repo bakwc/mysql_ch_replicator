@@ -1334,12 +1334,22 @@ def test_performance_dbreplicator():
 
     mysql.execute(f'''
     CREATE TABLE {TEST_TABLE_NAME} (
-        id int NOT NULL AUTO_INCREMENT,
-        name varchar(2048),
-        age int,
+        id INT NOT NULL AUTO_INCREMENT,
+        name VARCHAR(2048),
+        age INT,
+        test1 VARCHAR(255) DEFAULT 'azaza12456778',
+        test2 INT DEFAULT 42483,
+        test3 VARCHAR(255) DEFAULT 'qjfsjdfjdfjfdjdfjfdjwhfdf',
+        test4 JSON DEFAULT ('{{"a": 3, "b": "caad", "f": [1, 2, 3]}}'),
+        test5 INT DEFAULT 32,
+        test6 INT DEFAULT 9234,
+        test7 INT DEFAULT 431,
+        test8 INT DEFAULT 121,
+        test9 INT DEFAULT 33,
+        test10 INT DEFAULT 1948,
         PRIMARY KEY (id)
-    ); 
-        ''')
+    );
+    ''')
 
     binlog_replicator_runner = BinlogReplicatorRunner(cfg_file=config_file)
     binlog_replicator_runner.run()
@@ -1365,7 +1375,7 @@ def test_performance_dbreplicator():
     base_value = 'a' * 2000
 
     for i in range(num_records):
-        if i % 2000 == 0:
+        if i % 5000 == 0:
             print(f'populated {i} elements')
         mysql.execute(
             f"INSERT INTO {TEST_TABLE_NAME} (name, age) "
@@ -1379,7 +1389,7 @@ def test_performance_dbreplicator():
     binlog_replicator_runner = BinlogReplicatorRunner(cfg_file=config_file)
     binlog_replicator_runner.run()
 
-    assert_wait(lambda: _get_last_insert_name() == 'TEST_VALUE_FINAL', retry_interval=0.5, max_wait_time=1000)
+    assert_wait(lambda: _get_last_insert_name() == 'TEST_VALUE_FINAL', retry_interval=0.5, max_wait_time=60)
     t2 = time.time()
 
     binlog_replicator_runner.stop()
@@ -1388,9 +1398,34 @@ def test_performance_dbreplicator():
     rps = num_records / time_delta
 
     print('\n\n')
-    print("*****************************")
+    print("********* INSERTS ************")
     print("records per second:", int(rps))
     print("total time (seconds):", round(time_delta, 2))
     print("*****************************")
     print('\n\n')
 
+    print("removing mysql data")
+    for i in range(num_records):
+        if i % 5000 == 0:
+            print(f'removed {i} elements')
+        mysql.execute(f'DELETE FROM {TEST_TABLE_NAME} WHERE ID = {i}', commit=i % 20 == 0)
+    mysql.execute(f"INSERT INTO {TEST_TABLE_NAME} (name, age) VALUES ('TEST_VALUE_FINAL_2', 0);", commit=True)
+
+    t1 = time.time()
+    binlog_replicator_runner = BinlogReplicatorRunner(cfg_file=config_file)
+    binlog_replicator_runner.run()
+
+    assert_wait(lambda: _get_last_insert_name() == 'TEST_VALUE_FINAL_2', retry_interval=0.5, max_wait_time=60)
+    t2 = time.time()
+
+    binlog_replicator_runner.stop()
+
+    time_delta = t2 - t1
+    rps = num_records / time_delta
+
+    print('\n\n')
+    print("********* DELETES ************")
+    print("records per second:", int(rps))
+    print("total time (seconds):", round(time_delta, 2))
+    print("*****************************")
+    print('\n\n')
