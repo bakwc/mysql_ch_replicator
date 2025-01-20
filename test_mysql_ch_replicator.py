@@ -760,7 +760,8 @@ CREATE TABLE {TEST_TABLE_NAME} (
   `modified_date` datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
   `entity` int NOT NULL DEFAULT '0',
   `sent_2_tac` char(1) CHARACTER SET utf8mb3 COLLATE utf8mb3_unicode_ci NOT NULL DEFAULT '0',
-    PRIMARY KEY (id)
+    PRIMARY KEY (id),
+    KEY `name, employee` (`name`,`employee`) USING BTREE
 ); 
     ''')
 
