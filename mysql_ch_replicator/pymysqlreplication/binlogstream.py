@@ -310,7 +310,7 @@ class BinLogStreamReader(object):
         self._ctl_connection = self.pymysql_wrapper(**self._ctl_connection_settings)
         self._ctl_connection._get_dbms = self.__get_dbms
         self.__connected_ctl = True
-        self.__check_optional_meta_data()
+        #self.__check_optional_meta_data()
 
     def __checksum_enabled(self):
         """Return True if binlog-checksum = CRC32. Only for MySQL > 5.6"""
@@ -563,12 +563,13 @@ class BinLogStreamReader(object):
         cur.execute("SHOW VARIABLES LIKE 'BINLOG_ROW_METADATA';")
         value = cur.fetchone()
         if value is None:  # BinLog Variable Not exist It means Not Supported Version
-            logging.log(
-                logging.WARN,
-                """
-                    Before using MARIADB 10.5.0 and MYSQL 8.0.14 versions,
-                    use python-mysql-replication version Before 1.0 version """,
-            )
+            pass
+            # logging.log(
+            #     logging.WARN,
+            #     """
+            #         Before using MARIADB 10.5.0 and MYSQL 8.0.14 versions,
+            #         use python-mysql-replication version Before 1.0 version """,
+            # )
         else:
             value = value.get("Value", "")
             if value.upper() != "FULL":
