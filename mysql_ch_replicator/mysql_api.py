@@ -49,7 +49,7 @@ class MySQLApi:
         self.cursor.execute(f'DROP TABLE IF EXISTS `{table_name}`')
 
     def create_database(self, db_name):
-        self.cursor.execute(f'CREATE DATABASE {db_name}')
+        self.cursor.execute(f'CREATE DATABASE `{db_name}`')
 
     def execute(self, command, commit=False, args=None):
         if args:
