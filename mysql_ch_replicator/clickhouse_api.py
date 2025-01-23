@@ -14,7 +14,7 @@ logger = getLogger(__name__)
 
 
 CREATE_TABLE_QUERY = '''
-CREATE TABLE {if_not_exists} {db_name}.{table_name}
+CREATE TABLE {if_not_exists} `{db_name}`.`{table_name}`
 (
 {fields},
     `_version` UInt64,
@@ -26,7 +26,7 @@ SETTINGS index_granularity = 8192
 '''
 
 DELETE_QUERY = '''
-DELETE FROM {db_name}.{table_name} WHERE ({field_name}) IN ({field_values})
+DELETE FROM `{db_name}`.`{table_name}` WHERE ({field_name}) IN ({field_values})
 '''
 
 
@@ -126,8 +126,8 @@ class ClickhouseApi:
                 time.sleep(ClickhouseApi.RETRY_INTERVAL)
 
     def recreate_database(self):
-        self.execute_command(f'DROP DATABASE IF EXISTS {self.database}')
-        self.execute_command(f'CREATE DATABASE {self.database}')
+        self.execute_command(f'DROP DATABASE IF EXISTS `{self.database}`')
+        self.execute_command(f'CREATE DATABASE `{self.database}`')
 
     def get_last_used_version(self, table_name):
         return self.tables_last_record_version.get(table_name, 0)
@@ -210,9 +210,9 @@ class ClickhouseApi:
             records_to_insert.append(tuple(record) + (current_version,))
             current_version += 1
 
-        full_table_name = table_name
+        full_table_name = f'`table_name`'
         if '.' not in full_table_name:
-            full_table_name = f'{self.database}.{table_name}'
+            full_table_name = f'`{self.database}`.`{table_name}`'
 
         duration = 0.0
         for attempt in range(ClickhouseApi.MAX_RETRIES):
@@ -258,10 +258,10 @@ class ClickhouseApi:
         )
 
     def drop_database(self, db_name):
-        self.execute_command(f'DROP DATABASE IF EXISTS {db_name}')
+        self.execute_command(f'DROP DATABASE IF EXISTS `{db_name}`')
 
     def create_database(self, db_name):
-        self.cursor.execute(f'CREATE DATABASE {db_name}')
+        self.cursor.execute(f'CREATE DATABASE `{db_name}`')
 
     def select(self, table_name, where=None, final=None):
         query = f'SELECT * FROM {table_name}'
@@ -282,7 +282,7 @@ class ClickhouseApi:
         return self.client.query(query)
 
     def show_create_table(self, table_name):
-        return self.client.query(f'SHOW CREATE TABLE {table_name}').result_rows[0][0]
+        return self.client.query(f'SHOW CREATE TABLE `{table_name}`').result_rows[0][0]
 
     def get_system_setting(self, name):
         results = self.select('system.settings', f"name = '{name}'")

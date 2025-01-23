@@ -498,7 +498,7 @@ class MysqlToClickhouseConverter:
                     column_after,
                 )
 
-        query = f'ALTER TABLE {db_name}.{table_name} ADD COLUMN {column_name} {column_type_ch}'
+        query = f'ALTER TABLE `{db_name}`.`{table_name}` ADD COLUMN `{column_name}` {column_type_ch}'
         if column_first:
             query += ' FIRST'
         else:
@@ -525,7 +525,7 @@ class MysqlToClickhouseConverter:
             mysql_table_structure.remove_field(field_name=column_name)
             ch_table_structure.remove_field(field_name=column_name)
 
-        query = f'ALTER TABLE {db_name}.{table_name} DROP COLUMN {column_name}'
+        query = f'ALTER TABLE `{db_name}`.`{table_name}` DROP COLUMN {column_name}'
         if self.db_replicator:
             self.db_replicator.clickhouse_api.execute_command(query)
 
@@ -556,7 +556,7 @@ class MysqlToClickhouseConverter:
                 TableField(name=column_name, field_type=column_type_ch),
             )
 
-        query = f'ALTER TABLE {db_name}.{table_name} MODIFY COLUMN {column_name} {column_type_ch}'
+        query = f'ALTER TABLE `{db_name}`.`{table_name}` MODIFY COLUMN `{column_name}` {column_type_ch}'
         if self.db_replicator:
             self.db_replicator.clickhouse_api.execute_command(query)
 
@@ -592,7 +592,7 @@ class MysqlToClickhouseConverter:
                     TableField(name=column_name, field_type=column_type_ch),
                 )
 
-                query = f'ALTER TABLE {db_name}.{table_name} MODIFY COLUMN {column_name} {column_type_ch}'
+                query = f'ALTER TABLE `{db_name}`.`{table_name}` MODIFY COLUMN {column_name} {column_type_ch}'
                 self.db_replicator.clickhouse_api.execute_command(query)
 
             if column_name != new_column_name:
@@ -602,7 +602,7 @@ class MysqlToClickhouseConverter:
                 curr_field_mysql.name = new_column_name
                 curr_field_clickhouse.name = new_column_name
 
-                query = f'ALTER TABLE {db_name}.{table_name} RENAME COLUMN {column_name} TO {new_column_name}'
+                query = f'ALTER TABLE `{db_name}`.`{table_name}` RENAME COLUMN {column_name} TO {new_column_name}'
                 self.db_replicator.clickhouse_api.execute_command(query)
 
     def parse_create_table_query(self, mysql_query) -> tuple[TableStructure, TableStructure]:
