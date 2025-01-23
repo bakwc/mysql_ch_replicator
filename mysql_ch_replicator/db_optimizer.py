@@ -82,7 +82,7 @@ class DbOptimizer:
         self.mysql_api.close()
         tables = [table for table in tables if self.config.is_table_matches(table)]
 
-        self.clickhouse_api.execute_command(f'USE {db_name}')
+        self.clickhouse_api.execute_command(f'USE `{db_name}`')
         ch_tables = set(self.clickhouse_api.get_tables())
 
         for table in tables:
