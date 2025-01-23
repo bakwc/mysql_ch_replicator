@@ -242,15 +242,15 @@ class DbReplicator:
         logger.info(f'initial replication - swapping database')
         if self.target_database in self.clickhouse_api.get_databases():
             self.clickhouse_api.execute_command(
-                f'RENAME DATABASE {self.target_database} TO {self.target_database}_old',
+                f'RENAME DATABASE `{self.target_database}` TO `{self.target_database}_old`',
             )
             self.clickhouse_api.execute_command(
-                f'RENAME DATABASE {self.target_database_tmp} TO {self.target_database}',
+                f'RENAME DATABASE `{self.target_database_tmp}` TO `{self.target_database}`',
             )
             self.clickhouse_api.drop_database(f'{self.target_database}_old')
         else:
             self.clickhouse_api.execute_command(
-                f'RENAME DATABASE {self.target_database_tmp} TO {self.target_database}',
+                f'RENAME DATABASE `{self.target_database_tmp}` TO `{self.target_database}`',
             )
         self.clickhouse_api.database = self.target_database
         logger.info(f'initial replication - done')
@@ -519,7 +519,7 @@ class DbReplicator:
 
         if table_name in self.state.tables_structure:
             self.state.tables_structure.pop(table_name)
-        self.clickhouse_api.execute_command(f'DROP TABLE {"IF EXISTS" if if_exists else ""} {db_name}.{table_name}')
+        self.clickhouse_api.execute_command(f'DROP TABLE {"IF EXISTS" if if_exists else ""} `{db_name}`.`{table_name}`')
 
     def handle_rename_table_query(self, query, db_name):
         tokens = query.split()
@@ -545,7 +545,7 @@ class DbReplicator:
             if src_table_name in self.state.tables_structure:
                 self.state.tables_structure[dest_table_name] = self.state.tables_structure.pop(src_table_name)
 
-            ch_clauses.append(f"{src_db_name}.{src_table_name} TO {dest_db_name}.{dest_table_name}")
+            ch_clauses.append(f"`{src_db_name}`.`{src_table_name}` TO `{dest_db_name}`.`{dest_table_name}`")
         self.clickhouse_api.execute_command(f'RENAME TABLE {", ".join(ch_clauses)}')
 
     def log_stats_if_required(self):
