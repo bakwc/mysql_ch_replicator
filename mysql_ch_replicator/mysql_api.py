@@ -39,7 +39,7 @@ class MySQLApi:
                 raise
         self.cursor = self.db.cursor()
         if self.database is not None:
-            self.cursor.execute(f'USE {self.database}')
+            self.cursor.execute(f'USE `{self.database}`')
         self.last_connect_time = curr_time
 
     def drop_database(self, db_name):
@@ -63,7 +63,7 @@ class MySQLApi:
         self.reconnect_if_required()
         self.database = database
         self.cursor = self.db.cursor()
-        self.cursor.execute(f'USE {self.database}')
+        self.cursor.execute(f'USE `{self.database}`')
 
     def get_databases(self):
         self.reconnect_if_required(True)  # New database appear only after new connection
