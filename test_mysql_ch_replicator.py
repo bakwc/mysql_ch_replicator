@@ -100,7 +100,7 @@ def test_e2e_regular(config_file):
 CREATE TABLE `{TEST_TABLE_NAME}` (
     id int NOT NULL AUTO_INCREMENT,
     name varchar(255) COMMENT 'Dân tộc, ví dụ: Kinh',
-    age int COMMENT 'CMND Cũ',
+    `age x` int COMMENT 'CMND Cũ',
     field1 text,
     field2 blob,
     PRIMARY KEY (id)
@@ -108,10 +108,10 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     ''')
 
     mysql.execute(
-        f"INSERT INTO `{TEST_TABLE_NAME}` (name, age, field1, field2) VALUES ('Ivan', 42, 'test1', 'test2');",
+        f"INSERT INTO `{TEST_TABLE_NAME}` (name, `age x`, field1, field2) VALUES ('Ivan', 42, 'test1', 'test2');",
         commit=True,
     )
-    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, age) VALUES ('Peter', 33);", commit=True)
+    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, `age x`) VALUES ('Peter', 33);", commit=True)
 
     binlog_replicator_runner = BinlogReplicatorRunner(cfg_file=config_file)
     binlog_replicator_runner.run()
@@ -125,13 +125,13 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 2)
 
-    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, age) VALUES ('Filipp', 50);", commit=True)
+    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, `age x`) VALUES ('Filipp', 50);", commit=True)
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
-    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Filipp'")[0]['age'] == 50)
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Filipp'")[0]['age x'] == 50)
 
 
     mysql.execute(f"ALTER TABLE `{TEST_TABLE_NAME}` ADD `last_name` varchar(255); ")
-    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, age, last_name) VALUES ('Mary', 24, 'Smith');", commit=True)
+    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, `age x`, last_name) VALUES ('Mary', 24, 'Smith');", commit=True)
 
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 4)
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Mary'")[0]['last_name'] == 'Smith')
@@ -146,7 +146,7 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     )
 
     mysql.execute(
-        f"INSERT INTO `{TEST_TABLE_NAME}` (name, age, last_name, country) "
+        f"INSERT INTO `{TEST_TABLE_NAME}` (name, `age x`, last_name, country) "
         f"VALUES ('John', 12, 'Doe', 'USA');", commit=True,
     )
 
