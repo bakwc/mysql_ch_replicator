@@ -710,14 +710,23 @@ class MysqlToClickhouseConverter:
 
                 continue
 
-            #print(" === processing line", line)
+            line = line.strip()
+            # print(" === processing line", line)
 
-            definition = line.split(' ')
-            field_name = strip_sql_name(definition[0])
-            field_type = definition[1]
+            if line.startswith('`'):
+                end_pos = line.find('`', 1)
+                field_name = line[1:end_pos]
+                line = line[end_pos+1:].strip()
+                definition = line.split(' ')
+            else:
+                definition = line.split(' ')
+                field_name = strip_sql_name(definition[0])
+                definition = definition[1:]
+
+            field_type = definition[0]
             field_parameters = ''
-            if len(definition) > 2:
-                field_parameters = ' '.join(definition[2:])
+            if len(definition) > 1:
+                field_parameters = ' '.join(definition[1:])
 
             additional_data = None
             if 'set(' in field_type.lower():
