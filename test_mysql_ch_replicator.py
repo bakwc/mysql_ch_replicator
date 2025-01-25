@@ -23,6 +23,8 @@ CONFIG_FILE = 'tests_config.yaml'
 CONFIG_FILE_MARIADB = 'tests_config_mariadb.yaml'
 TEST_DB_NAME = 'replication-test_db'
 TEST_DB_NAME_2 = 'replication-test_db_2'
+TEST_DB_NAME_2_DESTINATION = 'replication-destination'
+
 TEST_TABLE_NAME = 'test_table'
 TEST_TABLE_NAME_2 = 'test_table_2'
 TEST_TABLE_NAME_3 = 'test_table_3'
@@ -102,7 +104,7 @@ def test_e2e_regular(config_file):
 CREATE TABLE `{TEST_TABLE_NAME}` (
     id int NOT NULL AUTO_INCREMENT,
     name varchar(255) COMMENT 'Dân tộc, ví dụ: Kinh',
-    `age x` int COMMENT 'CMND Cũ',
+    age int COMMENT 'CMND Cũ',
     field1 text,
     field2 blob,
     PRIMARY KEY (id)
@@ -110,10 +112,10 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     ''')
 
     mysql.execute(
-        f"INSERT INTO `{TEST_TABLE_NAME}` (name, `age x`, field1, field2) VALUES ('Ivan', 42, 'test1', 'test2');",
+        f"INSERT INTO `{TEST_TABLE_NAME}` (name, age, field1, field2) VALUES ('Ivan', 42, 'test1', 'test2');",
         commit=True,
     )
-    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, `age x`) VALUES ('Peter', 33);", commit=True)
+    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, age) VALUES ('Peter', 33);", commit=True)
 
     binlog_replicator_runner = BinlogReplicatorRunner(cfg_file=config_file)
     binlog_replicator_runner.run()
@@ -127,13 +129,13 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 2)
 
-    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, `age x`) VALUES ('Filipp', 50);", commit=True)
+    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, age) VALUES ('Filipp', 50);", commit=True)
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
-    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Filipp'")[0]['age x'] == 50)
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Filipp'")[0]['age'] == 50)
 
 
     mysql.execute(f"ALTER TABLE `{TEST_TABLE_NAME}` ADD `last_name` varchar(255); ")
-    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, `age x`, last_name) VALUES ('Mary', 24, 'Smith');", commit=True)
+    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, age, last_name) VALUES ('Mary', 24, 'Smith');", commit=True)
 
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 4)
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Mary'")[0]['last_name'] == 'Smith')
@@ -148,7 +150,7 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     )
 
     mysql.execute(
-        f"INSERT INTO `{TEST_TABLE_NAME}` (name, `age x`, last_name, country) "
+        f"INSERT INTO `{TEST_TABLE_NAME}` (name, age, last_name, country) "
         f"VALUES ('John', 12, 'Doe', 'USA');", commit=True,
     )
 
@@ -316,6 +318,7 @@ def test_runner():
 
     mysql.drop_database(TEST_DB_NAME_2)
     ch.drop_database(TEST_DB_NAME_2)
+    ch.drop_database(TEST_DB_NAME_2_DESTINATION)
 
     prepare_env(cfg, mysql, ch)
 
@@ -418,7 +421,7 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, "age=1912")[0]['name'] == 'Hällo')
 
     mysql.create_database(TEST_DB_NAME_2)
-    assert_wait(lambda: TEST_DB_NAME_2 in ch.get_databases())
+    assert_wait(lambda: TEST_DB_NAME_2_DESTINATION in ch.get_databases())
 
     mysql.execute(f'''
     CREATE TABLE `group` (
@@ -459,7 +462,7 @@ def test_multi_column_erase():
     )
 
     mysql.drop_database(TEST_DB_NAME_2)
-    ch.drop_database(TEST_DB_NAME_2)
+    ch.drop_database(TEST_DB_NAME_2_DESTINATION)
 
     prepare_env(cfg, mysql, ch)
 
@@ -709,6 +712,89 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
 
     db_replicator_runner.stop()
     binlog_replicator_runner.stop()
+
+
+def test_performance():
+    config_file = 'tests_config_perf.yaml'
+    num_records = 100000
+
+    cfg = config.Settings()
+    cfg.load(config_file)
+
+    mysql = mysql_api.MySQLApi(
+        database=None,
+        mysql_settings=cfg.mysql,
+    )
+
+    ch = clickhouse_api.ClickhouseApi(
+        database=TEST_DB_NAME,
+        clickhouse_settings=cfg.clickhouse,
+    )
+
+    prepare_env(cfg, mysql, ch)
+
+    mysql.execute(f'''
+    CREATE TABLE `{TEST_TABLE_NAME}` (
+        id int NOT NULL AUTO_INCREMENT,
+        name varchar(2048),
+        age int,
+        PRIMARY KEY (id)
+    ); 
+        ''')
+
+    binlog_replicator_runner = BinlogReplicatorRunner(cfg_file=config_file)
+    binlog_replicator_runner.run()
+
+    time.sleep(1)
+
+    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, age) VALUES ('TEST_VALUE_1', 33);", commit=True)
+
+    def _get_last_insert_name():
+        record = get_last_insert_from_binlog(cfg=cfg, db_name=TEST_DB_NAME)
+        if record is None:
+            return None
+        return record[1].decode('utf-8')
+
+    assert_wait(lambda: _get_last_insert_name() == 'TEST_VALUE_1', retry_interval=0.5)
+
+    binlog_replicator_runner.stop()
+
+    time.sleep(1)
+
+    print("populating mysql data")
+
+    base_value = 'a' * 2000
+
+    for i in range(num_records):
+        if i % 2000 == 0:
+            print(f'populated {i} elements')
+        mysql.execute(
+            f"INSERT INTO `{TEST_TABLE_NAME}` (name, age) "
+            f"VALUES ('TEST_VALUE_{i}_{base_value}', {i});", commit=i % 20 == 0,
+        )
+
+    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, age) VALUES ('TEST_VALUE_FINAL', 0);", commit=True)
+
+    print("running db_replicator")
+    t1 = time.time()
+    binlog_replicator_runner = BinlogReplicatorRunner(cfg_file=config_file)
+    binlog_replicator_runner.run()
+
+    assert_wait(lambda: _get_last_insert_name() == 'TEST_VALUE_FINAL', retry_interval=0.5, max_wait_time=1000)
+    t2 = time.time()
+
+    binlog_replicator_runner.stop()
+
+    time_delta = t2 - t1
+    rps = num_records / time_delta
+
+    print('\n\n')
+    print("*****************************")
+    print("records per second:", int(rps))
+    print("total time (seconds):", round(time_delta, 2))
+    print("*****************************")
+    print('\n\n')
+
 
 
 def test_different_types_1():

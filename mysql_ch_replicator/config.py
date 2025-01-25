@@ -111,6 +111,7 @@ class Settings:
         self.http_host = ''
         self.http_port = 0
         self.types_mapping = {}
+        self.target_databases = {}
 
     def load(self, settings_file):
         data = open(settings_file, 'r').read()
@@ -134,6 +135,7 @@ class Settings:
         self.types_mapping = data.pop('types_mapping', {})
         self.http_host = data.pop('http_host', '')
         self.http_port = data.pop('http_port', 0)
+        self.target_databases = data.pop('target_databases', {})
 
         indexes = data.pop('indexes', [])
         for index in indexes:
@@ -191,3 +193,5 @@ class Settings:
         self.clickhouse.validate()
         self.binlog_replicator.validate()
         self.validate_log_level()
+        if not isinstance(self.target_databases, dict):
+            raise ValueError(f'wrong target databases {self.target_databases}')
