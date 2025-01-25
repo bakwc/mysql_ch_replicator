@@ -181,7 +181,9 @@ def convert_timestamp_to_datetime64(input_str):
 class MysqlToClickhouseConverter:
     def __init__(self, db_replicator: 'DbReplicator' = None):
         self.db_replicator = db_replicator
-        self.types_mapping = db_replicator.config.types_mapping
+        self.types_mapping = {}
+        if self.db_replicator is not None:
+            self.types_mapping = db_replicator.config.types_mapping
 
     def convert_type(self, mysql_type, parameters):
         is_unsigned = 'unsigned' in parameters.lower()
