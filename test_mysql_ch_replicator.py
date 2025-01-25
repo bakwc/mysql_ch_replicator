@@ -4,6 +4,8 @@ import shutil
 import time
 import subprocess
 import json
+import uuid
+
 import pytest
 import requests
 
@@ -890,13 +892,14 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     test3 binary(16),
     test4 set('1','2','3','4','5','6','7'),
     test5 timestamp(0),
+    test6 char(36),
     PRIMARY KEY (id)
 ); 
     ''')
 
     mysql.execute(
-        f"INSERT INTO `{TEST_TABLE_NAME}` (test1, test2, test3, test4, test5) VALUES "
-        f"(0, POINT(10.0, 20.0), 'azaza', '1,3,5', '2023-08-15 14:30:00');",
+        f"INSERT INTO `{TEST_TABLE_NAME}` (test1, test2, test3, test4, test5, test6) VALUES "
+        f"(0, POINT(10.0, 20.0), 'azaza', '1,3,5', '2023-08-15 14:30:00', '550e8400-e29b-41d4-a716-446655440000');",
         commit=True,
     )
 
@@ -913,8 +916,8 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1)
 
     mysql.execute(
-        f"INSERT INTO `{TEST_TABLE_NAME}` (test1, test2, test4, test5) VALUES "
-        f"(1, POINT(15.0, 14.0), '2,4,5', '2023-08-15 14:40:00');",
+        f"INSERT INTO `{TEST_TABLE_NAME}` (test1, test2, test4, test5, test6) VALUES "
+        f"(1, POINT(15.0, 14.0), '2,4,5', '2023-08-15 14:40:00', '110e6103-e39b-51d4-a716-826755413099');",
         commit=True,
     )
 
@@ -931,6 +934,8 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     value = ch.select(TEST_TABLE_NAME, 'test1=True')[0]['test5']
     assert isinstance(value, datetime.datetime)
     assert str(value) == '2023-08-15 14:40:00+00:00'
+
+    assert ch.select(TEST_TABLE_NAME, 'test1=True')[0]['test6'] == uuid.UUID('110e6103-e39b-51d4-a716-826755413099')
 
     mysql.execute(
         f"INSERT INTO `{TEST_TABLE_NAME}` (test1, test2) VALUES "

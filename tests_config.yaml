@@ -27,3 +27,6 @@ indexes:
 
 http_host: 'localhost'
 http_port: 9128
+
+types_mapping:
+  'char(36)': 'UUID'

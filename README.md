@@ -170,6 +170,10 @@ indexes:                        # optional
 http_host: '0.0.0.0'    # optional
 http_port: 9128         # optional
 
+types_mapping:          # optional
+  'char(36)': 'UUID'
+
+
 ```
 
 #### Required settings
@@ -188,6 +192,7 @@ http_port: 9128         # optional
 - `auto_restart_interval` - interval (seconds) between automatic db_replicator restart. Default 3600 (1 hour). This is done to reduce memory usage.
 - `indexes` - you may want to add some indexes to accelerate performance, eg. ngram index for full-test search, etc. To apply indexes you need to start replication from scratch.
 - `http_host`, `http_port` - http endpoint to control replication, use `/docs` for abailable commands
+- `types_mappings` - custom types mapping, eg. you can map char(36) to UUID instead of String, etc.
 
 Few more tables / dbs examples:
 
