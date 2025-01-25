@@ -68,6 +68,7 @@ class State:
             'tables_structure': self.tables_structure,
             'tables': self.tables,
             'pid': os.getpid(),
+            'save_time': time.time(),
         })
         with open(file_name + '.tmp', 'wb') as f:
             f.write(data)
@@ -108,7 +109,19 @@ class DbReplicator:
     def __init__(self, config: Settings, database: str, target_database: str = None, initial_only: bool = False):
         self.config = config
         self.database = database
-        self.target_database = target_database or database
+
+        # use same as source database by default
+        self.target_database = database
+
+        # use target database from config file if exists
+        target_database_from_config = config.target_databases.get(database)
+        if target_database_from_config:
+            self.target_database = target_database_from_config
+
+        # use command line argument if exists
+        if target_database:
+            self.target_database = target_database
+
         self.target_database_tmp = self.target_database + '_tmp'
         self.initial_only = initial_only
 
