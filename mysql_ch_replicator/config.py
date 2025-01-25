@@ -110,6 +110,7 @@ class Settings:
         self.auto_restart_interval = 0
         self.http_host = ''
         self.http_port = 0
+        self.types_mapping = {}
         self.target_databases = {}
 
     def load(self, settings_file):
@@ -131,6 +132,7 @@ class Settings:
         self.auto_restart_interval = data.pop(
             'auto_restart_interval', Settings.DEFAULT_AUTO_RESTART_INTERVAL,
         )
+        self.types_mapping = data.pop('types_mapping', {})
         self.http_host = data.pop('http_host', '')
         self.http_port = data.pop('http_port', 0)
         self.target_databases = data.pop('target_databases', {})
