@@ -1,5 +1,6 @@
 import struct
 import json
+import uuid
 import sqlparse
 import re
 from pyparsing import Suppress, CaselessKeyword, Word, alphas, alphanums, delimitedList
@@ -180,9 +181,16 @@ def convert_timestamp_to_datetime64(input_str):
 class MysqlToClickhouseConverter:
     def __init__(self, db_replicator: 'DbReplicator' = None):
         self.db_replicator = db_replicator
+        self.types_mapping = {}
+        if self.db_replicator is not None:
+            self.types_mapping = db_replicator.config.types_mapping
 
     def convert_type(self, mysql_type, parameters):
         is_unsigned = 'unsigned' in parameters.lower()
+
+        result_type = self.types_mapping.get(mysql_type)
+        if result_type is not None:
+            return result_type
 
         if mysql_type == 'point':
             return 'Tuple(x Float32, y Float32)'
@@ -329,6 +337,12 @@ class MysqlToClickhouseConverter:
                     clickhouse_field_value = json.dumps(convert_bytes(clickhouse_field_value))
 
             if clickhouse_field_value is not None:
+                if 'UUID' in clickhouse_field_type:
+                    if len(clickhouse_field_value) == 36:
+                        if isinstance(clickhouse_field_value, bytes):
+                            clickhouse_field_value = clickhouse_field_value.decode('utf-8')
+                        clickhouse_field_value = uuid.UUID(clickhouse_field_value).bytes
+
                 if 'UInt16' in clickhouse_field_type and clickhouse_field_value < 0:
                     clickhouse_field_value = 65536 + clickhouse_field_value
                 if 'UInt8' in clickhouse_field_type and clickhouse_field_value < 0:
