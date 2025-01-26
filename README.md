@@ -120,7 +120,7 @@ If you just need to copy data once, and don't need continuous synchronization fo
 2. Run one-time data copy:
 
 ```bash
-mysql_ch_replicator --config config.yaml db_replicator --database mysql_db_name --initial_only=True
+mysql_ch_replicator --config config.yaml db_replicator --db mysql_db_name --initial_only=True
 ```
 Where `mysql_db_name` is the name of the database you want to copy.
 
