@@ -192,7 +192,7 @@ class ClickhouseApi:
                     try:
                         e.timestamp()
                     except ValueError:
-                        e = 0
+                        e = datetime.datetime(1970, 1, 1)
                 if table_structure is not None:
                     field: TableField = table_structure.fields[i]
                     is_datetime = (
