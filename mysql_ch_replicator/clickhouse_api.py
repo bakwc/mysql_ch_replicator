@@ -182,6 +182,9 @@ class ClickhouseApi:
         if not records:
             return
 
+        if not isinstance(records, list):
+            records = list(records)
+        
         process_indices = []
         if table_structure:
             for i, field in enumerate(table_structure.fields):
@@ -194,8 +197,9 @@ class ClickhouseApi:
                     process_indices.append(i)
                 
         for j, record in enumerate(records):
-            record = list(record)
-            records[j] = record
+            if not isinstance(record, list):
+                record = list(record)
+                records[j] = record
 
             for i in process_indices:
                 e = record[i]
