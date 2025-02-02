@@ -269,7 +269,7 @@ class DbReplicator:
         self.clickhouse_api.database = self.target_database
         logger.info(f'initial replication - done')
 
-        def to_date_if_str(self, value):
+    def to_date_if_str(self, value):
         if not isinstance(value, str):
             return value
 
