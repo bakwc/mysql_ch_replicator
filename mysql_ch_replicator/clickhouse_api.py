@@ -194,7 +194,7 @@ class ClickhouseApi:
                     process_indices.append(i)
                 
         for j, record in enumerate(records):
-            if isinstance(record, tuple):
+            if isinstance(record, (tuple, dict_values)):
                 record = list(record)
                 records[j] = record
 
