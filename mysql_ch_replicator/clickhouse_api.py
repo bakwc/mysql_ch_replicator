@@ -62,6 +62,9 @@ class GeneralStats:
         if is_insert:
             targets.append(self.general.inserts)
             targets.append(self.table_stats[table_name].inserts)
+        else:
+            targets.append(self.general.erases)
+            targets.append(self.table_stats[table_name].erases)
 
         for target in targets:
             target.duration += duration
@@ -253,7 +256,7 @@ class ClickhouseApi:
         self.stats.on_event(
             table_name=table_name,
             duration=duration,
-            is_insert=True,
+            is_insert=False,
             records=len(field_values),
         )
 
