@@ -241,7 +241,7 @@ class ClickhouseApi:
             table_name=table_name,
             duration=duration,
             is_insert=True,
-            records=len(records_to_insert),
+            records=len(records),
         )
 
         self.set_last_used_version(table_name, current_version)
