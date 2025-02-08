@@ -981,13 +981,14 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     test4 set('1','2','3','4','5','6','7'),
     test5 timestamp(0),
     test6 char(36),
+    test7 ENUM('point', 'qwe', 'def'),
     PRIMARY KEY (id)
 ); 
     ''')
 
     mysql.execute(
-        f"INSERT INTO `{TEST_TABLE_NAME}` (test1, test2, test3, test4, test5, test6) VALUES "
-        f"(0, POINT(10.0, 20.0), 'azaza', '1,3,5', '2023-08-15 14:30:00', '550e8400-e29b-41d4-a716-446655440000');",
+        f"INSERT INTO `{TEST_TABLE_NAME}` (test1, test2, test3, test4, test5, test6, test7) VALUES "
+        f"(0, POINT(10.0, 20.0), 'azaza', '1,3,5', '2023-08-15 14:30:00', '550e8400-e29b-41d4-a716-446655440000', 'def');",
         commit=True,
     )
 
@@ -1004,8 +1005,8 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1)
 
     mysql.execute(
-        f"INSERT INTO `{TEST_TABLE_NAME}` (test1, test2, test4, test5, test6) VALUES "
-        f"(1, POINT(15.0, 14.0), '2,4,5', '2023-08-15 14:40:00', '110e6103-e39b-51d4-a716-826755413099');",
+        f"INSERT INTO `{TEST_TABLE_NAME}` (test1, test2, test4, test5, test6, test7) VALUES "
+        f"(1, POINT(15.0, 14.0), '2,4,5', '2023-08-15 14:40:00', '110e6103-e39b-51d4-a716-826755413099', 'point');",
         commit=True,
     )
 
@@ -1013,7 +1014,9 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME, 'test1=True')) == 1)
 
     assert ch.select(TEST_TABLE_NAME, 'test1=True')[0]['test2']['x'] == 15.0
+    assert ch.select(TEST_TABLE_NAME, 'test1=True')[0]['test7'] == 'point'
     assert ch.select(TEST_TABLE_NAME, 'test1=False')[0]['test2']['y'] == 20.0
+    assert ch.select(TEST_TABLE_NAME, 'test1=False')[0]['test7'] == 'def'
     assert ch.select(TEST_TABLE_NAME, 'test1=False')[0]['test3'] == 'azaza\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00'
 
     assert ch.select(TEST_TABLE_NAME, 'test1=True')[0]['test4'] == '2,4,5'
