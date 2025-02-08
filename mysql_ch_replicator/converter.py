@@ -6,6 +6,7 @@ import re
 from pyparsing import Suppress, CaselessKeyword, Word, alphas, alphanums, delimitedList
 
 from .table_structure import TableStructure, TableField
+from .converter_enum_parser import parse_mysql_enum
 
 
 CHARSET_MYSQL_TO_PYTHON = {
@@ -239,8 +240,14 @@ class MysqlToClickhouseConverter:
             return 'String'
         if 'varchar' in mysql_type:
             return 'String'
-        if 'enum' in mysql_type:
-            return 'String'
+        if mysql_type.startswith('enum'):
+            enum_values = parse_mysql_enum(mysql_type)
+            ch_enum_values = []
+            for idx, value_name in enumerate(enum_values):
+                ch_enum_values.append(f"'{value_name}' = {idx+1}")
+            ch_enum_values = ', '.join(ch_enum_values)
+            # Enum8('red' = 1, 'green' = 2, 'black' = 3)
+            return f'Enum8({ch_enum_values})'
         if 'text' in mysql_type:
             return 'String'
         if 'blob' in mysql_type:
@@ -376,8 +383,12 @@ class MysqlToClickhouseConverter:
                         ]
                     clickhouse_field_value = ','.join(clickhouse_field_value)
 
-            if 'point' in mysql_field_type:
+            if mysql_field_type.startswith('point'):
                 clickhouse_field_value = parse_mysql_point(clickhouse_field_value)
+
+            if mysql_field_type.startswith('enum(') and isinstance(clickhouse_field_value, int):
+                enum_values = mysql_structure.fields[idx].additional_data
+                clickhouse_field_value = enum_values[int(clickhouse_field_value)-1]
 
             clickhouse_record.append(clickhouse_field_value)
         return tuple(clickhouse_record)
@@ -744,6 +755,9 @@ class MysqlToClickhouseConverter:
                     return e
                 vals = [vstrip(v) for v in vals]
                 additional_data = vals
+
+            if field_type.lower().startswith('enum('):
+                additional_data = parse_mysql_enum(field_type)
 
             structure.fields.append(TableField(
                 name=field_name,
