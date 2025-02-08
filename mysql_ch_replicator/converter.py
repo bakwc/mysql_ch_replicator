@@ -465,9 +465,6 @@ class MysqlToClickhouseConverter:
         if len(tokens) < 2:
             raise Exception('wrong tokens count', tokens)
 
-        if ',' in ' '.join(tokens):
-            raise Exception('add multiple columns not implemented', tokens)
-
         column_after = None
         column_first = False
         if tokens[-2].lower() == 'after':
@@ -522,9 +519,6 @@ class MysqlToClickhouseConverter:
             self.db_replicator.clickhouse_api.execute_command(query)
 
     def __convert_alter_table_drop_column(self, db_name, table_name, tokens):
-        if ',' in ' '.join(tokens):
-            raise Exception('add multiple columns not implemented', tokens)
-
         if len(tokens) != 1:
             raise Exception('wrong tokens count', tokens)
 
@@ -546,9 +540,6 @@ class MysqlToClickhouseConverter:
     def __convert_alter_table_modify_column(self, db_name, table_name, tokens):
         if len(tokens) < 2:
             raise Exception('wrong tokens count', tokens)
-
-        if ',' in ' '.join(tokens):
-            raise Exception('add multiple columns not implemented', tokens)
 
         column_name = strip_sql_name(tokens[0])
         column_type_mysql = tokens[1]
@@ -577,9 +568,6 @@ class MysqlToClickhouseConverter:
     def __convert_alter_table_change_column(self, db_name, table_name, tokens):
         if len(tokens) < 3:
             raise Exception('wrong tokens count', tokens)
-
-        if ',' in ' '.join(tokens):
-            raise Exception('add multiple columns not implemented', tokens)
 
         column_name = strip_sql_name(tokens[0])
         new_column_name = strip_sql_name(tokens[1])
