@@ -258,10 +258,9 @@ class RowsEvent(BinLogEvent):
         elif column.type == FIELD_TYPE.YEAR:
             return self.packet.read_uint8() + 1900
         elif column.type == FIELD_TYPE.ENUM:
-            if column.enum_values:
-                return column.enum_values[self.packet.read_uint_by_size(column.size)]
-            self.packet.read_uint_by_size(column.size)
-            return None
+            # if column.enum_values:
+            #     return column.enum_values[self.packet.read_uint_by_size(column.size)]
+            return self.packet.read_uint_by_size(column.size)
         elif column.type == FIELD_TYPE.SET:
             bit_mask = self.packet.read_uint_by_size(column.size)
             if column.set_values:
