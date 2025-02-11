@@ -95,12 +95,30 @@ class MySQLApi:
 
     def get_records(self, table_name, order_by, limit, start_value=None):
         self.reconnect_if_required()
-        order_by = ','.join(order_by)
+        order_by_str = ','.join(order_by)
         where = ''
+
         if start_value is not None:
-            start_value = ','.join(map(str, start_value))
-            where = f'WHERE ({order_by}) > ({start_value}) '
-        query = f'SELECT * FROM `{table_name}` {where}ORDER BY {order_by} LIMIT {limit}'
+            or_clauses = []
+
+            for i in range(len(order_by)):
+                eq_parts = []
+
+                for j in range(i):
+                    eq_parts.append(f"{order_by[j]} = {start_value[j]}")
+                
+                gt_part = f"{order_by[i]} > {start_value[i]}"
+                
+                if eq_parts:
+                    clause = f"({' AND '.join(eq_parts)} AND {gt_part})"
+                else:
+                    clause = f"({gt_part})"
+                
+                or_clauses.append(clause)
+            where = f"WHERE {' OR '.join(or_clauses)} "
+
+        query = f'SELECT * FROM `{table_name}` {where}ORDER BY {order_by_str} LIMIT {limit}'
+
         self.cursor.execute(query)
         res = self.cursor.fetchall()
         records = [x for x in res]
