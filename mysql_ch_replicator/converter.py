@@ -196,6 +196,44 @@ class MysqlToClickhouseConverter:
         if mysql_type == 'point':
             return 'Tuple(x Float32, y Float32)'
 
+        # Correctly handle numeric types
+        if mysql_type.startswith('numeric'):
+            # Determine if parameters are specified via parentheses:
+            if '(' in mysql_type and ')' in mysql_type:
+                # Expecting a type definition like "numeric(precision, scale)"
+                pattern = r"numeric\((\d+)\s*,\s*(\d+)\)"
+                match = re.search(pattern, mysql_type)
+                if not match:
+                    raise ValueError(f"Invalid numeric type definition: {mysql_type}")
+
+                precision = int(match.group(1))
+                scale = int(match.group(2))
+            else:
+                # If no parentheses are provided, assume defaults.
+                precision = 10  # or other default as defined by your standards
+                scale = 0
+
+            # If no fractional part, consider mapping to integer type (if desired)
+            if scale == 0:
+                if is_unsigned:
+                    if precision <= 9:
+                        return "UInt32"
+                    elif precision <= 18:
+                        return "UInt64"
+                    else:
+                        # For very large precisions, fallback to Decimal
+                        return f"Decimal({precision}, {scale})"
+                else:
+                    if precision <= 9:
+                        return "Int32"
+                    elif precision <= 18:
+                        return "Int64"
+                    else:
+                        return f"Decimal({precision}, {scale})"
+            else:
+                # For types with a defined fractional part, use a Decimal mapping.
+                return f"Decimal({precision}, {scale})"
+
         if mysql_type == 'int':
             if is_unsigned:
                 return 'UInt32'
@@ -472,7 +510,69 @@ class MysqlToClickhouseConverter:
 
             raise Exception(f'operation {op_name} not implement, query: {subquery}')
 
+    @classmethod
+    def _tokenize_alter_query(cls, sql_line):
+        # We want to recognize tokens that may be:
+        # 1. A backquoted identifier that can optionally be immediately followed by parentheses.
+        # 2. A plain word (letters/digits/underscore) that may immediately be followed by a parenthesized argument list.
+        # 3. A single-quoted or double-quoted string.
+        # 4. Or, if nothing else, any non‐whitespace sequence.
+        #
+        # The order is important: for example, if a word is immediately followed by parentheses,
+        # we want to grab it as a single token.
+        token_pattern = re.compile(r'''
+             (                           # start capture group for a token 
+               `[^`]+`(?:\([^)]*\))?      |   # backquoted identifier w/ optional parentheses
+               \w+(?:\([^)]*\))?          |   # a word with optional parentheses
+               '(?:\\'|[^'])*'           |   # a single-quoted string
+               "(?:\\"|[^"])*"           |   # a double-quoted string
+               [^\s]+                      # fallback: any sequence of non-whitespace characters
+             )
+             ''', re.VERBOSE)
+        tokens = token_pattern.findall(sql_line)
+
+        # Now, split the column definition into:
+        #   token0 = column name,
+        #   token1 = data type (which might be multiple tokens, e.g. DOUBLE PRECISION, INT UNSIGNED,
+        #            or a word+parentheses like VARCHAR(254) or NUMERIC(5, 2)),
+        #   remaining tokens: the parameters such as DEFAULT, NOT, etc.
+        #
+        # We define a set of keywords that indicate the start of column options.
+        constraint_keywords = {
+            "DEFAULT", "NOT", "NULL", "AUTO_INCREMENT", "PRIMARY", "UNIQUE",
+            "COMMENT", "COLLATE", "REFERENCES", "ON", "CHECK", "CONSTRAINT",
+            "AFTER", "BEFORE", "GENERATED", "VIRTUAL", "STORED", "FIRST",
+            "ALWAYS", "AS", "IDENTITY", "INVISIBLE", "PERSISTED",
+        }
+
+        if not tokens:
+            return tokens
+        # The first token is always the column name.
+        column_name = tokens[0]
+
+        # Now “merge” tokens after the column name that belong to the type.
+        # (For many types the type is written as a single token already –
+        #  e.g. "VARCHAR(254)" or "NUMERIC(5, 2)", but for types like
+        #  "DOUBLE PRECISION" or "INT UNSIGNED" the .split() would produce two tokens.)
+        type_tokens = []
+        i = 1
+        while i < len(tokens) and tokens[i].upper() not in constraint_keywords:
+            type_tokens.append(tokens[i])
+            i += 1
+        merged_type = " ".join(type_tokens) if type_tokens else ""
+
+        # The remaining tokens are passed through unchanged.
+        param_tokens = tokens[i:]
+
+        # Result: [column name, merged type, all the rest]
+        if merged_type:
+            return [column_name, merged_type] + param_tokens
+        else:
+            return [column_name] + param_tokens
+
     def __convert_alter_table_add_column(self, db_name, table_name, tokens):
+        tokens = self._tokenize_alter_query(' '.join(tokens))
+
         if len(tokens) < 2:
             raise Exception('wrong tokens count', tokens)
 
