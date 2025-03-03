@@ -1523,7 +1523,8 @@ def test_alter_tokens_split():
          ["col", "DATETIME", "DEFAULT", "CURRENT_TIMESTAMP", "ON", "UPDATE", "CURRENT_TIMESTAMP"]),
         # type with a COMMENT clause (here the type is given, then a parameter keyword)
         ("col VARCHAR(100) COMMENT 'This is a test comment'",
-         ["col", "VARCHAR(100)", "COMMENT", "'This is a test comment'"])
+         ["col", "VARCHAR(100)", "COMMENT", "'This is a test comment'"]),
+        ("c1 INT FIRST", ["c1", "INT", "FIRST"]),
     ]
 
     for sql, expected in examples:

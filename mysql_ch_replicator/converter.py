@@ -541,7 +541,8 @@ class MysqlToClickhouseConverter:
         constraint_keywords = {
             "DEFAULT", "NOT", "NULL", "AUTO_INCREMENT", "PRIMARY", "UNIQUE",
             "COMMENT", "COLLATE", "REFERENCES", "ON", "CHECK", "CONSTRAINT",
-            "AFTER", "BEFORE", "GENERATED", "VIRTUAL", "STORED"
+            "AFTER", "BEFORE", "GENERATED", "VIRTUAL", "STORED", "FIRST",
+            "ALWAYS", "AS", "IDENTITY", "INVISIBLE", "PERSISTED",
         }
 
         if not tokens:
