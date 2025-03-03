@@ -5,6 +5,7 @@ import time
 import subprocess
 import json
 import uuid
+import decimal
 
 import pytest
 import requests
@@ -275,6 +276,12 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
 
     mysql.execute(f"DELETE FROM `{TEST_TABLE_NAME}` WHERE name='Ivan';", commit=True)
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1)
+
+    mysql.execute(f"ALTER TABLE `{TEST_TABLE_NAME}` ADD factor NUMERIC(5, 2) DEFAULT NULL;")
+    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, age, factor) VALUES ('Snow', 31, 13.29);", commit=True)
+
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 2)
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Snow'")[0].get('factor') == decimal.Decimal('13.29'))
 
     mysql.execute(
         f"CREATE TABLE {TEST_TABLE_NAME_2} "
@@ -1493,3 +1500,37 @@ def test_performance_dbreplicator():
     print("*****************************")
     print('\n\n')
 
+
+def test_alter_tokens_split():
+    examples = [
+        # basic examples from the prompt:
+        ("test_name VARCHAR(254) NULL", ["test_name", "VARCHAR(254)", "NULL"]),
+        ("factor NUMERIC(5, 2) DEFAULT NULL", ["factor", "NUMERIC(5, 2)", "DEFAULT", "NULL"]),
+        # backquoted column name:
+        ("`test_name` VARCHAR(254) NULL", ["`test_name`", "VARCHAR(254)", "NULL"]),
+        ("`order` INT NOT NULL", ["`order`", "INT", "NOT", "NULL"]),
+        # type that contains a parenthesized list with quoted values:
+        ("status ENUM('active','inactive') DEFAULT 'active'",
+         ["status", "ENUM('active','inactive')", "DEFAULT", "'active'"]),
+        # multi‐word type definitions:
+        ("col DOUBLE PRECISION DEFAULT 0", ["col", "DOUBLE PRECISION", "DEFAULT", "0"]),
+        ("col INT UNSIGNED DEFAULT 0", ["col", "INT UNSIGNED", "DEFAULT", "0"]),
+        # a case with a quoted string containing spaces and punctuation:
+        ("message VARCHAR(100) DEFAULT 'Hello, world!'",
+         ["message", "VARCHAR(100)", "DEFAULT", "'Hello, world!'"]),
+        # longer definition with more options:
+        ("col DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+         ["col", "DATETIME", "DEFAULT", "CURRENT_TIMESTAMP", "ON", "UPDATE", "CURRENT_TIMESTAMP"]),
+        # type with a COMMENT clause (here the type is given, then a parameter keyword)
+        ("col VARCHAR(100) COMMENT 'This is a test comment'",
+         ["col", "VARCHAR(100)", "COMMENT", "'This is a test comment'"])
+    ]
+
+    for sql, expected in examples:
+        result = MysqlToClickhouseConverter._tokenize_alter_query(sql)
+        print("SQL Input:  ", sql)
+        print("Expected:   ", expected)
+        print("Tokenized:  ", result)
+        print("Match?     ", result == expected)
+        print("-" * 60)
+        assert result == expected
