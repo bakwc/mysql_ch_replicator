@@ -46,7 +46,6 @@ def _extract_parenthesized_content(s, start_index):
     ', " or `) and also to skip over escape sequences in single/double quotes.
     (Backticks do not process backslash escapes.)
     """
-
     if s[start_index] != "(":
         raise ValueError("Expected '(' at position {}".format(start_index))
     depth = 1
@@ -95,15 +94,12 @@ def _extract_parenthesized_content(s, start_index):
                 i += 1
                 if depth == 0:
                     # Return the substring inside (excluding the outer parentheses)
-                    result = s[content_start : i - 1]
-                    return result, i
+                    return s[content_start : i - 1], i
                 continue
             else:
                 i += 1
 
-    raise ValueError(
-        "Unbalanced parentheses in enum definition at position {} in {!r}".format(i, s)
-    )
+    raise ValueError("Unbalanced parentheses in enum definition")
 
 
 def _parse_enum_values(content):
@@ -181,7 +177,7 @@ def _parse_enum_values(content):
         # Skip whitespace after the literal.
         while i < len(content) and content[i].isspace():
             i += 1
-        # If there's a comma, skip it; otherwise, we must be at the end.
+        # If there’s a comma, skip it; otherwise, we must be at the end.
         if i < len(content):
             if content[i] == ",":
                 i += 1
