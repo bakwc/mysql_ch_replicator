@@ -284,8 +284,12 @@ class MysqlToClickhouseConverter:
             for idx, value_name in enumerate(enum_values):
                 ch_enum_values.append(f"'{value_name}' = {idx+1}")
             ch_enum_values = ', '.join(ch_enum_values)
-            # Enum8('red' = 1, 'green' = 2, 'black' = 3)
-            return f'Enum8({ch_enum_values})'
+            if len(enum_values) <= 127:
+                # Enum8('red' = 1, 'green' = 2, 'black' = 3)
+                return f'Enum8({ch_enum_values})'
+            else:
+                # Enum16('red' = 1, 'green' = 2, 'black' = 3)
+                return f'Enum16({ch_enum_values})'
         if 'text' in mysql_type:
             return 'String'
         if 'blob' in mysql_type:
