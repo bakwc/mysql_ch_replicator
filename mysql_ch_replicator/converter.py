@@ -284,8 +284,12 @@ class MysqlToClickhouseConverter:
             for idx, value_name in enumerate(enum_values):
                 ch_enum_values.append(f"'{value_name}' = {idx+1}")
             ch_enum_values = ', '.join(ch_enum_values)
-            # Enum8('red' = 1, 'green' = 2, 'black' = 3)
-            return f'Enum8({ch_enum_values})'
+            if len(enum_values) <= 127:
+                # Enum8('red' = 1, 'green' = 2, 'black' = 3)
+                return f'Enum8({ch_enum_values})'
+            else:
+                # Enum16('red' = 1, 'green' = 2, 'black' = 3)
+                return f'Enum16({ch_enum_values})'
         if 'text' in mysql_type:
             return 'String'
         if 'blob' in mysql_type:
@@ -550,7 +554,7 @@ class MysqlToClickhouseConverter:
         # The first token is always the column name.
         column_name = tokens[0]
 
-        # Now “merge” tokens after the column name that belong to the type.
+        # Now "merge" tokens after the column name that belong to the type.
         # (For many types the type is written as a single token already –
         #  e.g. "VARCHAR(254)" or "NUMERIC(5, 2)", but for types like
         #  "DOUBLE PRECISION" or "INT UNSIGNED" the .split() would produce two tokens.)
@@ -829,17 +833,90 @@ class MysqlToClickhouseConverter:
             if line.startswith('`'):
                 end_pos = line.find('`', 1)
                 field_name = line[1:end_pos]
-                line = line[end_pos+1:].strip()
-                definition = line.split(' ')
+                line = line[end_pos + 1 :].strip()
+                # Don't split by space for enum and set types that might contain spaces
+                if line.lower().startswith('enum(') or line.lower().startswith('set('):
+                    # Find the end of the enum/set definition (closing parenthesis)
+                    open_parens = 0
+                    in_quotes = False
+                    quote_char = None
+                    end_pos = -1
+
+                    for i, char in enumerate(line):
+                        if char in "'\"" and (i == 0 or line[i - 1] != "\\"):
+                            if not in_quotes:
+                                in_quotes = True
+                                quote_char = char
+                            elif char == quote_char:
+                                in_quotes = False
+                        elif char == '(' and not in_quotes:
+                            open_parens += 1
+                        elif char == ')' and not in_quotes:
+                            open_parens -= 1
+                            if open_parens == 0:
+                                end_pos = i + 1
+                                break
+
+                    if end_pos > 0:
+                        field_type = line[:end_pos]
+                        field_parameters = line[end_pos:].strip()
+                    else:
+                        # Fallback to original behavior if we can't find the end
+                        definition = line.split(' ')
+                        field_type = definition[0]
+                        field_parameters = (
+                            ' '.join(definition[1:]) if len(definition) > 1 else ''
+                        )
+                else:
+                    definition = line.split(' ')
+                    field_type = definition[0]
+                    field_parameters = (
+                        ' '.join(definition[1:]) if len(definition) > 1 else ''
+                    )    
             else:
                 definition = line.split(' ')
                 field_name = strip_sql_name(definition[0])
                 definition = definition[1:]
+                if definition and (
+                    definition[0].lower().startswith('enum(')
+                    or definition[0].lower().startswith('set(')
+                ):
+                    line = ' '.join(definition)
+                    # Find the end of the enum/set definition (closing parenthesis)
+                    open_parens = 0
+                    in_quotes = False
+                    quote_char = None
+                    end_pos = -1
 
-            field_type = definition[0]
-            field_parameters = ''
-            if len(definition) > 1:
-                field_parameters = ' '.join(definition[1:])
+                    for i, char in enumerate(line):
+                        if char in "'\"" and (i == 0 or line[i - 1] != "\\"):
+                            if not in_quotes:
+                                in_quotes = True
+                                quote_char = char
+                            elif char == quote_char:
+                                in_quotes = False
+                        elif char == '(' and not in_quotes:
+                            open_parens += 1
+                        elif char == ')' and not in_quotes:
+                            open_parens -= 1
+                            if open_parens == 0:
+                                end_pos = i + 1
+                                break
+
+                    if end_pos > 0:
+                        field_type = line[:end_pos]
+                        field_parameters = line[end_pos:].strip()
+                    else:
+                        # Fallback to original behavior
+                        field_type = definition[0]
+                        field_parameters = (
+                            ' '.join(definition[1:]) if len(definition) > 1 else ''
+                        )
+                else:
+                    field_type = definition[0]
+                    field_parameters = (
+                        ' '.join(definition[1:]) if len(definition) > 1 else ''
+                    )    
 
             additional_data = None
             if 'set(' in field_type.lower():
