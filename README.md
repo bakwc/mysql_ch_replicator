@@ -241,6 +241,10 @@ sudo docker compose -f docker-compose-tests.yaml up
 ```bash
 sudo docker exec -w /app/ -it mysql_ch_replicator-replicator-1 python3 -m pytest -v -s test_mysql_ch_replicator.py
 ```
+3. To run a single test:
+```bash
+sudo docker exec -w /app/ -it mysql_ch_replicator-replicator-1 python3 -m pytest -v -s test_mysql_ch_replicator.py -k test_your_test_name
+```
 
 ## Contribution
 
