@@ -554,7 +554,7 @@ class MysqlToClickhouseConverter:
         # The first token is always the column name.
         column_name = tokens[0]
 
-        # Now “merge” tokens after the column name that belong to the type.
+        # Now "merge" tokens after the column name that belong to the type.
         # (For many types the type is written as a single token already –
         #  e.g. "VARCHAR(254)" or "NUMERIC(5, 2)", but for types like
         #  "DOUBLE PRECISION" or "INT UNSIGNED" the .split() would produce two tokens.)
@@ -872,7 +872,7 @@ class MysqlToClickhouseConverter:
                     field_type = definition[0]
                     field_parameters = (
                         ' '.join(definition[1:]) if len(definition) > 1 else ''
-                    )
+                    )    
             else:
                 definition = line.split(' ')
                 field_name = strip_sql_name(definition[0])
@@ -917,10 +917,6 @@ class MysqlToClickhouseConverter:
                     field_parameters = (
                         ' '.join(definition[1:]) if len(definition) > 1 else ''
                     )    
-            field_type = definition[0]
-            field_parameters = ''
-            if len(definition) > 1:
-                field_parameters = ' '.join(definition[1:])
 
             additional_data = None
             if 'set(' in field_type.lower():
