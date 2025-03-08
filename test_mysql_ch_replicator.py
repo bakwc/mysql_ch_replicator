@@ -991,7 +991,7 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     test4 set('1','2','3','4','5','6','7'),
     test5 timestamp(0),
     test6 char(36),
-    test7 ENUM('point', 'qwe', 'def'),
+    test7 ENUM('point', 'qwe', 'def', 'azaza kokoko'),
     PRIMARY KEY (id)
 ); 
     ''')
