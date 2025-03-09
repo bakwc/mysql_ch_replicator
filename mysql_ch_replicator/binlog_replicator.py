@@ -5,6 +5,7 @@ import os
 import os.path
 import json
 import random
+import re
 
 from enum import Enum
 from logging import getLogger
@@ -379,6 +380,48 @@ class BinlogReplicator:
         self.last_binlog_clear_time = curr_time
         self.data_writer.remove_old_files(curr_time - BinlogReplicator.BINLOG_RETENTION_PERIOD)
 
+    @classmethod
+    def _try_parse_db_name_from_query(cls, query: str) -> str:
+        """
+         Extract the database name from a MySQL CREATE TABLE or ALTER TABLE query.
+         Supports multiline queries and quoted identifiers that may include special characters.
+
+         Examples:
+           - CREATE TABLE `mydb`.`mytable` ( ... )
+           - ALTER TABLE mydb.mytable ADD COLUMN id int NOT NULL
+           - CREATE TABLE IF NOT EXISTS mydb.mytable ( ... )
+           - ALTER TABLE "mydb"."mytable" ...
+           - CREATE TABLE IF NOT EXISTS `multidb` . `multitable` ( ... )
+           - CREATE TABLE `replication-test_db`.`test_table_2` ( ... )
+
+         Returns the database name, or an empty string if not found.
+         """
+        # Updated regex:
+        # 1. Matches optional leading whitespace.
+        # 2. Matches "CREATE TABLE" or "ALTER TABLE" (with optional IF NOT EXISTS).
+        # 3. Optionally captures a database name, which can be either:
+        #      - Quoted (using backticks or double quotes) and may contain special characters.
+        #      - Unquoted (letters, digits, and underscores only).
+        # 4. Allows optional whitespace around the separating dot.
+        # 5. Matches the table name (which we do not capture).
+        pattern = re.compile(
+            r'^\s*'  # optional leading whitespace/newlines
+            r'(?i:(?:create|alter))\s+table\s+'  # "CREATE TABLE" or "ALTER TABLE"
+            r'(?:if\s+not\s+exists\s+)?'  # optional "IF NOT EXISTS"
+            # Optional DB name group: either quoted or unquoted, followed by optional whitespace, a dot, and more optional whitespace.
+            r'(?:(?:[`"](?P<dbname_quoted>[^`"]+)[`"]|(?P<dbname_unquoted>[a-zA-Z0-9_]+))\s*\.\s*)?'
+            r'[`"]?[a-zA-Z0-9_]+[`"]?',  # table name (quoted or not)
+            re.IGNORECASE | re.DOTALL  # case-insensitive, dot matches newline
+        )
+
+        m = pattern.search(query)
+        if m:
+            # Return the quoted db name if found; else return the unquoted name if found.
+            if m.group('dbname_quoted'):
+                return m.group('dbname_quoted')
+            elif m.group('dbname_unquoted'):
+                return m.group('dbname_unquoted')
+        return ''
 
     def run(self):
         last_transaction_id = None
@@ -425,12 +468,6 @@ class BinlogReplicator:
                     if isinstance(log_event.db_name, bytes):
                         log_event.db_name = log_event.db_name.decode('utf-8')
 
-                    if not self.settings.is_database_matches(log_event.db_name):
-                        continue
-
-                    logger.debug(f'event matched {transaction_id}, {log_event.db_name}, {log_event.table_name}')
-
-                    log_event.transaction_id = transaction_id
                     if isinstance(event, UpdateRowsEvent) or isinstance(event, WriteRowsEvent):
                         log_event.event_type = EventType.ADD_EVENT.value
 
@@ -439,6 +476,21 @@ class BinlogReplicator:
 
                     if isinstance(event, QueryEvent):
                         log_event.event_type = EventType.QUERY.value
+
+                    if log_event.event_type == EventType.UNKNOWN.value:
+                        continue
+
+                    if log_event.event_type == EventType.QUERY.value:
+                        db_name_from_query = self._try_parse_db_name_from_query(event.query)
+                        if db_name_from_query:
+                            log_event.db_name = db_name_from_query
+
+                    if not self.settings.is_database_matches(log_event.db_name):
+                        continue
+
+                    logger.debug(f'event matched {transaction_id}, {log_event.db_name}, {log_event.table_name}')
+
+                    log_event.transaction_id = transaction_id
 
                     if isinstance(event, QueryEvent):
                         log_event.records = event.query
