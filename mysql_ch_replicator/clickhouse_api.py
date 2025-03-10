@@ -117,6 +117,37 @@ class ClickhouseApi:
         database_list = [row[0] for row in databases]
         return database_list
 
+    def table_exists(self, table_name):
+        """Check if a specific table exists in the current database"""
+        if self.database not in self.get_databases():
+            return False
+            
+        query = f"EXISTS TABLE `{self.database}`.`{table_name}`"
+        result = self.client.query(query)
+        if result.result_rows and result.result_rows[0][0] == 1:
+            return True
+        return False
+
+    def validate_database_schema(self, expected_tables):
+        """Validates that all expected tables exist in the database and returns missing tables"""
+        if self.database not in self.get_databases():
+            logger.warning(f"Database {self.database} does not exist")
+            return False, expected_tables
+            
+        existing_tables = self.get_tables()
+        missing_tables = [table for table in expected_tables if table not in existing_tables]
+        
+        if missing_tables:
+            # Log with a count for large numbers of missing tables
+            if len(missing_tables) > 10:
+                sample_tables = ", ".join(missing_tables[:10])
+                logger.warning(f"Missing {len(missing_tables)} tables in {self.database}. First 10: {sample_tables}...")
+            else:
+                logger.warning(f"Missing tables in {self.database}: {', '.join(missing_tables)}")
+            return False, missing_tables
+            
+        return True, []
+
     def execute_command(self, query):
         for attempt in range(ClickhouseApi.MAX_RETRIES):
             try:
@@ -127,6 +158,16 @@ class ClickhouseApi:
                 if attempt == ClickhouseApi.MAX_RETRIES - 1:
                     raise e
                 time.sleep(ClickhouseApi.RETRY_INTERVAL)
+            except clickhouse_connect.driver.exceptions.DatabaseError as e:
+                # Handle TABLE_ALREADY_EXISTS errors
+                if "Table already exists" in str(e) or "TABLE_ALREADY_EXISTS" in str(e):
+                    logger.warning(f"Table already exists, continuing: {e}")
+                    break
+                else:
+                    logger.error(f'error executing command {query}: {e}', exc_info=e)
+                    if attempt == ClickhouseApi.MAX_RETRIES - 1:
+                        raise e
+                    time.sleep(ClickhouseApi.RETRY_INTERVAL)
 
     def recreate_database(self):
         self.execute_command(f'DROP DATABASE IF EXISTS `{self.database}`')

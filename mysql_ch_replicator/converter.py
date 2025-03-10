@@ -6,7 +6,11 @@ import re
 from pyparsing import Suppress, CaselessKeyword, Word, alphas, alphanums, delimitedList
 
 from .table_structure import TableStructure, TableField
-from .converter_enum_parser import parse_mysql_enum
+from .enum import (
+    parse_mysql_enum, EnumConverter,
+    parse_enum_or_set_field,
+    extract_enum_or_set_values
+)
 
 
 CHARSET_MYSQL_TO_PYTHON = {
@@ -282,7 +286,7 @@ class MysqlToClickhouseConverter:
             enum_values = parse_mysql_enum(mysql_type)
             ch_enum_values = []
             for idx, value_name in enumerate(enum_values):
-                ch_enum_values.append(f"'{value_name}' = {idx+1}")
+                ch_enum_values.append(f"'{value_name.lower()}' = {idx+1}")
             ch_enum_values = ', '.join(ch_enum_values)
             if len(enum_values) <= 127:
                 # Enum8('red' = 1, 'green' = 2, 'black' = 3)
@@ -428,9 +432,15 @@ class MysqlToClickhouseConverter:
             if mysql_field_type.startswith('point'):
                 clickhouse_field_value = parse_mysql_point(clickhouse_field_value)
 
-            if mysql_field_type.startswith('enum(') and isinstance(clickhouse_field_value, int):
+            if mysql_field_type.startswith('enum('):
                 enum_values = mysql_structure.fields[idx].additional_data
-                clickhouse_field_value = enum_values[int(clickhouse_field_value)-1]
+                field_name = mysql_structure.fields[idx].name if idx < len(mysql_structure.fields) else "unknown"
+                
+                clickhouse_field_value = EnumConverter.convert_mysql_to_clickhouse_enum(
+                    clickhouse_field_value, 
+                    enum_values,
+                    field_name
+                )
 
             clickhouse_record.append(clickhouse_field_value)
         return tuple(clickhouse_record)
@@ -834,107 +844,16 @@ class MysqlToClickhouseConverter:
                 end_pos = line.find('`', 1)
                 field_name = line[1:end_pos]
                 line = line[end_pos + 1 :].strip()
-                # Don't split by space for enum and set types that might contain spaces
-                if line.lower().startswith('enum(') or line.lower().startswith('set('):
-                    # Find the end of the enum/set definition (closing parenthesis)
-                    open_parens = 0
-                    in_quotes = False
-                    quote_char = None
-                    end_pos = -1
-
-                    for i, char in enumerate(line):
-                        if char in "'\"" and (i == 0 or line[i - 1] != "\\"):
-                            if not in_quotes:
-                                in_quotes = True
-                                quote_char = char
-                            elif char == quote_char:
-                                in_quotes = False
-                        elif char == '(' and not in_quotes:
-                            open_parens += 1
-                        elif char == ')' and not in_quotes:
-                            open_parens -= 1
-                            if open_parens == 0:
-                                end_pos = i + 1
-                                break
-
-                    if end_pos > 0:
-                        field_type = line[:end_pos]
-                        field_parameters = line[end_pos:].strip()
-                    else:
-                        # Fallback to original behavior if we can't find the end
-                        definition = line.split(' ')
-                        field_type = definition[0]
-                        field_parameters = (
-                            ' '.join(definition[1:]) if len(definition) > 1 else ''
-                        )
-                else:
-                    definition = line.split(' ')
-                    field_type = definition[0]
-                    field_parameters = (
-                        ' '.join(definition[1:]) if len(definition) > 1 else ''
-                    )    
+                # Use our new enum parsing utilities
+                field_name, field_type, field_parameters = parse_enum_or_set_field(line, field_name, is_backtick_quoted=True)
             else:
                 definition = line.split(' ')
                 field_name = strip_sql_name(definition[0])
-                definition = definition[1:]
-                if definition and (
-                    definition[0].lower().startswith('enum(')
-                    or definition[0].lower().startswith('set(')
-                ):
-                    line = ' '.join(definition)
-                    # Find the end of the enum/set definition (closing parenthesis)
-                    open_parens = 0
-                    in_quotes = False
-                    quote_char = None
-                    end_pos = -1
+                # Use our new enum parsing utilities
+                field_name, field_type, field_parameters = parse_enum_or_set_field(line, field_name, is_backtick_quoted=False)
 
-                    for i, char in enumerate(line):
-                        if char in "'\"" and (i == 0 or line[i - 1] != "\\"):
-                            if not in_quotes:
-                                in_quotes = True
-                                quote_char = char
-                            elif char == quote_char:
-                                in_quotes = False
-                        elif char == '(' and not in_quotes:
-                            open_parens += 1
-                        elif char == ')' and not in_quotes:
-                            open_parens -= 1
-                            if open_parens == 0:
-                                end_pos = i + 1
-                                break
-
-                    if end_pos > 0:
-                        field_type = line[:end_pos]
-                        field_parameters = line[end_pos:].strip()
-                    else:
-                        # Fallback to original behavior
-                        field_type = definition[0]
-                        field_parameters = (
-                            ' '.join(definition[1:]) if len(definition) > 1 else ''
-                        )
-                else:
-                    field_type = definition[0]
-                    field_parameters = (
-                        ' '.join(definition[1:]) if len(definition) > 1 else ''
-                    )    
-
-            additional_data = None
-            if 'set(' in field_type.lower():
-                vals = field_type[len('set('):]
-                close_pos = vals.find(')')
-                vals = vals[:close_pos]
-                vals = vals.split(',')
-                def vstrip(e):
-                    if not e:
-                        return e
-                    if e[0] in '"\'':
-                        return e[1:-1]
-                    return e
-                vals = [vstrip(v) for v in vals]
-                additional_data = vals
-
-            if field_type.lower().startswith('enum('):
-                additional_data = parse_mysql_enum(field_type)
+            # Extract additional data for enum and set types
+            additional_data = extract_enum_or_set_values(field_type, from_parser_func=parse_mysql_enum)
 
             structure.fields.append(TableField(
                 name=field_name,
