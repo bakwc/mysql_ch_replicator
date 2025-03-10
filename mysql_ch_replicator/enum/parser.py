@@ -194,3 +194,22 @@ def is_enum_type(field_type):
         bool: True if it's an enum type, False otherwise
     """
     return field_type.lower().startswith('enum(') 
+
+if __name__ == '__main__':
+    tests = [
+        "enum('point','qwe','def')",
+        "ENUM('asd', 'qwe', 'def')",
+        'enum("first",  \'second\', "Don""t stop")',
+        "enum('a\\'b','c\\\\d','Hello\\nWorld')",
+        # Now with backticks:
+        "enum(`point`,`qwe`,`def`)",
+        "enum('point',`qwe`,'def')",
+        "enum(`first`, `Don``t`, `third`)",
+    ]
+
+    for t in tests:
+        try:
+            result = parse_mysql_enum(t)
+            print("Input: {}\nParsed: {}\n".format(t, result))
+        except Exception as e:
+            print("Error parsing {}: {}\n".format(t, e))
