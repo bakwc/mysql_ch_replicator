@@ -13,7 +13,7 @@ import requests
 from mysql_ch_replicator import config
 from mysql_ch_replicator import mysql_api
 from mysql_ch_replicator import clickhouse_api
-from mysql_ch_replicator.binlog_replicator import State as BinlogState, FileReader, EventType
+from mysql_ch_replicator.binlog_replicator import State as BinlogState, FileReader, EventType, BinlogReplicator
 from mysql_ch_replicator.db_replicator import State as DbReplicatorState, DbReplicator
 from mysql_ch_replicator.converter import MysqlToClickhouseConverter
 
@@ -69,14 +69,16 @@ def prepare_env(
         cfg: config.Settings,
         mysql: mysql_api.MySQLApi,
         ch: clickhouse_api.ClickhouseApi,
-        db_name: str = TEST_DB_NAME
+        db_name: str = TEST_DB_NAME,
+        set_mysql_db: bool = True
 ):
     if os.path.exists(cfg.binlog_replicator.data_dir):
         shutil.rmtree(cfg.binlog_replicator.data_dir)
     os.mkdir(cfg.binlog_replicator.data_dir)
     mysql.drop_database(db_name)
     mysql.create_database(db_name)
-    mysql.set_database(db_name)
+    if set_mysql_db:
+        mysql.set_database(db_name)
     ch.drop_database(db_name)
     assert_wait(lambda: db_name not in ch.get_databases())
 
@@ -784,7 +786,7 @@ def test_performance():
             f"INSERT INTO `{TEST_TABLE_NAME}` (name, age) "
             f"VALUES ('TEST_VALUE_{i}_{base_value}', {i});", commit=i % 20 == 0,
         )
-
+#`replication-test_db`
     mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, age) VALUES ('TEST_VALUE_FINAL', 0);", commit=True)
 
     print("running db_replicator")
@@ -823,12 +825,12 @@ def test_different_types_1():
         clickhouse_settings=cfg.clickhouse,
     )
 
-    prepare_env(cfg, mysql, ch)
+    prepare_env(cfg, mysql, ch, set_mysql_db=False)
 
     mysql.execute("SET sql_mode = 'ALLOW_INVALID_DATES';")
 
     mysql.execute(f'''
-CREATE TABLE `{TEST_TABLE_NAME}` (
+CREATE TABLE `{TEST_DB_NAME}`.`{TEST_TABLE_NAME}` (
     `id` int unsigned NOT NULL AUTO_INCREMENT,
     name varchar(255),
   `employee` int unsigned NOT NULL,
@@ -866,7 +868,7 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     ''')
 
     mysql.execute(
-        f"INSERT INTO `{TEST_TABLE_NAME}` (name, modified_date) VALUES ('Ivan', '0000-00-00 00:00:00');",
+        f"INSERT INTO `{TEST_DB_NAME}`.`{TEST_TABLE_NAME}` (name, modified_date) VALUES ('Ivan', '0000-00-00 00:00:00');",
         commit=True,
     )
 
@@ -883,14 +885,29 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1)
 
     mysql.execute(
-        f"INSERT INTO `{TEST_TABLE_NAME}` (name, modified_date) VALUES ('Alex', '0000-00-00 00:00:00');",
+        f"INSERT INTO `{TEST_DB_NAME}`.`{TEST_TABLE_NAME}` (name, modified_date) VALUES ('Alex', '0000-00-00 00:00:00');",
         commit=True,
     )
     mysql.execute(
-        f"INSERT INTO `{TEST_TABLE_NAME}` (name, modified_date) VALUES ('Givi', '2023-01-08 03:11:09');",
+        f"INSERT INTO `{TEST_DB_NAME}`.`{TEST_TABLE_NAME}` (name, modified_date) VALUES ('Givi', '2023-01-08 03:11:09');",
         commit=True,
     )
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
+
+    mysql.execute(f'''
+    CREATE TABLE `{TEST_DB_NAME}`.`{TEST_TABLE_NAME_2}` (
+        `id` int unsigned NOT NULL AUTO_INCREMENT,
+        name varchar(255),
+        PRIMARY KEY (id)
+    ); 
+        ''')
+
+    mysql.execute(
+        f"INSERT INTO `{TEST_DB_NAME}`.`{TEST_TABLE_NAME_2}` (name) VALUES ('Ivan');",
+        commit=True,
+    )
+
+    assert_wait(lambda: TEST_TABLE_NAME_2 in ch.get_tables())
 
     db_replicator_runner.stop()
     binlog_replicator_runner.stop()
@@ -991,7 +1008,7 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     test4 set('1','2','3','4','5','6','7'),
     test5 timestamp(0),
     test6 char(36),
-    test7 ENUM('point', 'qwe', 'def'),
+    test7 ENUM('point', 'qwe', 'def', 'azaza kokoko'),
     PRIMARY KEY (id)
 ); 
     ''')
@@ -1591,3 +1608,41 @@ def test_enum_conversion():
     run_all_runner.stop()
     assert_wait(lambda: 'stopping db_replicator' in read_logs(TEST_DB_NAME))
     assert('Traceback' not in read_logs(TEST_DB_NAME))
+    
+@pytest.mark.parametrize("query,expected", [
+    ("CREATE TABLE `mydb`.`mytable` (id INT)", "mydb"),
+    ("CREATE TABLE mydb.mytable (id INT)", "mydb"),
+    ("ALTER TABLE `mydb`.mytable ADD COLUMN name VARCHAR(50)", "mydb"),
+    ("CREATE TABLE IF NOT EXISTS mydb.mytable (id INT)", "mydb"),
+    ("CREATE TABLE mytable (id INT)", ""),
+    ("  CREATE   TABLE    `mydb`   .   `mytable` \n ( id INT )", "mydb"),
+    ('ALTER TABLE "testdb"."tablename" ADD COLUMN flag BOOLEAN', "testdb"),
+    ("create table mydb.mytable (id int)", "mydb"),
+    ("DROP DATABASE mydb", ""),
+    ("CREATE TABLE mydbmytable (id int)", ""),  # missing dot between DB and table
+    ("""
+        CREATE TABLE IF NOT EXISTS
+        `multidb`
+        .
+        `multitable`
+        (
+          id INT,
+          name VARCHAR(100)
+        )
+    """, "multidb"),
+    ("""
+        ALTER TABLE
+        `justtable`
+        ADD COLUMN age INT;
+    """, ""),
+    ("""
+    CREATE TABLE `replication-test_db`.`test_table_2` (
+        `id` int unsigned NOT NULL AUTO_INCREMENT,
+        name varchar(255),
+        PRIMARY KEY (id)
+    )
+    """, "replication-test_db"),
+    ("BEGIN", ""),
+])
+def test_parse_db_name_from_query(query, expected):
+    assert BinlogReplicator._try_parse_db_name_from_query(query) == expected
