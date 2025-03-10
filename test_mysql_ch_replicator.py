@@ -1535,3 +1535,59 @@ def test_alter_tokens_split():
         print("Match?     ", result == expected)
         print("-" * 60)
         assert result == expected
+
+
+def test_enum_conversion():
+    """
+    Test that enum values are properly converted to lowercase in ClickHouse
+    and that zero values are preserved rather than converted to first enum value.
+    """
+    config_file = CONFIG_FILE
+    cfg = config.Settings(config_file)
+    mysql_config = cfg.mysql
+    clickhouse_config = cfg.clickhouse
+    mysql = mysql_api.MySQLApi(mysql_config)
+    ch = clickhouse_api.ClickhouseApi(clickhouse_config)
+
+    prepare_env(cfg, mysql, ch)
+
+    mysql.execute(f'''
+    CREATE TABLE `{TEST_TABLE_NAME}` (
+        id INT NOT NULL AUTO_INCREMENT, 
+        status_mixed_case ENUM('Purchase','Sell','Transfer') NOT NULL,
+        status_empty ENUM('Yes','No','Maybe'),
+        PRIMARY KEY (id)
+    )
+    ''')
+
+    # Insert values with mixed case and NULL/empty values
+    mysql.execute(f'''
+    INSERT INTO `{TEST_TABLE_NAME}` (status_mixed_case, status_empty) VALUES 
+    ('Purchase', 'Yes'),
+    ('Sell', NULL),
+    ('Transfer', '');
+    ''', commit=True)
+
+    run_all_runner = RunAllRunner(cfg_file=config_file)
+    run_all_runner.run()
+
+    assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
+    ch.execute_command(f'USE `{TEST_DB_NAME}`')
+    assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
+
+    # Get the ClickHouse data
+    results = ch.select(TEST_TABLE_NAME)
+    
+    # Verify all values are properly converted
+    assert results[0][1] == 'purchase'  # First row, status_mixed_case is lowercase 'purchase'
+    assert results[1][1] == 'sell'      # Second row, status_mixed_case is lowercase 'sell'
+    assert results[2][1] == 'transfer'  # Third row, status_mixed_case is lowercase 'transfer'
+    
+    # Status_empty should now keep 0s as 0s instead of converting to first enum value
+    assert results[1][2] is None        # NULL should remain NULL
+    assert results[2][2] == 0           # Empty string should be stored as 0, not converted to 'yes'
+
+    run_all_runner.stop()
+    assert_wait(lambda: 'stopping db_replicator' in read_logs(TEST_DB_NAME))
+    assert('Traceback' not in read_logs(TEST_DB_NAME))
