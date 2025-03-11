@@ -1567,8 +1567,14 @@ def test_enum_conversion():
     cfg.load(config_file)
     mysql_config = cfg.mysql
     clickhouse_config = cfg.clickhouse
-    mysql = mysql_api.MySQLApi(mysql_config)
-    ch = clickhouse_api.ClickhouseApi(clickhouse_config)
+    mysql = mysql_api.MySQLApi(
+        database=None,
+        mysql_settings=mysql_config
+    )
+    ch = clickhouse_api.ClickhouseApi(
+        database=TEST_DB_NAME,
+        clickhouse_settings=clickhouse_config
+    )
 
     prepare_env(cfg, mysql, ch)
 
