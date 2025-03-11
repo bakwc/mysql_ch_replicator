@@ -1292,6 +1292,9 @@ CREATE TABLE `{TEST_DB_NAME}`.`_{TEST_TABLE_NAME}_new` (
     mysql.execute(
         f"DROP TABLE IF EXISTS `{TEST_DB_NAME}`.`_{TEST_TABLE_NAME}_old`;")
 
+    # Wait for table to be recreated in ClickHouse after rename
+    assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
+
     mysql.execute(
         f"INSERT INTO `{TEST_TABLE_NAME}` (id, c1) VALUES (43, 1)",
         commit=True,
@@ -1604,7 +1607,7 @@ def test_enum_conversion():
     
     # Status_empty should now keep 0s as 0s instead of converting to first enum value
     assert results[1][2] is None        # NULL should remain NULL
-    assert results[2][2] == 0           # Empty string should be stored as 0, not converted to 'yes'
+    assert results[2][2] == 0           # Empty string should be stored as 0, not converted to first enum value
 
     run_all_runner.stop()
     assert_wait(lambda: 'stopping db_replicator' in read_logs(TEST_DB_NAME))
