@@ -1607,14 +1607,14 @@ def test_enum_conversion():
     results = ch.select(TEST_TABLE_NAME)
     
     # Verify all values are properly converted
-    assert results[0][1] == 'purchase'  # First row, status_mixed_case is lowercase 'purchase'
-    assert results[1][1] == 'sell'      # Second row, status_mixed_case is lowercase 'sell'
-    assert results[2][1] == 'transfer'  # Third row, status_mixed_case is lowercase 'transfer'
+    assert results[0]['status_mixed_case'] == 'purchase'
+    assert results[1]['status_mixed_case'] == 'sell'
+    assert results[2]['status_mixed_case'] == 'transfer'
     
     # Status_empty should handle NULL values correctly
-    assert results[0][2] == 'yes'       # First row has explicit 'Yes' value
-    assert results[1][2] is None        # Second row is NULL
-    assert results[2][2] is None        # Third row is NULL
+    assert results[0]['status_empty'] == 'yes'
+    assert results[1]['status_empty'] is None
+    assert results[2]['status_empty'] is None
 
     run_all_runner.stop()
     assert_wait(lambda: 'stopping db_replicator' in read_logs(TEST_DB_NAME))
