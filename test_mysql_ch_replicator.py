@@ -1560,7 +1560,8 @@ def test_enum_conversion():
     and that zero values are preserved rather than converted to first enum value.
     """
     config_file = CONFIG_FILE
-    cfg = config.Settings(config_file)
+    cfg = config.Settings()
+    cfg.load(config_file)
     mysql_config = cfg.mysql
     clickhouse_config = cfg.clickhouse
     mysql = mysql_api.MySQLApi(mysql_config)
