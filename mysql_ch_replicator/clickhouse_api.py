@@ -147,16 +147,6 @@ class ClickhouseApi:
                 if attempt == ClickhouseApi.MAX_RETRIES - 1:
                     raise e
                 time.sleep(ClickhouseApi.RETRY_INTERVAL)
-            except clickhouse_connect.driver.exceptions.DatabaseError as e:
-                # Handle TABLE_ALREADY_EXISTS errors
-                if "Table already exists" in str(e) or "TABLE_ALREADY_EXISTS" in str(e):
-                    logger.warning(f"Table already exists, continuing: {e}")
-                    break
-                else:
-                    logger.error(f'error executing command {query}: {e}', exc_info=e)
-                    if attempt == ClickhouseApi.MAX_RETRIES - 1:
-                        raise e
-                    time.sleep(ClickhouseApi.RETRY_INTERVAL)
 
     def recreate_database(self):
         self.execute_command(f'DROP DATABASE IF EXISTS `{self.database}`')
