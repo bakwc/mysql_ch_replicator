@@ -1292,6 +1292,9 @@ CREATE TABLE `{TEST_DB_NAME}`.`_{TEST_TABLE_NAME}_new` (
     mysql.execute(
         f"DROP TABLE IF EXISTS `{TEST_DB_NAME}`.`_{TEST_TABLE_NAME}_old`;")
 
+    # Wait for table to be recreated in ClickHouse after rename
+    assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
+
     mysql.execute(
         f"INSERT INTO `{TEST_TABLE_NAME}` (id, c1) VALUES (43, 1)",
         commit=True,
@@ -1554,6 +1557,69 @@ def test_alter_tokens_split():
         assert result == expected
 
 
+def test_enum_conversion():
+    """
+    Test that enum values are properly converted to lowercase in ClickHouse
+    and that zero values are preserved rather than converted to first enum value.
+    """
+    config_file = CONFIG_FILE
+    cfg = config.Settings()
+    cfg.load(config_file)
+    mysql_config = cfg.mysql
+    clickhouse_config = cfg.clickhouse
+    mysql = mysql_api.MySQLApi(
+        database=None,
+        mysql_settings=mysql_config
+    )
+    ch = clickhouse_api.ClickhouseApi(
+        database=TEST_DB_NAME,
+        clickhouse_settings=clickhouse_config
+    )
+
+    prepare_env(cfg, mysql, ch)
+
+    mysql.execute(f'''
+    CREATE TABLE `{TEST_TABLE_NAME}` (
+        id INT NOT NULL AUTO_INCREMENT, 
+        status_mixed_case ENUM('Purchase','Sell','Transfer') NOT NULL,
+        status_empty ENUM('Yes','No','Maybe'),
+        PRIMARY KEY (id)
+    )
+    ''')
+
+    # Insert values with mixed case and NULL values
+    mysql.execute(f'''
+    INSERT INTO `{TEST_TABLE_NAME}` (status_mixed_case, status_empty) VALUES 
+    ('Purchase', 'Yes'),
+    ('Sell', NULL),
+    ('Transfer', NULL);
+    ''', commit=True)
+
+    run_all_runner = RunAllRunner(cfg_file=config_file)
+    run_all_runner.run()
+
+    assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
+    ch.execute_command(f'USE `{TEST_DB_NAME}`')
+    assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
+
+    # Get the ClickHouse data
+    results = ch.select(TEST_TABLE_NAME)
+    
+    # Verify all values are properly converted
+    assert results[0]['status_mixed_case'] == 'purchase'
+    assert results[1]['status_mixed_case'] == 'sell'
+    assert results[2]['status_mixed_case'] == 'transfer'
+    
+    # Status_empty should handle NULL values correctly
+    assert results[0]['status_empty'] == 'yes'
+    assert results[1]['status_empty'] is None
+    assert results[2]['status_empty'] is None
+
+    run_all_runner.stop()
+    assert_wait(lambda: 'stopping db_replicator' in read_logs(TEST_DB_NAME))
+    assert('Traceback' not in read_logs(TEST_DB_NAME))
+    
 @pytest.mark.parametrize("query,expected", [
     ("CREATE TABLE `mydb`.`mytable` (id INT)", "mydb"),
     ("CREATE TABLE mydb.mytable (id INT)", "mydb"),

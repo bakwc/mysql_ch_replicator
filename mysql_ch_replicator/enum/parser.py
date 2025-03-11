@@ -1,5 +1,3 @@
-
-
 def parse_mysql_enum(enum_definition):
     """
     Accepts a MySQL ENUM definition string (case–insensitive),
@@ -175,7 +173,7 @@ def _parse_enum_values(content):
         # Skip whitespace after the literal.
         while i < len(content) and content[i].isspace():
             i += 1
-        # If there’s a comma, skip it; otherwise, we must be at the end.
+        # If there's a comma, skip it; otherwise, we must be at the end.
         if i < len(content):
             if content[i] == ',':
                 i += 1
@@ -185,7 +183,18 @@ def _parse_enum_values(content):
     return values
 
 
-# --- For testing purposes ---
+def is_enum_type(field_type):
+    """
+    Check if a field type is an enum type
+    
+    Args:
+        field_type: The MySQL field type string
+        
+    Returns:
+        bool: True if it's an enum type, False otherwise
+    """
+    return field_type.lower().startswith('enum(') 
+
 if __name__ == '__main__':
     tests = [
         "enum('point','qwe','def')",
