@@ -117,26 +117,6 @@ class ClickhouseApi:
         database_list = [row[0] for row in databases]
         return database_list
 
-    def validate_database_schema(self, expected_tables):
-        """Validates that all expected tables exist in the database and returns missing tables"""
-        if self.database not in self.get_databases():
-            logger.warning(f"Database {self.database} does not exist")
-            return False, expected_tables
-            
-        existing_tables = self.get_tables()
-        missing_tables = [table for table in expected_tables if table not in existing_tables]
-        
-        if missing_tables:
-            # Log with a count for large numbers of missing tables
-            if len(missing_tables) > 10:
-                sample_tables = ", ".join(missing_tables[:10])
-                logger.warning(f"Missing {len(missing_tables)} tables in {self.database}. First 10: {sample_tables}...")
-            else:
-                logger.warning(f"Missing tables in {self.database}: {', '.join(missing_tables)}")
-            return False, missing_tables
-            
-        return True, []
-
     def execute_command(self, query):
         for attempt in range(ClickhouseApi.MAX_RETRIES):
             try:
