@@ -180,12 +180,11 @@ class DbReplicator:
 
             if self.state.status != Status.NONE:
                 # ensure target database still exists
-                if self.target_database not in self.clickhouse_api.get_databases():
+                if self.target_database not in self.clickhouse_api.get_databases() and f"{self.target_database}_tmp" not in self.clickhouse_api.get_databases():
                     logger.warning(f'database {self.target_database} missing in CH')
-                    if self.initial_only:
-                        logger.warning('will run replication from scratch')
-                        self.state.remove()
-                        self.state = self.create_state()
+                    logger.warning('will run replication from scratch')
+                    self.state.remove()
+                    self.state = self.create_state()
 
             if self.state.status == Status.RUNNING_REALTIME_REPLICATION:
                 self.run_realtime_replication()
@@ -227,6 +226,10 @@ class DbReplicator:
         )
         self.validate_mysql_structure(mysql_structure)
         clickhouse_structure = self.converter.convert_table_structure(mysql_structure)
+        
+        # Always set if_not_exists to True to prevent errors when tables already exist
+        clickhouse_structure.if_not_exists = True
+        
         self.state.tables_structure[table_name] = (mysql_structure, clickhouse_structure)
         indexes = self.config.get_indexes(self.database, table_name)
         self.clickhouse_api.create_table(clickhouse_structure, additional_indexes=indexes)
