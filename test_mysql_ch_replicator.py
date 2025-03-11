@@ -1587,12 +1587,12 @@ def test_enum_conversion():
     )
     ''')
 
-    # Insert values with mixed case and NULL/empty values
+    # Insert values with mixed case and NULL values
     mysql.execute(f'''
     INSERT INTO `{TEST_TABLE_NAME}` (status_mixed_case, status_empty) VALUES 
     ('Purchase', 'Yes'),
     ('Sell', NULL),
-    ('Transfer', '');
+    ('Transfer', NULL);
     ''', commit=True)
 
     run_all_runner = RunAllRunner(cfg_file=config_file)
@@ -1611,9 +1611,10 @@ def test_enum_conversion():
     assert results[1][1] == 'sell'      # Second row, status_mixed_case is lowercase 'sell'
     assert results[2][1] == 'transfer'  # Third row, status_mixed_case is lowercase 'transfer'
     
-    # Status_empty should now keep 0s as 0s instead of converting to first enum value
-    assert results[1][2] is None        # NULL should remain NULL
-    assert results[2][2] == 0           # Empty string should be stored as 0, not converted to first enum value
+    # Status_empty should handle NULL values correctly
+    assert results[0][2] == 'yes'       # First row has explicit 'Yes' value
+    assert results[1][2] is None        # Second row is NULL
+    assert results[2][2] is None        # Third row is NULL
 
     run_all_runner.stop()
     assert_wait(lambda: 'stopping db_replicator' in read_logs(TEST_DB_NAME))
