@@ -117,17 +117,6 @@ class ClickhouseApi:
         database_list = [row[0] for row in databases]
         return database_list
 
-    def table_exists(self, table_name):
-        """Check if a specific table exists in the current database"""
-        if self.database not in self.get_databases():
-            return False
-            
-        query = f"EXISTS TABLE `{self.database}`.`{table_name}`"
-        result = self.client.query(query)
-        if result.result_rows and result.result_rows[0][0] == 1:
-            return True
-        return False
-
     def validate_database_schema(self, expected_tables):
         """Validates that all expected tables exist in the database and returns missing tables"""
         if self.database not in self.get_databases():

@@ -180,7 +180,7 @@ class DbReplicator:
 
             if self.state.status != Status.NONE:
                 # ensure target database still exists
-                if self.target_database not in self.clickhouse_api.get_databases():
+                if self.target_database not in self.clickhouse_api.get_databases() and f"{self.target_database}_tmp" not in self.clickhouse_api.get_databases():
                     logger.warning(f'database {self.target_database} missing in CH')
                     logger.warning('will run replication from scratch')
                     self.state.remove()
