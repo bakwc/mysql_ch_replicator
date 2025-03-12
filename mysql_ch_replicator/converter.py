@@ -518,11 +518,14 @@ class MysqlToClickhouseConverter:
             if op_name == 'alter':
                 continue
 
+            if op_name == 'auto_increment':
+                continue
+
             if op_name == 'change':
                 self.__convert_alter_table_change_column(db_name, table_name, tokens)
                 continue
 
-            raise Exception(f'operation {op_name} not implement, query: {subquery}')
+            raise Exception(f'operation {op_name} not implement, query: {subquery}, full query: {mysql_query}')
 
     @classmethod
     def _tokenize_alter_query(cls, sql_line):
