@@ -736,6 +736,72 @@ class MysqlToClickhouseConverter:
                 query = f'ALTER TABLE `{db_name}`.`{table_name}` RENAME COLUMN {column_name} TO {new_column_name}'
                 self.db_replicator.clickhouse_api.execute_command(query)
 
+    def _handle_create_table_like(self, create_statement, source_table_name, target_table_name, is_query_api=True):
+        """
+        Helper method to handle CREATE TABLE LIKE statements.
+        
+        Args:
+            create_statement: The original CREATE TABLE LIKE statement
+            source_table_name: Name of the source table being copied
+            target_table_name: Name of the new table being created
+            is_query_api: If True, returns both MySQL and CH structures; if False, returns only MySQL structure
+            
+        Returns:
+            Either (mysql_structure, ch_structure) if is_query_api=True, or just mysql_structure otherwise
+        """
+        # Try to get the actual structure from the existing table structures first
+        if (hasattr(self, 'db_replicator') and 
+            self.db_replicator is not None and 
+            hasattr(self.db_replicator, 'state') and
+            hasattr(self.db_replicator.state, 'tables_structure')):
+            
+            # Check if the source table structure is already in our state
+            if source_table_name in self.db_replicator.state.tables_structure:
+                # Get the existing structure
+                source_mysql_structure, source_ch_structure = self.db_replicator.state.tables_structure[source_table_name]
+                
+                # Create a new structure with the target table name
+                new_mysql_structure = copy.deepcopy(source_mysql_structure)
+                new_mysql_structure.table_name = target_table_name
+                
+                # Convert to ClickHouse structure 
+                new_ch_structure = copy.deepcopy(source_ch_structure)
+                new_ch_structure.table_name = target_table_name
+                
+                return (new_mysql_structure, new_ch_structure) if is_query_api else new_mysql_structure
+        
+        # If we couldn't get it from state, try with MySQL API
+        if (hasattr(self, 'db_replicator') and 
+            self.db_replicator is not None and 
+            hasattr(self.db_replicator, 'mysql_api') and 
+            self.db_replicator.mysql_api is not None):
+            
+            try:
+                # Get the CREATE statement for the source table
+                source_create_statement = self.db_replicator.mysql_api.get_table_create_statement(source_table_name)
+                
+                # Parse the source table structure
+                source_structure = self.parse_mysql_table_structure(source_create_statement)
+                
+                # Copy the structure but keep the new table name
+                mysql_structure = copy.deepcopy(source_structure)
+                mysql_structure.table_name = target_table_name
+                
+                if is_query_api:
+                    # Convert to ClickHouse structure
+                    ch_structure = self.convert_table_structure(mysql_structure)
+                    return mysql_structure, ch_structure
+                else:
+                    return mysql_structure
+                    
+            except Exception as e:
+                error_msg = f"Could not get source table structure for LIKE statement: {str(e)}"
+                print(f"Error: {error_msg}")
+                raise Exception(error_msg, create_statement)
+        
+        # If we got here, we couldn't determine the structure
+        raise Exception(f"Could not determine structure for source table '{source_table_name}' in LIKE statement", create_statement)
+
     def parse_create_table_query(self, mysql_query) -> tuple[TableStructure, TableStructure]:
         # Special handling for CREATE TABLE LIKE statements
         if 'LIKE' in mysql_query.upper():
@@ -748,55 +814,8 @@ class MysqlToClickhouseConverter:
                 new_table_name = match.group(1).strip('`"')
                 source_table_name = match.group(2).strip('`"')
                 
-                # Try to get the actual structure from the existing table structures first
-                if (hasattr(self, 'db_replicator') and 
-                    self.db_replicator is not None and 
-                    hasattr(self.db_replicator, 'state') and
-                    hasattr(self.db_replicator.state, 'tables_structure')):
-                    
-                    # Check if the source table structure is already in our state
-                    if source_table_name in self.db_replicator.state.tables_structure:
-                        # Get the existing structure
-                        source_mysql_structure, source_ch_structure = self.db_replicator.state.tables_structure[source_table_name]
-                        
-                        # Create a new structure with the target table name
-                        new_mysql_structure = copy.deepcopy(source_mysql_structure)
-                        new_mysql_structure.table_name = new_table_name
-                        
-                        # Convert to ClickHouse structure 
-                        new_ch_structure = copy.deepcopy(source_ch_structure)
-                        new_ch_structure.table_name = new_table_name
-                        
-                        return new_mysql_structure, new_ch_structure
-                
-                # If we couldn't get it from state, try with MySQL API
-                if (hasattr(self, 'db_replicator') and 
-                    self.db_replicator is not None and 
-                    hasattr(self.db_replicator, 'mysql_api') and 
-                    self.db_replicator.mysql_api is not None):
-                    
-                    try:
-                        # Get the CREATE statement for the source table
-                        source_create_statement = self.db_replicator.mysql_api.get_table_create_statement(source_table_name)
-                        
-                        # Parse the source table structure
-                        source_structure = self.parse_mysql_table_structure(source_create_statement)
-                        
-                        # Create a new structure with the target table name
-                        mysql_table_structure = copy.deepcopy(source_structure)
-                        mysql_table_structure.table_name = new_table_name
-                        
-                        # Convert to ClickHouse structure
-                        ch_table_structure = self.convert_table_structure(mysql_table_structure)
-                        
-                        return mysql_table_structure, ch_table_structure
-                    except Exception as e:
-                        error_msg = f"Could not get source table structure for LIKE statement: {str(e)}"
-                        print(f"Error: {error_msg}")
-                        raise Exception(error_msg, mysql_query)
-                
-                # If we got here, we couldn't determine the structure
-                raise Exception(f"Could not determine structure for source table '{source_table_name}' in LIKE statement", mysql_query)
+                # Use the common helper method to handle the LIKE statement
+                return self._handle_create_table_like(mysql_query, source_table_name, new_table_name, True)
 
         # Regular parsing for non-LIKE statements
         mysql_table_structure = self.parse_mysql_table_structure(mysql_query)
@@ -851,29 +870,8 @@ class MysqlToClickhouseConverter:
             source_table_name = strip_sql_name(tokens[4].get_real_name())
             target_table_name = strip_sql_name(tokens[2].get_real_name())
             
-            # Try to get the actual structure - we need a valid MySQL API
-            if not (hasattr(self, 'db_replicator') and 
-                    self.db_replicator is not None and 
-                    hasattr(self.db_replicator, 'mysql_api') and 
-                    self.db_replicator.mysql_api is not None):
-                raise Exception(f"Cannot parse LIKE statement - no MySQL API available to get source table structure", create_statement)
-                
-            try:
-                # Try to get the CREATE statement from the current database
-                mysql_api = self.db_replicator.mysql_api
-                source_create_statement = mysql_api.get_table_create_statement(source_table_name)
-                
-                # Parse the source table structure
-                source_structure = self.parse_mysql_table_structure(source_create_statement)
-                
-                # Copy the structure but keep the new table name
-                structure = copy.deepcopy(source_structure)
-                structure.table_name = target_table_name
-                return structure
-            except Exception as e:
-                error_msg = f"Could not get source table structure: {str(e)}"
-                print(f"Error: {error_msg}")
-                raise Exception(error_msg, create_statement)
+            # Use the common helper method to handle the LIKE statement
+            return self._handle_create_table_like(create_statement, source_table_name, target_table_name, False)
 
         if not isinstance(tokens[3], sqlparse.sql.Parenthesis):
             raise Exception('wrong create statement', create_statement)
