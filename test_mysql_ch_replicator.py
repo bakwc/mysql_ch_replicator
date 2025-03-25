@@ -1657,3 +1657,158 @@ def test_enum_conversion():
 ])
 def test_parse_db_name_from_query(query, expected):
     assert BinlogReplicator._try_parse_db_name_from_query(query) == expected
+
+
+def test_create_table_like():
+    """
+    Test that CREATE TABLE ... LIKE statements are handled correctly.
+    The test creates a source table, then creates another table using LIKE,
+    and verifies that both tables have the same structure in ClickHouse.
+    """
+    config_file = CONFIG_FILE
+    cfg = config.Settings()
+    cfg.load(config_file)
+
+    mysql = mysql_api.MySQLApi(
+        database=None,
+        mysql_settings=cfg.mysql,
+    )
+
+    ch = clickhouse_api.ClickhouseApi(
+        database=TEST_DB_NAME,
+        clickhouse_settings=cfg.clickhouse,
+    )
+
+    prepare_env(cfg, mysql, ch)
+    mysql.set_database(TEST_DB_NAME)
+
+    # Create the source table with a complex structure
+    mysql.execute(f'''
+    CREATE TABLE `source_table` (
+        id INT NOT NULL AUTO_INCREMENT,
+        name VARCHAR(255) NOT NULL,
+        age INT UNSIGNED,
+        email VARCHAR(100) UNIQUE,
+        status ENUM('active','inactive','pending') DEFAULT 'active',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        data JSON,
+        PRIMARY KEY (id)
+    );
+    ''')
+    
+    # Get the CREATE statement for the source table
+    source_create = mysql.get_table_create_statement('source_table')
+    
+    # Create a table using LIKE statement
+    mysql.execute(f'''
+    CREATE TABLE `derived_table` LIKE `source_table`;
+    ''')
+
+    # Set up replication
+    binlog_replicator_runner = BinlogReplicatorRunner(cfg_file=config_file)
+    binlog_replicator_runner.run()
+    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file=config_file)
+    db_replicator_runner.run()
+
+    # Wait for database to be created and renamed from tmp to final
+    assert_wait(lambda: TEST_DB_NAME in ch.get_databases(), max_wait_time=10.0)
+    
+    # Use the correct database explicitly
+    ch.execute_command(f'USE `{TEST_DB_NAME}`')
+
+    # Wait for tables to be created in ClickHouse with a longer timeout
+    assert_wait(lambda: 'source_table' in ch.get_tables(), max_wait_time=10.0)
+    assert_wait(lambda: 'derived_table' in ch.get_tables(), max_wait_time=10.0)
+
+    # Insert data into both tables to verify they work
+    mysql.execute("INSERT INTO `source_table` (name, age, email, status) VALUES ('Alice', 30, 'alice@example.com', 'active');", commit=True)
+    mysql.execute("INSERT INTO `derived_table` (name, age, email, status) VALUES ('Bob', 25, 'bob@example.com', 'pending');", commit=True)
+
+    # Wait for data to be replicated
+    assert_wait(lambda: len(ch.select('source_table')) == 1, max_wait_time=10.0)
+    assert_wait(lambda: len(ch.select('derived_table')) == 1, max_wait_time=10.0)
+
+    # Compare structures by reading descriptions in ClickHouse
+    source_desc = ch.execute_command("DESCRIBE TABLE source_table")
+    derived_desc = ch.execute_command("DESCRIBE TABLE derived_table")
+
+    # The structures should be identical
+    assert source_desc == derived_desc
+    
+    # Verify the data in both tables
+    source_data = ch.select('source_table')[0]
+    derived_data = ch.select('derived_table')[0]
+    
+    assert source_data['name'] == 'Alice'
+    assert derived_data['name'] == 'Bob'
+    
+    # Both tables should have same column types
+    assert type(source_data['id']) == type(derived_data['id'])
+    assert type(source_data['name']) == type(derived_data['name'])
+    assert type(source_data['age']) == type(derived_data['age'])
+    
+    # Now test realtime replication by creating a new table after the initial replication
+    mysql.execute(f'''
+    CREATE TABLE `realtime_table` (
+        id INT NOT NULL AUTO_INCREMENT,
+        title VARCHAR(100) NOT NULL,
+        description TEXT,
+        price DECIMAL(10,2),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (id)
+    );
+    ''')
+    
+    # Wait for the new table to be created in ClickHouse
+    assert_wait(lambda: 'realtime_table' in ch.get_tables(), max_wait_time=10.0)
+    
+    # Insert data into the new table
+    mysql.execute("""
+    INSERT INTO `realtime_table` (title, description, price) VALUES 
+    ('Product 1', 'First product description', 19.99),
+    ('Product 2', 'Second product description', 29.99),
+    ('Product 3', 'Third product description', 39.99);
+    """, commit=True)
+    
+    # Wait for data to be replicated
+    assert_wait(lambda: len(ch.select('realtime_table')) == 3, max_wait_time=10.0)
+    
+    # Verify the data in the realtime table
+    realtime_data = ch.select('realtime_table')
+    assert len(realtime_data) == 3
+    
+    # Verify specific values
+    products = sorted([record['title'] for record in realtime_data])
+    assert products == ['Product 1', 'Product 2', 'Product 3']
+    
+    prices = sorted([float(record['price']) for record in realtime_data])
+    assert prices == [19.99, 29.99, 39.99]
+    
+    # Now create another table using LIKE after initial replication
+    mysql.execute(f'''
+    CREATE TABLE `realtime_like_table` LIKE `realtime_table`;
+    ''')
+    
+    # Wait for the new LIKE table to be created in ClickHouse
+    assert_wait(lambda: 'realtime_like_table' in ch.get_tables(), max_wait_time=10.0)
+    
+    # Insert data into the new LIKE table
+    mysql.execute("""
+    INSERT INTO `realtime_like_table` (title, description, price) VALUES 
+    ('Service A', 'Premium service', 99.99),
+    ('Service B', 'Standard service', 49.99);
+    """, commit=True)
+    
+    # Wait for data to be replicated
+    assert_wait(lambda: len(ch.select('realtime_like_table')) == 2, max_wait_time=10.0)
+    
+    # Verify the data in the realtime LIKE table
+    like_data = ch.select('realtime_like_table')
+    assert len(like_data) == 2
+    
+    services = sorted([record['title'] for record in like_data])
+    assert services == ['Service A', 'Service B']
+    
+    # Clean up
+    db_replicator_runner.stop()
+    binlog_replicator_runner.stop()
