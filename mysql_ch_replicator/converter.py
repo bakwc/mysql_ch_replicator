@@ -133,6 +133,55 @@ def parse_mysql_point(binary):
     return (x, y)
 
 
+def parse_mysql_polygon(binary):
+    """
+    Parses the binary representation of a MySQL POLYGON data type
+    and returns a list of tuples [(x1,y1), (x2,y2), ...] representing the polygon vertices.
+
+    :param binary: The binary data representing the POLYGON.
+    :return: A list of tuples with the coordinate values.
+    """
+    if binary is None:
+        return []
+
+    # Determine if SRID is present (25 bytes for header with SRID, 21 without)
+    has_srid = len(binary) > 25
+    offset = 4 if has_srid else 0
+
+    # Read byte order
+    byte_order = binary[offset]
+    if byte_order == 0:
+        endian = '>'
+    elif byte_order == 1:
+        endian = '<'
+    else:
+        raise ValueError("Invalid byte order in WKB POLYGON")
+
+    # Read WKB Type
+    wkb_type = struct.unpack(endian + 'I', binary[offset + 1:offset + 5])[0]
+    if wkb_type != 3:  # WKB type 3 means POLYGON
+        raise ValueError("Not a WKB POLYGON type")
+
+    # Read number of rings (polygons can have holes)
+    num_rings = struct.unpack(endian + 'I', binary[offset + 5:offset + 9])[0]
+    if num_rings == 0:
+        return []
+
+    # Read the first ring (outer boundary)
+    ring_offset = offset + 9
+    num_points = struct.unpack(endian + 'I', binary[ring_offset:ring_offset + 4])[0]
+    points = []
+    
+    # Read each point in the ring
+    for i in range(num_points):
+        point_offset = ring_offset + 4 + (i * 16)  # 16 bytes per point (8 for x, 8 for y)
+        x = struct.unpack(endian + 'd', binary[point_offset:point_offset + 8])[0]
+        y = struct.unpack(endian + 'd', binary[point_offset + 8:point_offset + 16])[0]
+        points.append((x, y))
+
+    return points
+
+
 def strip_sql_name(name):
     name = name.strip()
     if name.startswith('`'):
@@ -200,6 +249,9 @@ class MysqlToClickhouseConverter:
 
         if mysql_type == 'point':
             return 'Tuple(x Float32, y Float32)'
+
+        if mysql_type == 'polygon':
+            return 'Array(Tuple(x Float32, y Float32))'
 
         # Correctly handle numeric types
         if mysql_type.startswith('numeric'):
@@ -432,6 +484,9 @@ class MysqlToClickhouseConverter:
 
             if mysql_field_type.startswith('point'):
                 clickhouse_field_value = parse_mysql_point(clickhouse_field_value)
+
+            if mysql_field_type.startswith('polygon'):
+                clickhouse_field_value = parse_mysql_polygon(clickhouse_field_value)
 
             if mysql_field_type.startswith('enum('):
                 enum_values = mysql_structure.fields[idx].additional_data
