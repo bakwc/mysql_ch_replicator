@@ -381,6 +381,8 @@ class MysqlToClickhouseConverter:
             return 'String'
         if 'set(' in mysql_type:
             return 'String'
+        if mysql_type == 'year':
+            return 'UInt16'  # MySQL YEAR type can store years from 1901 to 2155, UInt16 is sufficient
         raise Exception(f'unknown mysql type "{mysql_type}"')
 
     def convert_field_type(self, mysql_type, mysql_parameters):
@@ -497,6 +499,18 @@ class MysqlToClickhouseConverter:
                     enum_values,
                     field_name
                 )
+
+            # Handle MySQL YEAR type conversion
+            if mysql_field_type == 'year' and clickhouse_field_value is not None:
+                # MySQL YEAR type can store years from 1901 to 2155
+                # Convert to integer if it's a string
+                if isinstance(clickhouse_field_value, str):
+                    clickhouse_field_value = int(clickhouse_field_value)
+                # Ensure the value is within valid range
+                if clickhouse_field_value < 1901:
+                    clickhouse_field_value = 1901
+                elif clickhouse_field_value > 2155:
+                    clickhouse_field_value = 2155
 
             clickhouse_record.append(clickhouse_field_value)
         return tuple(clickhouse_record)
