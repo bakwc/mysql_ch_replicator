@@ -1955,3 +1955,91 @@ def test_create_table_like():
     # Clean up
     db_replicator_runner.stop()
     binlog_replicator_runner.stop()
+
+
+def test_year_type():
+    """
+    Test that MySQL YEAR type is properly converted to UInt16 in ClickHouse
+    and that year values are correctly handled.
+    """
+    config_file = CONFIG_FILE
+    cfg = config.Settings()
+    cfg.load(config_file)
+    mysql_config = cfg.mysql
+    clickhouse_config = cfg.clickhouse
+    mysql = mysql_api.MySQLApi(
+        database=None,
+        mysql_settings=mysql_config
+    )
+    ch = clickhouse_api.ClickhouseApi(
+        database=TEST_DB_NAME,
+        clickhouse_settings=clickhouse_config
+    )
+
+    prepare_env(cfg, mysql, ch)
+
+    mysql.execute(f'''
+    CREATE TABLE `{TEST_TABLE_NAME}` (
+        id INT NOT NULL AUTO_INCREMENT,
+        year_field YEAR NOT NULL,
+        nullable_year YEAR,
+        PRIMARY KEY (id)
+    )
+    ''')
+
+    # Insert test data with various year values
+    mysql.execute(f'''
+    INSERT INTO `{TEST_TABLE_NAME}` (year_field, nullable_year) VALUES 
+    (2024, 2024),
+    (1901, NULL),
+    (2155, 2000),
+    (2000, 1999);
+    ''', commit=True)
+
+    run_all_runner = RunAllRunner(cfg_file=config_file)
+    run_all_runner.run()
+
+    assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
+    ch.execute_command(f'USE `{TEST_DB_NAME}`')
+    assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 4)
+
+    # Get the ClickHouse data
+    results = ch.select(TEST_TABLE_NAME)
+    
+    # Verify the data
+    assert results[0]['year_field'] == 2024
+    assert results[0]['nullable_year'] == 2024
+    assert results[1]['year_field'] == 1901
+    assert results[1]['nullable_year'] is None
+    assert results[2]['year_field'] == 2155
+    assert results[2]['nullable_year'] == 2000
+    assert results[3]['year_field'] == 2000
+    assert results[3]['nullable_year'] == 1999
+
+    # Test realtime replication by adding more records
+    mysql.execute(f'''
+    INSERT INTO `{TEST_TABLE_NAME}` (year_field, nullable_year) VALUES 
+    (2025, 2025),
+    (1999, NULL),
+    (2100, 2100);
+    ''', commit=True)
+
+    # Wait for new records to be replicated
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 7)
+
+    # Verify the new records - include order by in the where clause
+    new_results = ch.select(TEST_TABLE_NAME, where="year_field >= 2025 ORDER BY year_field ASC")
+    assert len(new_results) == 3
+    
+    # Check specific values
+    assert new_results[0]['year_field'] == 2025
+    assert new_results[0]['nullable_year'] == 2025
+    assert new_results[1]['year_field'] == 2100
+    assert new_results[1]['nullable_year'] == 2100
+    assert new_results[2]['year_field'] == 2155
+    assert new_results[2]['nullable_year'] == 2000
+
+    run_all_runner.stop()
+    assert_wait(lambda: 'stopping db_replicator' in read_logs(TEST_DB_NAME))
+    assert('Traceback' not in read_logs(TEST_DB_NAME))
