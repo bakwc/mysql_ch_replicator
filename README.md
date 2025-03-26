@@ -148,6 +148,7 @@ clickhouse:
 binlog_replicator:
   data_dir: '/home/user/binlog/'
   records_per_file: 100000
+  binlog_retention_period: 43200  # optional, how long to keep binlog files in seconds, default 12 hours
 
 databases: 'database_name_pattern_*'
 tables: '*'
@@ -196,6 +197,7 @@ types_mapping:          # optional
 - `log_level` - log level, default is `info`, you can set to `debug` to get maximum information (allowed values are `debug`, `info`, `warning`, `error`, `critical`)
 - `optimize_interval` - interval (seconds) between automatic `OPTIMIZE table FINAL` calls. Default 86400 (1 day). This is required to perform all merges guaranteed and avoid increasing of used storage and decreasing performance.
 - `auto_restart_interval` - interval (seconds) between automatic db_replicator restart. Default 3600 (1 hour). This is done to reduce memory usage.
+- `binlog_retention_period` - how long to keep binlog files in seconds. Default 43200 (12 hours). This setting controls how long the local binlog files are retained before being automatically cleaned up.
 - `indexes` - you may want to add some indexes to accelerate performance, eg. ngram index for full-test search, etc. To apply indexes you need to start replication from scratch.
 - `http_host`, `http_port` - http endpoint to control replication, use `/docs` for abailable commands
 - `types_mappings` - custom types mapping, eg. you can map char(36) to UUID instead of String, etc.

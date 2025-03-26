@@ -340,7 +340,6 @@ class State:
 class BinlogReplicator:
     SAVE_UPDATE_INTERVAL = 60
     BINLOG_CLEAN_INTERVAL = 5 * 60
-    BINLOG_RETENTION_PERIOD = 12 * 60 * 60
     READ_LOG_INTERVAL = 0.3
 
     def __init__(self, settings: Settings):
@@ -378,7 +377,7 @@ class BinlogReplicator:
             return
 
         self.last_binlog_clear_time = curr_time
-        self.data_writer.remove_old_files(curr_time - BinlogReplicator.BINLOG_RETENTION_PERIOD)
+        self.data_writer.remove_old_files(curr_time - self.replicator_settings.binlog_retention_period)
 
     @classmethod
     def _try_parse_db_name_from_query(cls, query: str) -> str:
