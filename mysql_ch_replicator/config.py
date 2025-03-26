@@ -75,6 +75,7 @@ class ClickhouseSettings:
 class BinlogReplicatorSettings:
     data_dir: str = 'binlog'
     records_per_file: int = 100000
+    binlog_retention_period: int = 43200  # 12 hours in seconds
 
     def validate(self):
         if not isinstance(self.data_dir, str):
@@ -85,6 +86,12 @@ class BinlogReplicatorSettings:
 
         if self.records_per_file <= 0:
             raise ValueError('binlog_replicator records_per_file should be positive')
+
+        if not isinstance(self.binlog_retention_period, int):
+            raise ValueError(f'binlog_replicator binlog_retention_period should be int and not {stype(self.binlog_retention_period)}')
+
+        if self.binlog_retention_period <= 0:
+            raise ValueError('binlog_replicator binlog_retention_period should be positive')
 
 
 class Settings:
