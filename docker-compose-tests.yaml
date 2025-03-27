@@ -17,6 +17,12 @@ services:
       - 9123:9123
     volumes:
       - ./tests_override.xml:/bitnami/clickhouse/etc/conf.d/override.xml:ro
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9123/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
 
   mysql_db:
     image: mysql:8.4.3
@@ -30,6 +36,12 @@ services:
       - ./test_mysql.cnf:/etc/mysql/my.cnf:ro
     networks:
       - default
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
 
   mariadb_db:
     image: mariadb:11.5.2
@@ -43,6 +55,12 @@ services:
       - 9307:3306
     volumes:
       - ./test_mariadb.cnf:/etc/mysql/my.cnf:ro  # Adjust path to MariaDB config location if needed
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MARIADB_ROOT_PASSWORD"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
 
   replicator:
     build:
@@ -58,3 +76,10 @@ services:
       interval: 2s
       retries: 100
       start_period: 10s
+    depends_on:
+      clickhouse_db:
+        condition: service_healthy
+      mysql_db:
+        condition: service_healthy
+      mariadb_db:
+        condition: service_healthy
