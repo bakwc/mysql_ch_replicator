@@ -15,6 +15,27 @@
 
 With a focus on high performance, it utilizes batching heavily and uses C++ extension for faster execution. This tool ensures seamless data integration with support for migrations, schema changes, and correct data management.
 
+## Table of Contents
+- [Features](#features)
+- [Installation](#installation)
+  - [Requirements](#requirements)
+  - [Installation](#installation-1)
+  - [Docker Installation](#docker-installation)
+- [Usage](#usage)
+  - [Basic Usage](#basic-usage)
+  - [One Time Data Copy](#one-time-data-copy)
+  - [Configuration](#configuration)
+    - [Required settings](#required-settings)
+    - [Optional settings](#optional-settings)
+  - [Advanced Features](#advanced-features)
+    - [Migrations & Schema Changes](#migrations--schema-changes)
+    - [Recovery Without Downtime](#recovery-without-downtime)
+- [Development](#development)
+  - [Running Tests](#running-tests)
+- [Contribution](#contribution)
+- [License](#license)
+- [Acknowledgements](#acknowledgements)
+
 ## Features
 
 - **Real-Time Replication**: Keeps your ClickHouse database in sync with MySQL in real-time.
@@ -39,6 +60,29 @@ pip install mysql_ch_replicator
 ```
 
 You may need to also compile C++ components if they're not pre-built for your platform.
+
+### Docker Installation
+
+Alternatively, you can use the pre-built Docker image from DockerHub:
+
+```bash
+docker pull fippo/mysql-ch-replicator:latest
+```
+
+To run the container:
+
+```bash
+docker run -d \
+  -v /path/to/your/config.yaml:/app/config.yaml \
+  -v /path/to/your/data:/app/data \
+  fippo/mysql-ch-replicator:latest \
+  --config /app/config.yaml run_all
+```
+
+Make sure to:
+1. Mount your configuration file using the `-v` flag
+2. Mount a persistent volume for the data directory
+3. Adjust the paths according to your setup
 
 ## Usage
 
