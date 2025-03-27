@@ -17,4 +17,4 @@ jobs:
         run: >
           ls -la &&
           docker compose -f docker-compose-tests.yaml up --force-recreate --no-deps --wait -d &&
-          sudo docker exec -w /app/ -i `docker ps | grep python | awk '{print $1;}'` python3 -m pytest -x -v -s test_mysql_ch_replicator.py
+          sudo docker exec -w /app/ -i `docker ps | grep mysql_ch_replicator-replicator | awk '{print $1;}'` python3 -m pytest -x -v -s test_mysql_ch_replicator.py
