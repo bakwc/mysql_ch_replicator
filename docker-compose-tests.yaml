@@ -18,7 +18,7 @@ services:
     volumes:
       - ./tests_override.xml:/bitnami/clickhouse/etc/conf.d/override.xml:ro
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9123/ping"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://default:admin@localhost:9123/ping"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -37,7 +37,7 @@ services:
     networks:
       - default
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MYSQL_ROOT_PASSWORD"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-padmin"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -56,7 +56,7 @@ services:
     volumes:
       - ./test_mariadb.cnf:/etc/mysql/my.cnf:ro  # Adjust path to MariaDB config location if needed
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p$$MARIADB_ROOT_PASSWORD"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-padmin"]
       interval: 5s
       timeout: 3s
       retries: 5
