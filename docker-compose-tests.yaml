@@ -18,11 +18,11 @@ services:
     volumes:
       - ./tests_override.xml:/bitnami/clickhouse/etc/conf.d/override.xml:ro
     healthcheck:
-      test: ["CMD-SHELL", "sleep 15"]
-      interval: 15s
+      test: ["CMD", "true"]
+      interval: 5s
       timeout: 1s
       retries: 1
-      start_period: 0s
+      start_period: 15s
 
   mysql_db:
     image: mysql:8.4.3
@@ -37,11 +37,11 @@ services:
     networks:
       - default
     healthcheck:
-      test: ["CMD-SHELL", "sleep 15"]
-      interval: 15s
+      test: ["CMD", "true"]
+      interval: 5s
       timeout: 1s
       retries: 1
-      start_period: 0s
+      start_period: 15s
 
   mariadb_db:
     image: mariadb:11.5.2
@@ -56,11 +56,11 @@ services:
     volumes:
       - ./test_mariadb.cnf:/etc/mysql/my.cnf:ro  # Adjust path to MariaDB config location if needed
     healthcheck:
-      test: ["CMD-SHELL", "sleep 15"]
-      interval: 15s
+      test: ["CMD", "true"]
+      interval: 5s
       timeout: 1s
       retries: 1
-      start_period: 0s
+      start_period: 15s
 
   replicator:
     build:
