@@ -17,6 +17,12 @@ services:
       - 9123:9123
     volumes:
       - ./tests_override.xml:/bitnami/clickhouse/etc/conf.d/override.xml:ro
+    healthcheck:
+      test: ["CMD", "true"]
+      interval: 5s
+      timeout: 1s
+      retries: 1
+      start_period: 15s
 
   mysql_db:
     image: mysql:8.4.3
@@ -30,6 +36,12 @@ services:
       - ./test_mysql.cnf:/etc/mysql/my.cnf:ro
     networks:
       - default
+    healthcheck:
+      test: ["CMD", "true"]
+      interval: 5s
+      timeout: 1s
+      retries: 1
+      start_period: 15s
 
   mariadb_db:
     image: mariadb:11.5.2
@@ -43,15 +55,31 @@ services:
       - 9307:3306
     volumes:
       - ./test_mariadb.cnf:/etc/mysql/my.cnf:ro  # Adjust path to MariaDB config location if needed
+    healthcheck:
+      test: ["CMD", "true"]
+      interval: 5s
+      timeout: 1s
+      retries: 1
+      start_period: 15s
 
   replicator:
-    image: python:3.12.4-slim-bookworm
-    command: bash -c "pip install -r /app/requirements.txt && pip install -r /app/requirements-dev.txt && touch /tmp/ready && tail -f /dev/null"
+    build:
+      context: .
+      dockerfile: Dockerfile
+    network_mode: host
+    volumes:
+      - ./:/app/
+    entrypoint: ["/bin/bash"]
+    command: ["-c", "touch /tmp/ready && tail -f /dev/null"]
     healthcheck:
       test: [ 'CMD-SHELL', 'test -f /tmp/ready' ]
       interval: 2s
       retries: 100
       start_period: 10s
-    network_mode: host
-    volumes:
-      - ./:/app/
+    depends_on:
+      clickhouse_db:
+        condition: service_healthy
+      mysql_db:
+        condition: service_healthy
+      mariadb_db:
+        condition: service_healthy
