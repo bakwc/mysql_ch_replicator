@@ -182,46 +182,55 @@ class ClickhouseApi:
     def insert(self, table_name, records, table_structure: TableStructure = None):
         current_version = self.get_last_used_version(table_name) + 1
 
-        records_to_insert = []
-        for record in records:
-            new_record = []
-            for i, e in enumerate(record):
+        if not records:
+            return
+
+        if not isinstance(records, list):
+            records = list(records)
+        
+        process_indices = []
+        if table_structure:
+            for i, field in enumerate(table_structure.fields):
+                if (("DateTime" in field.field_type or "Date32" in field.field_type) and "Nullable" not in field.field_type):
+                    process_indices.append(i)
+        else:
+            first_record = records[0]
+            for i, value in enumerate(first_record):
+                if isinstance(value, (datetime.date, datetime.datetime)):
+                    process_indices.append(i)
+                
+        for j, record in enumerate(records):
+            if not isinstance(record, list):
+                record = list(record)
+                records[j] = record
+
+            for i in process_indices:
+                e = record[i]
+
                 if isinstance(e, datetime.date) and not isinstance(e, datetime.datetime):
                     try:
-                        e = datetime.datetime.combine(e, datetime.time())
+                        record[i] = datetime.datetime.combine(e, datetime.time())
                     except ValueError:
-                        e = datetime.datetime(1970, 1, 1)
-                if isinstance(e, datetime.datetime):
+                        record[i] = datetime.datetime(1970, 1, 1)
+                elif isinstance(e, datetime.datetime):
                     try:
                         e.timestamp()
-                    except ValueError:
-                        e = datetime.datetime(1970, 1, 1)
-                if table_structure is not None:
-                    field: TableField = table_structure.fields[i]
-                    is_datetime = (
-                        ('DateTime' in field.field_type) or
-                        ('Date32' in field.field_type)
-                    )
-                    if is_datetime and 'Nullable' not in field.field_type:
-                        try:
-                            e.timestamp()
-                        except (ValueError, AttributeError):
-                            e = datetime.datetime(1970, 1, 1)
-                new_record.append(e)
-            record = new_record
+                    except (ValueError, AttributeError):
+                        record[i] = datetime.datetime(1970, 1, 1)
 
-            records_to_insert.append(tuple(record) + (current_version,))
+            record.append(current_version)
             current_version += 1
 
-        full_table_name = f'`table_name`'
-        if '.' not in full_table_name:
+        if '.' in table_name:
+            full_table_name = f'`{table_name}`'
+        else:
             full_table_name = f'`{self.database}`.`{table_name}`'
 
         duration = 0.0
         for attempt in range(ClickhouseApi.MAX_RETRIES):
             try:
                 t1 = time.time()
-                self.client.insert(table=full_table_name, data=records_to_insert)
+                self.client.insert(table=full_table_name, data=records)
                 t2 = time.time()
                 duration += (t2 - t1)
                 break
@@ -235,7 +244,7 @@ class ClickhouseApi:
             table_name=table_name,
             duration=duration,
             is_insert=True,
-            records=len(records_to_insert),
+            records=len(records),
         )
 
         self.set_last_used_version(table_name, current_version)
