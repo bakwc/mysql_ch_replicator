@@ -93,14 +93,27 @@ class MySQLApi:
         create_statement = res[0][1].strip()
         return create_statement
 
-    def get_records(self, table_name, order_by, limit, start_value=None):
+    def get_records(self, table_name, order_by, limit, start_value=None, worker_id=None, total_workers=None):
         self.reconnect_if_required()
-        order_by = ','.join(order_by)
+        order_by_str = ','.join(order_by)
         where = ''
         if start_value is not None:
             start_value = ','.join(map(str, start_value))
-            where = f'WHERE ({order_by}) > ({start_value}) '
-        query = f'SELECT * FROM `{table_name}` {where}ORDER BY {order_by} LIMIT {limit}'
+            where = f'WHERE ({order_by_str}) > ({start_value}) '
+
+        # Add partitioning filter for parallel processing if needed
+        if worker_id is not None and total_workers is not None and total_workers > 1:
+            concat_keys = f"CONCAT_WS('|', {', '.join([f'COALESCE({key}, \"\")' for key in order_by])})"
+            hash_condition = f"CRC32({concat_keys}) % {total_workers} = {worker_id}"
+            if where:
+                where += f'AND {hash_condition} '
+            else:
+                where = f'WHERE {hash_condition} '
+        
+        query = f'SELECT * FROM `{table_name}` {where}ORDER BY {order_by_str} LIMIT {limit}'
+        print("query:", query)
+
+        # Execute the actual query
         self.cursor.execute(query)
         res = self.cursor.fetchall()
         records = [x for x in res]

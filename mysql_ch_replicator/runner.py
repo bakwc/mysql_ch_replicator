@@ -24,8 +24,19 @@ class BinlogReplicatorRunner(ProcessRunner):
 
 
 class DbReplicatorRunner(ProcessRunner):
-    def __init__(self, db_name, config_file):
-        super().__init__(f'{sys.argv[0]} --config {config_file} --db {db_name} db_replicator')
+    def __init__(self, db_name, config_file, worker_id=None, total_workers=None, initial_only=False):
+        cmd = f'{sys.argv[0]} --config {config_file} --db {db_name} db_replicator'
+        
+        if worker_id is not None:
+            cmd += f' --worker_id={worker_id}'
+        
+        if total_workers is not None:
+            cmd += f' --total_workers={total_workers}'
+        
+        if initial_only:
+            cmd += ' --initial_only=True'
+            
+        super().__init__(cmd)
 
 
 class DbOptimizerRunner(ProcessRunner):

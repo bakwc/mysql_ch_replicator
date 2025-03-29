@@ -1,11 +1,15 @@
 import json
 import os.path
+import random
 import time
 import pickle
 from logging import getLogger
 from enum import Enum
 from dataclasses import dataclass
 from collections import defaultdict
+import sys
+import subprocess
+import select
 
 from .config import Settings, MysqlSettings, ClickhouseSettings
 from .mysql_api import MySQLApi
@@ -106,10 +110,15 @@ class DbReplicator:
 
     READ_LOG_INTERVAL = 0.3
 
-    def __init__(self, config: Settings, database: str, target_database: str = None, initial_only: bool = False):
+    def __init__(self, config: Settings, database: str, target_database: str = None, initial_only: bool = False, 
+                 worker_id: int = None, total_workers: int = None, table: str = None):
         self.config = config
         self.database = database
-
+        self.worker_id = worker_id
+        self.total_workers = total_workers
+        self.settings_file = config.settings_file
+        self.single_table = table  # Store the single table to process
+        
         # use same as source database by default
         self.target_database = database
 
@@ -122,8 +131,28 @@ class DbReplicator:
         if target_database:
             self.target_database = target_database
 
-        self.target_database_tmp = self.target_database + '_tmp'
         self.initial_only = initial_only
+
+        # Handle state file differently for parallel workers
+        if self.worker_id is not None and self.total_workers is not None:
+            # For worker processes in parallel mode, use a different state file
+            self.is_parallel_worker = True
+            self.state_path = os.path.join(
+                self.config.binlog_replicator.data_dir, 
+                self.database, 
+                f'state_worker_{self.worker_id}_{random.randint(0,9999999999)}.pckl'
+            )
+            logger.info(f"Worker {self.worker_id}/{self.total_workers} using state file: {self.state_path}")
+            
+            if self.single_table:
+                logger.info(f"Worker {self.worker_id} focusing only on table: {self.single_table}")
+        else:
+            self.state_path = os.path.join(self.config.binlog_replicator.data_dir, self.database, 'state.pckl')
+            self.is_parallel_worker = False
+
+        self.target_database_tmp = self.target_database + '_tmp'
+        if self.is_parallel_worker:
+            self.target_database_tmp = self.target_database
 
         self.mysql_api = MySQLApi(
             database=self.database,
@@ -148,7 +177,7 @@ class DbReplicator:
         self.start_time = time.time()
 
     def create_state(self):
-        return State(os.path.join(self.config.binlog_replicator.data_dir, self.database, 'state.pckl'))
+        return State(self.state_path)
 
     def validate_database_settings(self):
         if not self.initial_only:
@@ -196,7 +225,9 @@ class DbReplicator:
 
             logger.info('recreating database')
             self.clickhouse_api.database = self.target_database_tmp
-            self.clickhouse_api.recreate_database()
+            if not self.is_parallel_worker:
+                self.clickhouse_api.recreate_database()
+
             self.state.tables = self.mysql_api.get_tables()
             self.state.tables = [
                 table for table in self.state.tables if self.config.is_table_matches(table)
@@ -220,6 +251,10 @@ class DbReplicator:
     def create_initial_structure_table(self, table_name):
         if not self.config.is_table_matches(table_name):
             return
+
+        if self.single_table and self.single_table != table_name:
+            return
+
         mysql_create_statement = self.mysql_api.get_table_create_statement(table_name)
         mysql_structure = self.converter.parse_mysql_table_structure(
             mysql_create_statement, required_table_name=table_name,
@@ -232,7 +267,9 @@ class DbReplicator:
         
         self.state.tables_structure[table_name] = (mysql_structure, clickhouse_structure)
         indexes = self.config.get_indexes(self.database, table_name)
-        self.clickhouse_api.create_table(clickhouse_structure, additional_indexes=indexes)
+
+        if not self.is_parallel_worker:
+            self.clickhouse_api.create_table(clickhouse_structure, additional_indexes=indexes)
 
     def prevent_binlog_removal(self):
         if time.time() - self.last_touch_time < self.BINLOG_TOUCH_INTERVAL:
@@ -253,22 +290,26 @@ class DbReplicator:
         for table in self.state.tables:
             if start_table and table != start_table:
                 continue
+            if self.single_table and self.single_table != table:
+                continue
             self.perform_initial_replication_table(table)
             start_table = None
-        logger.info(f'initial replication - swapping database')
-        if self.target_database in self.clickhouse_api.get_databases():
-            self.clickhouse_api.execute_command(
-                f'RENAME DATABASE `{self.target_database}` TO `{self.target_database}_old`',
-            )
-            self.clickhouse_api.execute_command(
-                f'RENAME DATABASE `{self.target_database_tmp}` TO `{self.target_database}`',
-            )
-            self.clickhouse_api.drop_database(f'{self.target_database}_old')
-        else:
-            self.clickhouse_api.execute_command(
-                f'RENAME DATABASE `{self.target_database_tmp}` TO `{self.target_database}`',
-            )
-        self.clickhouse_api.database = self.target_database
+
+        if not self.is_parallel_worker:
+            logger.info(f'initial replication - swapping database')
+            if self.target_database in self.clickhouse_api.get_databases():
+                self.clickhouse_api.execute_command(
+                    f'RENAME DATABASE `{self.target_database}` TO `{self.target_database}_old`',
+                )
+                self.clickhouse_api.execute_command(
+                    f'RENAME DATABASE `{self.target_database_tmp}` TO `{self.target_database}`',
+                )
+                self.clickhouse_api.drop_database(f'{self.target_database}_old')
+            else:
+                self.clickhouse_api.execute_command(
+                    f'RENAME DATABASE `{self.target_database_tmp}` TO `{self.target_database}`',
+                )
+            self.clickhouse_api.database = self.target_database
         logger.info(f'initial replication - done')
 
     def perform_initial_replication_table(self, table_name):
@@ -276,6 +317,13 @@ class DbReplicator:
 
         if not self.config.is_table_matches(table_name):
             logger.info(f'skip table {table_name} - not matching any allowed table')
+            return
+
+        if not self.is_parallel_worker and self.config.initial_replication_threads > 1:
+            self.state.initial_replication_table = table_name
+            self.state.initial_replication_max_primary_key = None
+            self.state.save()
+            self.perform_initial_replication_table_parallel(table_name)
             return
 
         max_primary_key = None
@@ -322,6 +370,8 @@ class DbReplicator:
                 order_by=primary_keys,
                 limit=DbReplicator.INITIAL_REPLICATION_BATCH_SIZE,
                 start_value=query_start_values,
+                worker_id=self.worker_id,
+                total_workers=self.total_workers,
             )
             logger.debug(f'extracted {len(records)} records from mysql')
 
@@ -359,6 +409,66 @@ class DbReplicator:
             f'replicated {stats_number_of_records} records, '
             f'primary key: {max_primary_key}',
         )
+
+    def perform_initial_replication_table_parallel(self, table_name):
+        """
+        Execute initial replication for a table using multiple parallel worker processes.
+        Each worker will handle a portion of the table based on its worker_id and total_workers.
+        """
+        logger.info(f"Starting parallel replication for table {table_name} with {self.config.initial_replication_threads} workers")
+
+        # Create and launch worker processes
+        processes = []
+        for worker_id in range(self.config.initial_replication_threads):
+            # Prepare command to launch a worker process
+            cmd = [
+                sys.executable, "-m", "mysql_ch_replicator.main",
+                "db_replicator",  # Required positional mode argument
+                "--config", self.settings_file,
+                "--db", self.database,
+                "--worker_id", str(worker_id),
+                "--total_workers", str(self.config.initial_replication_threads),
+                "--table", table_name,
+                "--target_db", self.target_database_tmp,
+                "--initial_only=True",
+            ]
+                
+            logger.info(f"Launching worker {worker_id}: {' '.join(cmd)}")
+            process = subprocess.Popen(cmd)
+            processes.append(process)
+        
+        # Wait for all worker processes to complete
+        logger.info(f"Waiting for {len(processes)} workers to complete replication of {table_name}")
+        
+        try:
+            while processes:
+                for i, process in enumerate(processes[:]):
+                    # Check if process is still running
+                    if process.poll() is not None:
+                        exit_code = process.returncode
+                        if exit_code == 0:
+                            logger.info(f"Worker process {i} completed successfully")
+                        else:
+                            logger.error(f"Worker process {i} failed with exit code {exit_code}")
+                            # Optional: can raise an exception here to abort the entire operation
+                            raise Exception(f"Worker process failed with exit code {exit_code}")
+                        
+                        processes.remove(process)
+                
+                if processes:
+                    # Wait a bit before checking again
+                    time.sleep(0.1)
+                    
+                    # Every 30 seconds, log progress
+                    if int(time.time()) % 30 == 0:
+                        logger.info(f"Still waiting for {len(processes)} workers to complete")
+        except KeyboardInterrupt:
+            logger.warning("Received interrupt, terminating worker processes")
+            for process in processes:
+                process.terminate()
+            raise
+        
+        logger.info(f"All workers completed replication of table {table_name}")
 
     def run_realtime_replication(self):
         if self.initial_only:
