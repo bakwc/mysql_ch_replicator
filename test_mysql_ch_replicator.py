@@ -1357,7 +1357,7 @@ def get_last_insert_from_binlog(cfg: config.Settings, db_name: str):
 
 
 @pytest.mark.optional
-def test_performance_binlog_replicator():
+def test_performance_realtime_replication():
     config_file = 'tests_config_perf.yaml'
     num_records = 100000
 
@@ -1387,6 +1387,8 @@ def test_performance_binlog_replicator():
 
     binlog_replicator_runner = BinlogReplicatorRunner(cfg_file=config_file)
     binlog_replicator_runner.run()
+    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file=config_file)
+    db_replicator_runner.run()
 
     time.sleep(1)
 
@@ -1399,8 +1401,15 @@ def test_performance_binlog_replicator():
         return record[1].decode('utf-8')
 
     assert_wait(lambda: _get_last_insert_name() == 'TEST_VALUE_1', retry_interval=0.5)
+    
+    # Wait for the database and table to be created in ClickHouse
+    assert_wait(lambda: TEST_DB_NAME in ch.get_databases(), retry_interval=0.5)
+    ch.execute_command(f'USE `{TEST_DB_NAME}`')
+    assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables(), retry_interval=0.5)
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1, retry_interval=0.5)
 
     binlog_replicator_runner.stop()
+    db_replicator_runner.stop()
 
     time.sleep(1)
 
@@ -1418,7 +1427,7 @@ def test_performance_binlog_replicator():
 
     mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, age) VALUES ('TEST_VALUE_FINAL', 0);", commit=True)
 
-    print("running db_replicator")
+    print("running binlog_replicator")
     t1 = time.time()
     binlog_replicator_runner = BinlogReplicatorRunner(cfg_file=config_file)
     binlog_replicator_runner.run()
@@ -1433,6 +1442,33 @@ def test_performance_binlog_replicator():
 
     print('\n\n')
     print("*****************************")
+    print("Binlog Replicator Performance:")
+    print("records per second:", int(rps))
+    print("total time (seconds):", round(time_delta, 2))
+    print("*****************************")
+    print('\n\n')
+
+    # Now test db_replicator performance
+    print("running db_replicator")
+    t1 = time.time()
+    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file=config_file)
+    db_replicator_runner.run()
+
+    # Make sure the database and table exist before querying
+    assert_wait(lambda: TEST_DB_NAME in ch.get_databases(), retry_interval=0.5)
+    ch.execute_command(f'USE `{TEST_DB_NAME}`')
+    assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables(), retry_interval=0.5)
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == num_records + 2, retry_interval=0.5, max_wait_time=1000)
+    t2 = time.time()
+
+    db_replicator_runner.stop()
+
+    time_delta = t2 - t1
+    rps = num_records / time_delta
+
+    print('\n\n')
+    print("*****************************")
+    print("DB Replicator Performance:")
     print("records per second:", int(rps))
     print("total time (seconds):", round(time_delta, 2))
     print("*****************************")
