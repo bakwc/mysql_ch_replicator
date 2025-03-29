@@ -1357,7 +1357,7 @@ def get_last_insert_from_binlog(cfg: config.Settings, db_name: str):
 
 
 @pytest.mark.optional
-def test_performance_dbreplicator():
+def test_performance_binlog_replicator():
     config_file = 'tests_config_perf.yaml'
     num_records = 100000
 
