@@ -1997,3 +1997,82 @@ def test_year_type():
     run_all_runner.stop()
     assert_wait(lambda: 'stopping db_replicator' in read_logs(TEST_DB_NAME))
     assert('Traceback' not in read_logs(TEST_DB_NAME))
+
+@pytest.mark.optional
+def test_performance_initial_only_replication():
+    config_file = 'tests_config_perf.yaml'
+    num_records = 1000000
+
+    cfg = config.Settings()
+    cfg.load(config_file)
+
+    mysql = mysql_api.MySQLApi(
+        database=None,
+        mysql_settings=cfg.mysql,
+    )
+
+    ch = clickhouse_api.ClickhouseApi(
+        database=TEST_DB_NAME,
+        clickhouse_settings=cfg.clickhouse,
+    )
+
+    prepare_env(cfg, mysql, ch)
+
+    mysql.execute(f'''
+    CREATE TABLE `{TEST_TABLE_NAME}` (
+        id int NOT NULL AUTO_INCREMENT,
+        name varchar(2048),
+        age int,
+        PRIMARY KEY (id)
+    ); 
+    ''')
+
+    print("populating mysql data")
+
+    base_value = 'a' * 2000
+
+    for i in range(num_records):
+        if i % 2000 == 0:
+            print(f'populated {i} elements')
+        mysql.execute(
+            f"INSERT INTO `{TEST_TABLE_NAME}` (name, age) "
+            f"VALUES ('TEST_VALUE_{i}_{base_value}', {i});", commit=i % 20 == 0,
+        )
+
+    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, age) VALUES ('TEST_VALUE_FINAL', 0);", commit=True)
+    print(f"finished populating {num_records} records")
+
+    # Now test db_replicator performance in initial_only mode
+    print("running db_replicator in initial_only mode")
+    t1 = time.time()
+    
+    db_replicator_runner = DbReplicatorRunner(
+        TEST_DB_NAME, 
+        additional_arguments='--initial_only=True',
+        cfg_file=config_file
+    )
+    db_replicator_runner.run()
+    db_replicator_runner.wait_complete()  # Wait for the process to complete
+
+    # Make sure the database and table exist
+    assert_wait(lambda: TEST_DB_NAME in ch.get_databases(), retry_interval=0.5)
+    ch.execute_command(f'USE `{TEST_DB_NAME}`')
+    assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables(), retry_interval=0.5)
+    
+    # Check that all records were replicated
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == num_records + 1, retry_interval=0.5, max_wait_time=300)
+    
+    t2 = time.time()
+
+    time_delta = t2 - t1
+    rps = num_records / time_delta
+
+    print('\n\n')
+    print("*****************************")
+    print("DB Replicator Initial Only Mode Performance:")
+    print("records per second:", int(rps))
+    print("total time (seconds):", round(time_delta, 2))
+    print("*****************************")
+    print('\n\n')
+
+    db_replicator_runner.stop()
