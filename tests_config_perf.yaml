@@ -1,7 +1,7 @@
 
 mysql:
   host: 'localhost'
-  port: 9307
+  port: 9306
   user: 'root'
   password: 'admin'
 
