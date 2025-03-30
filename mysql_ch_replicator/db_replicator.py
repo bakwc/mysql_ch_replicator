@@ -6,6 +6,7 @@ from logging import getLogger
 from enum import Enum
 from dataclasses import dataclass
 from collections import defaultdict
+from datetime import date
 
 from .config import Settings, MysqlSettings, ClickhouseSettings
 from .mysql_api import MySQLApi
@@ -271,6 +272,30 @@ class DbReplicator:
         self.clickhouse_api.database = self.target_database
         logger.info(f'initial replication - done')
 
+    def to_date_if_str(self, value):
+        if not isinstance(value, str):
+            return value
+
+        if len(value) == 10 and value[4] == '-' and value[7] == '-':
+            try:
+                year = int(value[0:4])
+                month = int(value[5:7])
+                day = int(value[8:10])
+                return date(year, month, day)
+            except ValueError:
+                return value
+
+        if len(value) == 12 and value[5] == '-' and value[8] == '-' and ((value[0] == '\'' and value[11] == '\'') or (value[0] == '"' and value[11] == '"')):
+            try:
+                year = int(value[1:5])
+                month = int(value[6:8])
+                day = int(value[9:11])
+                return date(year, month, day)
+            except ValueError:
+                return value
+
+        return value
+
     def perform_initial_replication_table(self, table_name):
         logger.info(f'running initial replication for table {table_name}')
 
@@ -332,13 +357,11 @@ class DbReplicator:
 
             if not records:
                 break
+
             self.clickhouse_api.insert(table_name, records, table_structure=clickhouse_table_structure)
-            for record in records:
-                record_primary_key = [record[key_idx] for key_idx in primary_key_ids]
-                if max_primary_key is None:
-                    max_primary_key = record_primary_key
-                else:
-                    max_primary_key = max(max_primary_key, record_primary_key)
+
+            last_record = records[-1]
+            max_primary_key = [self.to_date_if_str(last_record[key_idx]) for key_idx in primary_key_ids]
 
             self.state.initial_replication_max_primary_key = max_primary_key
             self.save_state_if_required()
