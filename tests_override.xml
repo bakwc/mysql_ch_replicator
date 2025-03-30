@@ -4,4 +4,25 @@
             <final>1</final>
         </default>
     </profiles>
+
+    <remote_servers>
+        <test_2shards>
+            <shard>
+                <replica>
+                    <host>clickhouse_db</host>
+                    <port>9000</port>
+                    <user>default</user>
+                    <password>admin</password>
+                </replica>
+            </shard>
+            <shard>
+                <replica>
+                    <host>clickhouse_db_2</host>
+                    <port>9000</port>
+                    <user>default</user>
+                    <password>admin</password>
+                </replica>
+            </shard>
+        </test_2shards>
+    </remote_servers>
 </clickhouse>
