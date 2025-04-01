@@ -87,13 +87,28 @@ def run_db_replicator(args, config: Settings):
         'db_replicator.log',
     )
 
-    set_logging_config(f'dbrepl {args.db}', log_file=log_file, log_level_str=config.log_level)
+    # Set log tag according to whether this is a worker or main process
+    if args.worker_id is not None:
+        if args.table:
+            log_tag = f'dbrepl {db_name} worker_{args.worker_id} table_{args.table}'
+        else:
+            log_tag = f'dbrepl {db_name} worker_{args.worker_id}'
+    else:
+        log_tag = f'dbrepl {db_name}'
+
+    set_logging_config(log_tag, log_file=log_file, log_level_str=config.log_level)
+
+    if args.table:
+        logging.info(f"Processing specific table: {args.table}")
 
     db_replicator = DbReplicator(
         config=config,
         database=db_name,
         target_database=getattr(args, 'target_db', None),
         initial_only=args.initial_only,
+        worker_id=args.worker_id,
+        total_workers=args.total_workers,
+        table=args.table,
     )
     db_replicator.run()
 
@@ -141,6 +156,18 @@ def main():
     parser.add_argument(
         "--initial_only", type=bool, default=False,
         help="don't run realtime replication, run initial replication only",
+    )
+    parser.add_argument(
+        "--worker_id", type=int, default=None,
+        help="Worker ID for parallel initial replication (0-based)",
+    )
+    parser.add_argument(
+        "--total_workers", type=int, default=None,
+        help="Total number of workers for parallel initial replication",
+    )
+    parser.add_argument(
+        "--table", type=str, default=None,
+        help="Specific table to process (used with --worker_id for parallel processing of a single table)",
     )
     args = parser.parse_args()
 
