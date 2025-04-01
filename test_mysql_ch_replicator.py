@@ -2003,6 +2003,7 @@ def test_year_type():
     assert_wait(lambda: 'stopping db_replicator' in read_logs(TEST_DB_NAME))
     assert('Traceback' not in read_logs(TEST_DB_NAME))
 
+
 @pytest.mark.optional
 def test_performance_initial_only_replication():
     config_file = 'tests_config_perf.yaml'
