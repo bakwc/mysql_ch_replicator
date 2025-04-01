@@ -14,7 +14,7 @@ from mysql_ch_replicator import config
 from mysql_ch_replicator import mysql_api
 from mysql_ch_replicator import clickhouse_api
 from mysql_ch_replicator.binlog_replicator import State as BinlogState, FileReader, EventType, BinlogReplicator
-from mysql_ch_replicator.db_replicator import State as DbReplicatorState, DbReplicator
+from mysql_ch_replicator.db_replicator import State as DbReplicatorState, DbReplicator, DbReplicatorInitial
 from mysql_ch_replicator.converter import MysqlToClickhouseConverter
 
 from mysql_ch_replicator.runner import ProcessRunner
@@ -1049,7 +1049,7 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
 
 
 def test_string_primary_key(monkeypatch):
-    monkeypatch.setattr(DbReplicator, 'INITIAL_REPLICATION_BATCH_SIZE', 1)
+    monkeypatch.setattr(DbReplicatorInitial, 'INITIAL_REPLICATION_BATCH_SIZE', 1)
 
     cfg = config.Settings()
     cfg.load(CONFIG_FILE)
@@ -1111,7 +1111,7 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
 
 
 def test_if_exists_if_not_exists(monkeypatch):
-    monkeypatch.setattr(DbReplicator, 'INITIAL_REPLICATION_BATCH_SIZE', 1)
+    monkeypatch.setattr(DbReplicatorInitial, 'INITIAL_REPLICATION_BATCH_SIZE', 1)
 
     cfg = config.Settings()
     cfg.load(CONFIG_FILE)
@@ -1152,7 +1152,7 @@ def test_if_exists_if_not_exists(monkeypatch):
 
 
 def test_percona_migration(monkeypatch):
-    monkeypatch.setattr(DbReplicator, 'INITIAL_REPLICATION_BATCH_SIZE', 1)
+    monkeypatch.setattr(DbReplicatorInitial, 'INITIAL_REPLICATION_BATCH_SIZE', 1)
 
     cfg = config.Settings()
     cfg.load(CONFIG_FILE)
@@ -1230,7 +1230,7 @@ CREATE TABLE `{TEST_DB_NAME}`.`_{TEST_TABLE_NAME}_new` (
 
 
 def test_add_column_first_after_and_drop_column(monkeypatch):
-    monkeypatch.setattr(DbReplicator, 'INITIAL_REPLICATION_BATCH_SIZE', 1)
+    monkeypatch.setattr(DbReplicatorInitial, 'INITIAL_REPLICATION_BATCH_SIZE', 1)
 
     cfg = config.Settings()
     cfg.load(CONFIG_FILE)
