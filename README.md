@@ -200,6 +200,8 @@ tables: '*'
 
 # OPTIONAL SETTINGS
 
+initial_replication_threads: 4                        # optional
+
 exclude_databases: ['database_10', 'database_*_42']   # optional
 exclude_tables: ['meta_table_*']                      # optional
 
@@ -234,6 +236,7 @@ types_mapping:          # optional
 - `databases` Databases name pattern to replicate, e.g. `db_*` will match `db_1` `db_2` `db_test`, list is also supported
 
 #### Optional settings
+- `initial_replication_threads` - number of threads for initial replication, by default 1, set it to number of cores to accelerate initial data copy
 - `tables` - tables to filter, list is also supported
 - `exclude_databases` - databases to __exclude__, string or list, eg `'table1*'` or `['table2', 'table3*']`. If same database matches `databases` and `exclude_databases`, exclude has higher priority.
 - `exclude_tables` - databases to __exclude__, string or list. If same table matches `tables` and `exclude_tables`, exclude has higher priority.
