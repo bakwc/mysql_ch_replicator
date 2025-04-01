@@ -103,7 +103,9 @@ class MySQLApi:
 
         # Add partitioning filter for parallel processing if needed
         if worker_id is not None and total_workers is not None and total_workers > 1:
-            concat_keys = f"CONCAT_WS('|', {', '.join([f'COALESCE({key}, \"\")' for key in order_by])})"
+            # Use a list comprehension to build the COALESCE expressions with proper quoting
+            coalesce_expressions = [f"COALESCE({key}, '')" for key in order_by]
+            concat_keys = f"CONCAT_WS('|', {', '.join(coalesce_expressions)})"
             hash_condition = f"CRC32({concat_keys}) % {total_workers} = {worker_id}"
             if where:
                 where += f'AND {hash_condition} '
