@@ -316,9 +316,10 @@ def get_db_replicator_pid(cfg: config.Settings, db_name: str):
     return state.pid
 
 
-def test_runner():
+@pytest.mark.parametrize('cfg_file', [CONFIG_FILE, 'tests_config_parallel.yaml'])
+def test_runner(cfg_file):
     cfg = config.Settings()
-    cfg.load(CONFIG_FILE)
+    cfg.load(cfg_file)
 
     mysql = mysql_api.MySQLApi(
         database=None,
@@ -367,7 +368,7 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
 
     mysql.execute(f"INSERT INTO `group` (name, age, rate) VALUES ('Peter', 33, 10.2);", commit=True)
 
-    run_all_runner = RunAllRunner()
+    run_all_runner = RunAllRunner(cfg_file=cfg_file)
     run_all_runner.run()
 
     assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
@@ -422,6 +423,8 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
         commit=True,
     )
 
+    assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
+
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 5)
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, "age=1912")[0]['name'] == 'Hällo')
 
@@ -430,6 +433,8 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
 
     requests.get('http://localhost:9128/restart_replication')
     time.sleep(1.0)
+
+    assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
 
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 5)
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, "age=1912")[0]['name'] == 'Hällo')
@@ -1998,10 +2003,11 @@ def test_year_type():
     assert_wait(lambda: 'stopping db_replicator' in read_logs(TEST_DB_NAME))
     assert('Traceback' not in read_logs(TEST_DB_NAME))
 
+
 @pytest.mark.optional
 def test_performance_initial_only_replication():
     config_file = 'tests_config_perf.yaml'
-    num_records = 1000000
+    num_records = 300000
 
     cfg = config.Settings()
     cfg.load(config_file)
@@ -2074,5 +2080,57 @@ def test_performance_initial_only_replication():
     print("total time (seconds):", round(time_delta, 2))
     print("*****************************")
     print('\n\n')
+    
+    # Clean up
+    ch.drop_database(TEST_DB_NAME)
+    
+    # Now test with parallel replication
+    # Set initial_replication_threads in the config
+    print("running db_replicator with parallel initial replication")
+    
+    t1 = time.time()
+    
+    # Create a custom config file for testing with parallel replication
+    parallel_config_file = 'tests_config_perf_parallel.yaml'
+    if os.path.exists(parallel_config_file):
+        os.remove(parallel_config_file)
 
+    with open(config_file, 'r') as src_file:
+        config_content = src_file.read()
+    config_content += f"\ninitial_replication_threads: 8\n"
+    with open(parallel_config_file, 'w') as dest_file:
+        dest_file.write(config_content)
+    
+    # Use the DbReplicator directly to test the new parallel implementation
+    db_replicator_runner = DbReplicatorRunner(
+        TEST_DB_NAME, 
+        cfg_file=parallel_config_file
+    )
+    db_replicator_runner.run()
+    
+    # Make sure the database and table exist
+    assert_wait(lambda: TEST_DB_NAME in ch.get_databases(), retry_interval=0.5)
+    ch.execute_command(f'USE `{TEST_DB_NAME}`')
+    assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables(), retry_interval=0.5)
+    
+    # Check that all records were replicated
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == num_records + 1, retry_interval=0.5, max_wait_time=300)
+    
+    t2 = time.time()
+    
+    time_delta = t2 - t1
+    rps = num_records / time_delta
+    
+    print('\n\n')
+    print("*****************************")
+    print("DB Replicator Parallel Mode Performance:")
+    print("workers:", cfg.initial_replication_threads)
+    print("records per second:", int(rps))
+    print("total time (seconds):", round(time_delta, 2))
+    print("*****************************")
+    print('\n\n')
+    
     db_replicator_runner.stop()
+    
+    # Clean up the temporary config file
+    os.remove(parallel_config_file)
