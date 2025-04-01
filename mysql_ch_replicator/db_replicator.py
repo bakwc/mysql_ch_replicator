@@ -3,6 +3,7 @@ import os.path
 import random
 import time
 import pickle
+import hashlib
 from logging import getLogger
 from enum import Enum
 from dataclasses import dataclass
@@ -135,13 +136,26 @@ class DbReplicator:
 
         # Handle state file differently for parallel workers
         if self.worker_id is not None and self.total_workers is not None:
-            # For worker processes in parallel mode, use a different state file
+            # For worker processes in parallel mode, use a different state file with a deterministic name
             self.is_parallel_worker = True
+            
+            # Determine table name for the state file
+            table_identifier = self.single_table if self.single_table else "all_tables"
+            
+            # Create a hash of the table name to ensure it's filesystem-safe
+            if self.single_table:
+                # Use a hex digest of the table name to ensure it's filesystem-safe
+                table_identifier = hashlib.sha256(self.single_table.encode('utf-8')).hexdigest()[:16]
+            else:
+                table_identifier = "all_tables"
+            
+            # Create a deterministic state file path that includes worker_id, total_workers, and table hash
             self.state_path = os.path.join(
                 self.config.binlog_replicator.data_dir, 
                 self.database, 
-                f'state_worker_{self.worker_id}_{random.randint(0,9999999999)}.pckl'
+                f'state_worker_{self.worker_id}_of_{self.total_workers}_{table_identifier}.pckl'
             )
+            
             logger.info(f"Worker {self.worker_id}/{self.total_workers} using state file: {self.state_path}")
             
             if self.single_table:
