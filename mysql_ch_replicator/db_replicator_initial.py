@@ -4,6 +4,7 @@ import hashlib
 import time
 import sys
 import subprocess
+import pickle
 from logging import getLogger
 from enum import Enum
 
@@ -213,6 +214,7 @@ class DbReplicatorInitial:
             f'replicated {stats_number_of_records} records, '
             f'primary key: {max_primary_key}',
         )
+        self.save_state_if_required(force=True)
 
     def perform_initial_replication_table_parallel(self, table_name):
         """
@@ -273,3 +275,28 @@ class DbReplicatorInitial:
             raise
         
         logger.info(f"All workers completed replication of table {table_name}")
+        
+        # Consolidate record versions from all worker states
+        logger.info(f"Consolidating record versions from worker states for table {table_name}")
+        self.consolidate_worker_record_versions(table_name)
+        
+    def consolidate_worker_record_versions(self, table_name):
+        """
+        Query ClickHouse directly to get the maximum record version for the specified table
+        and update the main state with this version.
+        """
+        logger.info(f"Getting maximum record version from ClickHouse for table {table_name}")
+        
+        # Query ClickHouse for the maximum record version
+        max_version = self.replicator.clickhouse_api.get_max_record_version(table_name)
+        
+        if max_version is not None and max_version > 0:
+            current_version = self.replicator.state.tables_last_record_version.get(table_name, 0)
+            if max_version > current_version:
+                logger.info(f"Updating record version for table {table_name} from {current_version} to {max_version}")
+                self.replicator.state.tables_last_record_version[table_name] = max_version
+                self.replicator.state.save()
+            else:
+                logger.info(f"Current version {current_version} is already up-to-date with ClickHouse version {max_version}")
+        else:
+            logger.warning(f"No record version found in ClickHouse for table {table_name}")

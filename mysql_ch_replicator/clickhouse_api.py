@@ -292,3 +292,25 @@ class ClickhouseApi:
         if not results:
             return None
         return results[0].get('value', None)
+
+    def get_max_record_version(self, table_name):
+        """
+        Query the maximum _version value for a given table directly from ClickHouse.
+        
+        Args:
+            table_name: The name of the table to query
+            
+        Returns:
+            The maximum _version value as an integer, or None if the table doesn't exist
+            or has no records
+        """
+        try:
+            query = f"SELECT MAX(_version) FROM `{self.database}`.`{table_name}`"
+            result = self.client.query(query)
+            if not result.result_rows or result.result_rows[0][0] is None:
+                logger.warning(f"No records with _version found in table {table_name}")
+                return None
+            return result.result_rows[0][0]
+        except Exception as e:
+            logger.error(f"Error querying max _version for table {table_name}: {e}")
+            return None
