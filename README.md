@@ -40,7 +40,7 @@ With a focus on high performance, it utilizes batching heavily and uses C++ exte
 
 - **Real-Time Replication**: Keeps your ClickHouse database in sync with MySQL in real-time.
 - **High Performance**: Utilizes batching and ports slow parts to C++ (e.g., MySQL internal JSON parsing) for optimal performance (±20K events / second on a single core).
-- **Supports Migrations/Schema Changes**: Handles adding, altering, and removing tables without breaking the replication process.
+- **Supports Migrations/Schema Changes**: Handles adding, altering, and removing tables without breaking the replication process (*for most cases, [details here](https://github.com/bakwc/mysql_ch_replicator#migrations--schema-changes)).
 - **Recovery without Downtime**: Allows for preserving old data while performing initial replication, ensuring continuous operation.
 - **Correct Data Removal**: Unlike MaterializedMySQL, `mysql_ch_replicator` ensures physical removal of data.
 - **Comprehensive Data Type Support**: Accurately replicates most data types, including JSON, booleans, and more. Easily extensible for additional data types.
@@ -265,6 +265,11 @@ tables: ['table_1', 'table_2*']
 - **Adding Tables**: Automatically starts replicating data from newly added tables.
 - **Altering Tables**: Adjusts replication strategy based on schema changes.
 - **Removing Tables**: Handles removal of tables without disrupting the replication process.
+
+**WARNING**. While 95% of operations supported, there could be still some unhandled operations. We try to support all of them, but for your safety, please write the CI/CD test that will check your migrations. Test should work a following way:
+ - Aplly all your mysql migrations
+ - Try to insert some record into mysql (to any table)
+ - Check that this record appears in ClickHouse
 
 #### Recovery Without Downtime
 
