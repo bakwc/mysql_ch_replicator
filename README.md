@@ -271,6 +271,10 @@ tables: ['table_1', 'table_2*']
  - Try to insert some record into mysql (to any table)
  - Check that this record appears in ClickHouse
 
+**Known Limitations**
+1. Migrations not supported during initial replication. You should either wait for initial replication finish and then apply migrations, or restart initial replication from scratch (by removing state file).
+2. Primary key changes not supported. This is a ClickHouse level limitation, it does not allow to make any changes realted to primary key.
+
 #### Recovery Without Downtime
 
 In case of a failure or during the initial replication, `mysql_ch_replicator` will preserve old data and continue syncing new data seamlessly. You could remove the state and restart replication from scratch.
