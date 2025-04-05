@@ -113,7 +113,6 @@ class MySQLApi:
                 where = f'WHERE {hash_condition} '
         
         query = f'SELECT * FROM `{table_name}` {where}ORDER BY {order_by_str} LIMIT {limit}'
-        print("query:", query)
 
         # Execute the actual query
         self.cursor.execute(query)
