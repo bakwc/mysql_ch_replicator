@@ -480,14 +480,20 @@ class BinlogReplicator:
                         continue
 
                     if log_event.event_type == EventType.QUERY.value:
+                        logger.info(f'received query event: {event.query}')
                         db_name_from_query = self._try_parse_db_name_from_query(event.query)
                         if db_name_from_query:
                             log_event.db_name = db_name_from_query
 
                     if not self.settings.is_database_matches(log_event.db_name):
+
+                        if log_event.event_type == EventType.QUERY.value:
+                            logger.info(f'query event not matched')
+
                         continue
 
-                    logger.debug(f'event matched {transaction_id}, {log_event.db_name}, {log_event.table_name}')
+                    if log_event.event_type == EventType.QUERY.value:
+                        logger.info(f'query event matched {transaction_id}, {log_event.db_name}, {log_event.table_name}')
 
                     log_event.transaction_id = transaction_id
 

@@ -82,7 +82,7 @@ class DbReplicatorRealtime:
             if event.transaction_id <= self.replicator.state.last_processed_transaction_non_uploaded:
                 return
 
-        logger.debug(f'processing event {event.transaction_id}, {event.event_type}, {event.table_name}')
+        logger.info(f'processing event {event.transaction_id}, {event.event_type}, {event.table_name}')
 
         event_handlers = {
             EventType.ADD_EVENT.value: self.handle_insert_event,
@@ -166,8 +166,8 @@ class DbReplicatorRealtime:
             current_table_records_to_insert.pop(record_id, None)
 
     def handle_query_event(self, event: LogEvent):
-        if self.replicator.config.debug_log_level:
-            logger.debug(f'processing query event: {event.transaction_id}, query: {event.records}')
+        logger.info(f'processing query event: {event.transaction_id}, query: {event.records}')
+
         query = strip_sql_comments(event.records)
         if query.lower().startswith('alter'):
             self.upload_records()
