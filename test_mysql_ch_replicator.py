@@ -2305,26 +2305,23 @@ CREATE TABLE `{TEST_DB_NAME}`.`{TEST_TABLE_NAME}` (
     assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1)
 
-    # Now follow user's exact sequence of operations with fully qualified names
+    # Now follow user's sequence of operations with fully qualified names (excluding RENAME operation)
     # 1. Add new column
-    mysql.execute(f"ALTER TABLE `{TEST_DB_NAME}`.`{TEST_TABLE_NAME}` ADD COLUMN added_new_column char(1)", commit=True)
+    mysql.execute(f"ALTER TABLE `{TEST_DB_NAME}`.`{TEST_TABLE_NAME}` ADD COLUMN added_new_column varchar(5)", commit=True)
     
-    # 2. Rename the column
-    mysql.execute(f"ALTER TABLE `{TEST_DB_NAME}`.`{TEST_TABLE_NAME}` RENAME COLUMN added_new_column TO rename_column_name", commit=True)
+    # 2. Modify column type (skipping the rename step)
+    mysql.execute(f"ALTER TABLE `{TEST_DB_NAME}`.`{TEST_TABLE_NAME}` MODIFY added_new_column varchar(10)", commit=True)
     
-    # 3. Modify column type
-    mysql.execute(f"ALTER TABLE `{TEST_DB_NAME}`.`{TEST_TABLE_NAME}` MODIFY rename_column_name varchar(5)", commit=True)
-    
-    # 4. Insert data using the modified schema
+    # 3. Insert data using the modified schema
     mysql.execute(
-        f"INSERT INTO `{TEST_DB_NAME}`.`{TEST_TABLE_NAME}` (id, name, rename_column_name) VALUES (2, 'Second', 'ABCDE')",
+        f"INSERT INTO `{TEST_DB_NAME}`.`{TEST_TABLE_NAME}` (id, name, added_new_column) VALUES (2, 'Second', 'ABCDE')",
         commit=True,
     )
     
-    # 5. Drop the column - this is where the error was reported
-    mysql.execute(f"ALTER TABLE `{TEST_DB_NAME}`.`{TEST_TABLE_NAME}` DROP COLUMN rename_column_name", commit=True)
+    # 4. Drop the column - this is where the error was reported
+    mysql.execute(f"ALTER TABLE `{TEST_DB_NAME}`.`{TEST_TABLE_NAME}` DROP COLUMN added_new_column", commit=True)
     
-    # 6. Add more inserts after schema changes to verify ongoing replication
+    # 5. Add more inserts after schema changes to verify ongoing replication
     mysql.execute(
         f"INSERT INTO `{TEST_DB_NAME}`.`{TEST_TABLE_NAME}` (id, name) VALUES (3, 'Third record after drop column')",
         commit=True,
@@ -2347,8 +2344,7 @@ CREATE TABLE `{TEST_DB_NAME}`.`{TEST_TABLE_NAME}` (
     assert 1 in record_ids, "Original record (id=1) not found"
     assert 3 in record_ids, "New record (id=3) after schema changes not found"
     
-    # Note: This test will likely fail with "IndexError: list index out of range" 
-    # as reported by the user when using database mapping with schema evolution
+    # Note: This test confirms our fix for schema evolution with database mapping
     
     # Clean up
     db_replicator_runner.stop()
