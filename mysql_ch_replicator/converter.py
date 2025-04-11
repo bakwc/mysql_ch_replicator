@@ -597,6 +597,13 @@ class MysqlToClickhouseConverter:
             if op_name == 'change':
                 self.__convert_alter_table_change_column(db_name, table_name, tokens)
                 continue
+            
+            if op_name == 'rename':
+                # Handle RENAME COLUMN operation
+                if tokens[0].lower() == 'column':
+                    tokens = tokens[1:]  # Skip the COLUMN keyword
+                self.__convert_alter_table_rename_column(db_name, table_name, tokens)
+                continue
 
             raise Exception(f'operation {op_name} not implement, query: {subquery}, full query: {mysql_query}')
 
@@ -807,6 +814,53 @@ class MysqlToClickhouseConverter:
 
                 query = f'ALTER TABLE `{db_name}`.`{table_name}` RENAME COLUMN {column_name} TO {new_column_name}'
                 self.db_replicator.clickhouse_api.execute_command(query)
+
+    def __convert_alter_table_rename_column(self, db_name, table_name, tokens):
+        """
+        Handle the RENAME COLUMN syntax of ALTER TABLE statements.
+        Example: RENAME COLUMN old_name TO new_name
+        """
+        if len(tokens) < 3:
+            raise Exception('wrong tokens count for RENAME COLUMN', tokens)
+        
+        # Extract old and new column names
+        old_column_name = strip_sql_name(tokens[0])
+        
+        # Check if the second token is "TO" (standard syntax)
+        if tokens[1].lower() != 'to':
+            raise Exception('expected TO keyword in RENAME COLUMN syntax', tokens)
+        
+        new_column_name = strip_sql_name(tokens[2])
+        
+        # Update table structure
+        if self.db_replicator:
+            if table_name in self.db_replicator.state.tables_structure:
+                table_structure = self.db_replicator.state.tables_structure[table_name]
+                mysql_table_structure: TableStructure = table_structure[0]
+                ch_table_structure: TableStructure = table_structure[1]
+                
+                # Update field name in MySQL structure
+                mysql_field = mysql_table_structure.get_field(old_column_name)
+                if mysql_field:
+                    mysql_field.name = new_column_name
+                else:
+                    raise Exception(f'Column {old_column_name} not found in MySQL structure')
+                
+                # Update field name in ClickHouse structure
+                ch_field = ch_table_structure.get_field(old_column_name)
+                if ch_field:
+                    ch_field.name = new_column_name
+                else:
+                    raise Exception(f'Column {old_column_name} not found in ClickHouse structure')
+                
+                # Preprocess to update primary key IDs if the renamed column is part of the primary key
+                mysql_table_structure.preprocess()
+                ch_table_structure.preprocess()
+            
+        # Execute the RENAME COLUMN command in ClickHouse
+        query = f'ALTER TABLE `{db_name}`.`{table_name}` RENAME COLUMN `{old_column_name}` TO `{new_column_name}`'
+        if self.db_replicator:
+            self.db_replicator.clickhouse_api.execute_command(query)
 
     def _handle_create_table_like(self, create_statement, source_table_name, target_table_name, is_query_api=True):
         """
