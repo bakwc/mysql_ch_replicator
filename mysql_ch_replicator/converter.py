@@ -531,11 +531,14 @@ class MysqlToClickhouseConverter:
         db_name = strip_sql_name(db_name)
         table_name = strip_sql_name(table_name)
         if self.db_replicator:
-            if db_name == self.db_replicator.database:
-                db_name = self.db_replicator.target_database
+            # Check if database and table match config BEFORE applying mapping
             matches_config = (
                 self.db_replicator.config.is_database_matches(db_name)
                 and self.db_replicator.config.is_table_matches(table_name))
+            
+            # Apply database mapping AFTER checking matches_config
+            if db_name == self.db_replicator.database:
+                db_name = self.db_replicator.target_database
         else:
             matches_config = True
 
