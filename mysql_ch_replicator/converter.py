@@ -530,11 +530,20 @@ class MysqlToClickhouseConverter:
             table_name = token
         db_name = strip_sql_name(db_name)
         table_name = strip_sql_name(table_name)
+
         if self.db_replicator:
-            # Check if database and table match config BEFORE applying mapping
-            matches_config = (
-                self.db_replicator.config.is_database_matches(db_name)
-                and self.db_replicator.config.is_table_matches(table_name))
+            # If we're dealing with a relative table name (no DB prefix), we need to check
+            # if the current db_name is already a target database name
+            if '.' not in token and self.db_replicator.target_database == db_name:
+                # This is a target database name, so for config matching we need to use the source database
+                matches_config = (
+                    self.db_replicator.config.is_database_matches(self.db_replicator.database)
+                    and self.db_replicator.config.is_table_matches(table_name))
+            else:
+                # Normal case: check if source database and table match config
+                matches_config = (
+                    self.db_replicator.config.is_database_matches(db_name)
+                    and self.db_replicator.config.is_table_matches(table_name))
             
             # Apply database mapping AFTER checking matches_config
             if db_name == self.db_replicator.database:

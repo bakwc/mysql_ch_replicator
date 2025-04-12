@@ -2280,6 +2280,9 @@ def test_schema_evolution_with_db_mapping():
         clickhouse_settings=cfg.clickhouse,
     )
 
+    ch.drop_database("mapped_target_db")
+    assert_wait(lambda: "mapped_target_db" not in ch.get_databases())
+
     prepare_env(cfg, mysql, ch, db_name=TEST_DB_NAME)
 
     # Create a test table with some columns using fully qualified name
@@ -2429,9 +2432,6 @@ def test_dynamic_column_addition_user_config():
     # Now try to update with a field that doesn't exist
     # This would have caused an error before our fix
     mysql.execute("UPDATE test_replication.replication_data SET val_2 = '100' WHERE code = 'test-1';", commit=True)
-    
-    # Give some time for the replication to process the update
-    time.sleep(5)
     
     # Verify replication processes are still running
     binlog_pid = get_binlog_replicator_pid(cfg)
