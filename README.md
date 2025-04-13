@@ -170,6 +170,8 @@ Where `mysql_db_name` is the name of the database you want to copy.
 
 Don't be afraid to interrupt process in the middle. It will save the state and continue copy after restart.
 
+__Hint__: _set `initial_replication_threads` to a number of cpu cores to accelerate initial replication_
+
 ### Configuration
 
 `mysql_ch_replicator` can be configured through a configuration file. Here is the config example:
