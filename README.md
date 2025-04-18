@@ -192,7 +192,7 @@ clickhouse:
   send_receive_timeout: 300     # optional
 
 binlog_replicator:
-  data_dir: '/home/user/binlog/'
+  data_dir: '/home/user/binlog/'  # a new EMPTY directory (for internal storage of data by mysql_ch_replicator itself)
   records_per_file: 100000
   binlog_retention_period: 43200  # optional, how long to keep binlog files in seconds, default 12 hours
 
