@@ -93,6 +93,9 @@ For realtime data sync from MySQL to ClickHouse:
 1. Prepare config file. Use `example_config.yaml` as an example.
 2. Configure MySQL and ClickHouse servers:
  - MySQL server configuration file `my.cnf` should include following settings (required to write binary log in raw format, and enable password authentication):
+<details>
+  <summary>🛠 MySQL Config</summary>
+
 ```ini
 [mysqld]
 # ... other settings ...
@@ -122,7 +125,13 @@ binlog_format                       ROW
 binlog_expire_logs_seconds          86400
 ```
 
+</details>
+
  - ClickHouse server config `override.xml` should include following settings (it makes clickhouse apply final keyword automatically to handle updates correctly):
+
+ <details>
+   <summary>🛠 ClickHouse Config</summary>
+ 
 ```xml
 <clickhouse>
     <!-- ... other settings ... -->
@@ -146,7 +155,7 @@ Execute the following command in clickhouse:
 Setting should be set to 1. If not, you should:
  * double check the `override.xml` is applied
  * try to modify `users.xml` instead
-
+</details>
 
 3. Start the replication:
 
