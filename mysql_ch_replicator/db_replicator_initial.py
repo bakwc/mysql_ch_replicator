@@ -106,19 +106,22 @@ class DbReplicatorInitial:
             # Verify table structures after replication but before swapping databases
             self.verify_table_structures_after_replication()
             
-            logger.info(f'initial replication - swapping database')
-            if self.replicator.target_database in self.replicator.clickhouse_api.get_databases():
-                self.replicator.clickhouse_api.execute_command(
-                    f'RENAME DATABASE `{self.replicator.target_database}` TO `{self.replicator.target_database}_old`',
-                )
-                self.replicator.clickhouse_api.execute_command(
-                    f'RENAME DATABASE `{self.replicator.target_database_tmp}` TO `{self.replicator.target_database}`',
-                )
-                self.replicator.clickhouse_api.drop_database(f'{self.replicator.target_database}_old')
-            else:
-                self.replicator.clickhouse_api.execute_command(
-                    f'RENAME DATABASE `{self.replicator.target_database_tmp}` TO `{self.replicator.target_database}`',
-                )
+            # If ignore_deletes is enabled, we don't swap databases, as we're directly replicating
+            # to the target database
+            if not self.replicator.config.ignore_deletes:
+                logger.info(f'initial replication - swapping database')
+                if self.replicator.target_database in self.replicator.clickhouse_api.get_databases():
+                    self.replicator.clickhouse_api.execute_command(
+                        f'RENAME DATABASE `{self.replicator.target_database}` TO `{self.replicator.target_database}_old`',
+                    )
+                    self.replicator.clickhouse_api.execute_command(
+                        f'RENAME DATABASE `{self.replicator.target_database_tmp}` TO `{self.replicator.target_database}`',
+                    )
+                    self.replicator.clickhouse_api.drop_database(f'{self.replicator.target_database}_old')
+                else:
+                    self.replicator.clickhouse_api.execute_command(
+                        f'RENAME DATABASE `{self.replicator.target_database_tmp}` TO `{self.replicator.target_database}`',
+                    )
             self.replicator.clickhouse_api.database = self.replicator.target_database
         logger.info(f'initial replication - done')
 
