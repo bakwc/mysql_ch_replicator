@@ -236,6 +236,7 @@ http_port: 9128         # optional
 types_mapping:          # optional
   'char(36)': 'UUID'
 
+ignore_deletes: false    # optional, set to true to ignore DELETE operations
 
 ```
 
@@ -259,6 +260,7 @@ types_mapping:          # optional
 - `indexes` - you may want to add some indexes to accelerate performance, eg. ngram index for full-test search, etc. To apply indexes you need to start replication from scratch.
 - `http_host`, `http_port` - http endpoint to control replication, use `/docs` for abailable commands
 - `types_mappings` - custom types mapping, eg. you can map char(36) to UUID instead of String, etc.
+- `ignore_deletes` - when set to `true`, DELETE operations in MySQL will be ignored during replication. This creates an append-only model where data is only added, never removed. In this mode, the replicator doesn't create a temporary database and instead replicates directly to the target database.
 
 Few more tables / dbs examples:
 

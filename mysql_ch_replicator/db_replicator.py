@@ -200,10 +200,22 @@ class DbReplicator:
                 self.run_realtime_replication()
                 return
 
-            logger.info('recreating database')
-            self.clickhouse_api.database = self.target_database_tmp
-            if not self.is_parallel_worker:
-                self.clickhouse_api.recreate_database()
+            # If ignore_deletes is enabled, we don't create a temporary DB and don't swap DBs
+            # We replicate directly into the target DB
+            if self.config.ignore_deletes:
+                logger.info(f'using existing database (ignore_deletes=True)')
+                self.clickhouse_api.database = self.target_database
+                self.target_database_tmp = self.target_database
+                
+                # Create database if it doesn't exist
+                if self.target_database not in self.clickhouse_api.get_databases():
+                    logger.info(f'creating database {self.target_database}')
+                    self.clickhouse_api.create_database(db_name=self.target_database)
+            else:
+                logger.info('recreating database')
+                self.clickhouse_api.database = self.target_database_tmp
+                if not self.is_parallel_worker:
+                    self.clickhouse_api.recreate_database()
 
             self.state.tables = self.mysql_api.get_tables()
             self.state.tables = [

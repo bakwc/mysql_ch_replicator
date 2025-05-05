@@ -120,6 +120,7 @@ class Settings:
         self.types_mapping = {}
         self.target_databases = {}
         self.initial_replication_threads = 0
+        self.ignore_deletes = False
 
     def load(self, settings_file):
         data = open(settings_file, 'r').read()
@@ -145,6 +146,7 @@ class Settings:
         self.http_port = data.pop('http_port', 0)
         self.target_databases = data.pop('target_databases', {})
         self.initial_replication_threads = data.pop('initial_replication_threads', 0)
+        self.ignore_deletes = data.pop('ignore_deletes', False)
 
         indexes = data.pop('indexes', [])
         for index in indexes:
