@@ -264,7 +264,7 @@ class ClickhouseApi:
         self.execute_command(f'DROP DATABASE IF EXISTS `{db_name}`')
 
     def create_database(self, db_name):
-        self.cursor.execute(f'CREATE DATABASE `{db_name}`')
+        self.execute_command(f'CREATE DATABASE `{db_name}`')
 
     def select(self, table_name, where=None, final=None):
         query = f'SELECT * FROM {table_name}'

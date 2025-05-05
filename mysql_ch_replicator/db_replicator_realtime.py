@@ -148,6 +148,17 @@ class DbReplicatorRealtime:
                 f'table: {event.table_name}, '
                 f'records: {event.records}',
             )
+        
+        # If ignore_deletes is enabled, skip processing delete events
+        if self.replicator.config.ignore_deletes:
+            if self.replicator.config.debug_log_level:
+                logger.debug(
+                    f'ignoring erase event (ignore_deletes=True): {event.transaction_id}, '
+                    f'table: {event.table_name}, '
+                    f'records: {len(event.records)}',
+                )
+            return
+            
         self.replicator.stats.erase_events_count += 1
         self.replicator.stats.erase_records_count += len(event.records)
 

@@ -2454,3 +2454,145 @@ def test_dynamic_column_addition_user_config():
     db_pid = get_db_replicator_pid(cfg, "test_replication")
     if db_pid:
         kill_process(db_pid)
+
+
+def test_ignore_deletes():
+    # Create a temporary config file with ignore_deletes=True
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as temp_config_file:
+        config_file = temp_config_file.name
+        
+        # Read the original config
+        with open(CONFIG_FILE, 'r') as original_config:
+            config_data = yaml.safe_load(original_config)
+        
+        # Add ignore_deletes=True
+        config_data['ignore_deletes'] = True
+        
+        # Write to the temp file
+        yaml.dump(config_data, temp_config_file)
+
+    try:
+        cfg = config.Settings()
+        cfg.load(config_file)
+        
+        # Verify the ignore_deletes option was set
+        assert cfg.ignore_deletes is True
+
+        mysql = mysql_api.MySQLApi(
+            database=None,
+            mysql_settings=cfg.mysql,
+        )
+
+        ch = clickhouse_api.ClickhouseApi(
+            database=TEST_DB_NAME,
+            clickhouse_settings=cfg.clickhouse,
+        )
+
+        prepare_env(cfg, mysql, ch)
+
+        # Create a table with a composite primary key
+        mysql.execute(f'''
+        CREATE TABLE `{TEST_TABLE_NAME}` (
+            departments int(11) NOT NULL,
+            termine int(11) NOT NULL,
+            data varchar(255) NOT NULL,
+            PRIMARY KEY (departments,termine)
+        )
+        ''')
+
+        # Insert initial records
+        mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (departments, termine, data) VALUES (10, 20, 'data1');", commit=True)
+        mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (departments, termine, data) VALUES (30, 40, 'data2');", commit=True)
+        mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (departments, termine, data) VALUES (50, 60, 'data3');", commit=True)
+
+        # Run the replicator with ignore_deletes=True
+        run_all_runner = RunAllRunner(cfg_file=config_file)
+        run_all_runner.run()
+
+        # Wait for replication to complete
+        assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
+        ch.execute_command(f'USE `{TEST_DB_NAME}`')
+        assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
+        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
+
+        # Delete some records from MySQL
+        mysql.execute(f"DELETE FROM `{TEST_TABLE_NAME}` WHERE departments=10;", commit=True)
+        mysql.execute(f"DELETE FROM `{TEST_TABLE_NAME}` WHERE departments=30;", commit=True)
+        
+        # Wait a moment to ensure replication processes the events
+        time.sleep(5)
+        
+        # Verify records are NOT deleted in ClickHouse (since ignore_deletes=True)
+        # The count should still be 3
+        assert len(ch.select(TEST_TABLE_NAME)) == 3, "Deletions were processed despite ignore_deletes=True"
+        
+        # Insert a new record and verify it's added
+        mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (departments, termine, data) VALUES (70, 80, 'data4');", commit=True)
+        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 4)
+        
+        # Verify the new record is correctly added
+        result = ch.select(TEST_TABLE_NAME, where="departments=70 AND termine=80")
+        assert len(result) == 1
+        assert result[0]['data'] == 'data4'
+        
+        # Clean up
+        run_all_runner.stop()
+        
+        # Verify no errors occurred
+        assert_wait(lambda: 'stopping db_replicator' in read_logs(TEST_DB_NAME))
+        assert('Traceback' not in read_logs(TEST_DB_NAME))
+        
+        # Additional tests for persistence after restart
+        
+        # 1. Remove all entries from table in MySQL
+        mysql.execute(f"DELETE FROM `{TEST_TABLE_NAME}` WHERE 1=1;", commit=True)
+
+                # Add a new row in MySQL before starting the replicator
+        mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (departments, termine, data) VALUES (110, 120, 'offline_data');", commit=True)
+        
+        # 2. Wait 5 seconds
+        time.sleep(5)
+        
+        # 3. Remove binlog directory (similar to prepare_env, but without removing tables)
+        if os.path.exists(cfg.binlog_replicator.data_dir):
+            shutil.rmtree(cfg.binlog_replicator.data_dir)
+        os.mkdir(cfg.binlog_replicator.data_dir)
+        
+
+        # 4. Create and run a new runner
+        new_runner = RunAllRunner(cfg_file=config_file)
+        new_runner.run()
+        
+        # 5. Ensure it has all the previous data (should still be 4 records from before + 1 new offline record)
+        assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
+        ch.execute_command(f'USE `{TEST_DB_NAME}`')
+        assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
+        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 5)
+        
+        # Verify we still have all the old data
+        assert len(ch.select(TEST_TABLE_NAME, where="departments=10 AND termine=20")) == 1
+        assert len(ch.select(TEST_TABLE_NAME, where="departments=30 AND termine=40")) == 1
+        assert len(ch.select(TEST_TABLE_NAME, where="departments=50 AND termine=60")) == 1
+        assert len(ch.select(TEST_TABLE_NAME, where="departments=70 AND termine=80")) == 1
+        
+        # Verify the offline data was replicated
+        assert len(ch.select(TEST_TABLE_NAME, where="departments=110 AND termine=120")) == 1
+        offline_data = ch.select(TEST_TABLE_NAME, where="departments=110 AND termine=120")[0]
+        assert offline_data['data'] == 'offline_data'
+        
+        # 6. Insert new data and verify it gets added to existing data
+        mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (departments, termine, data) VALUES (90, 100, 'data5');", commit=True)
+        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 6)
+        
+        # Verify the combined old and new data
+        result = ch.select(TEST_TABLE_NAME, where="departments=90 AND termine=100")
+        assert len(result) == 1
+        assert result[0]['data'] == 'data5'
+        
+        # Make sure we have all 6 records (4 original + 1 offline + 1 new one)
+        assert len(ch.select(TEST_TABLE_NAME)) == 6
+        
+        new_runner.stop()
+    finally:
+        # Clean up the temporary config file
+        os.unlink(config_file)
