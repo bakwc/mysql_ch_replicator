@@ -582,13 +582,13 @@ class MysqlToClickhouseConverter:
                 tokens = tokens[1:]
 
             if op_name == 'add':
-                if tokens[0].lower() in ('constraint', 'index', 'foreign', 'unique'):
+                if tokens[0].lower() in ('constraint', 'index', 'foreign', 'unique', 'key'):
                     continue
                 self.__convert_alter_table_add_column(db_name, table_name, tokens)
                 continue
 
             if op_name == 'drop':
-                if tokens[0].lower() in ('constraint', 'index', 'foreign', 'unique'):
+                if tokens[0].lower() in ('constraint', 'index', 'foreign', 'unique', 'key'):
                     continue
                 self.__convert_alter_table_drop_column(db_name, table_name, tokens)
                 continue
