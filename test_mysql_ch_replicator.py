@@ -1420,6 +1420,17 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="id=44")[0]['c1'] == 111)
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="id=44")[0]['c2'] == 222)
 
+    # Test add KEY
+    mysql.execute(
+        f"ALTER TABLE `{TEST_TABLE_NAME}` ADD KEY `idx_c1_c2` (`c1`,`c2`)")
+    mysql.execute(
+        f"INSERT INTO `{TEST_TABLE_NAME}` (id, c1, c2) VALUES (46, 333, 444)",
+        commit=True,
+    )
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME, where="id=46")) == 1)
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="id=46")[0]['c1'] == 333)
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="id=46")[0]['c2'] == 444)
+    
     # Test drop column
     mysql.execute(
         f"ALTER TABLE `{TEST_TABLE_NAME}` DROP COLUMN c2")
