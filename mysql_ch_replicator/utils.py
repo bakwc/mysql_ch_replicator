@@ -45,11 +45,15 @@ class ProcessRunner:
             logger.warning(f'Restarting stopped process: < {self.cmd} >')
             self.run()
             return
+
         res = self.process.poll()
         if res is None:
-            # still running
+            # Process is running fine.
             return
-        logger.warning(f'Restarting dead process: < {self.cmd} >')
+
+        logger.warning(f'Process dead (exit code: {res}), restarting: < {self.cmd} >')
+        # Process has already terminated, just reap it
+        self.process.wait()
         self.run()
 
     def stop(self):
