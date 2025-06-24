@@ -121,7 +121,7 @@ class MySQLApi:
         # Construct final query
         query = f'SELECT * FROM `{table_name}` {where}ORDER BY {order_by_str} LIMIT {limit}'
 
-        print("Executing query:", query)
+#         print("Executing query:", query)
 
         # Execute the query
         self.cursor.execute(query)
