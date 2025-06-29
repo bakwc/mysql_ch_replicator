@@ -19,3 +19,10 @@ databases: '*test*'
 log_level: 'debug'
 optimize_interval: 3
 check_db_updated_interval: 3
+
+
+partition_bys:
+  - databases: 'replication-test_db'
+    tables: ['test_table']
+    partition_by: 'intDiv(id, 1000000)'
+
