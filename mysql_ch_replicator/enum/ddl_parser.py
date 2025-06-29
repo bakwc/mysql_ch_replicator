@@ -36,8 +36,9 @@ def find_enum_or_set_definition_end(line: str) -> Tuple[int, str, str]:
         return end_pos, field_type, field_parameters
     
     # Fallback to splitting by space if we can't find the end
-    definition = line.split(' ')
-    field_type = definition[0]
+    # Use split() instead of split(' ') to handle multiple consecutive spaces
+    definition = line.split()
+    field_type = definition[0] if definition else ""
     field_parameters = ' '.join(definition[1:]) if len(definition) > 1 else ''
     
     return -1, field_type, field_parameters
@@ -62,12 +63,14 @@ def parse_enum_or_set_field(line: str, field_name: str, is_backtick_quoted: bool
         if line.lower().startswith('enum(') or line.lower().startswith('set('):
             end_pos, field_type, field_parameters = find_enum_or_set_definition_end(line)
         else:
-            definition = line.split(' ')
-            field_type = definition[0]
+            # Use split() instead of split(' ') to handle multiple consecutive spaces
+            definition = line.split()
+            field_type = definition[0] if definition else ""
             field_parameters = ' '.join(definition[1:]) if len(definition) > 1 else ''
     else:
         # For non-backtick quoted fields
-        definition = line.split(' ')
+        # Use split() instead of split(' ') to handle multiple consecutive spaces
+        definition = line.split()
         definition = definition[1:]  # Skip the field name which was already extracted
         
         if definition and (
