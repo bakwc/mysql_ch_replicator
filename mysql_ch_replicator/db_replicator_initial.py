@@ -54,9 +54,10 @@ class DbReplicatorInitial:
         
         self.replicator.state.tables_structure[table_name] = (mysql_structure, clickhouse_structure)
         indexes = self.replicator.config.get_indexes(self.replicator.database, table_name)
+        partition_bys = self.replicator.config.get_partition_bys(self.replicator.database, table_name)
 
         if not self.replicator.is_parallel_worker:
-            self.replicator.clickhouse_api.create_table(clickhouse_structure, additional_indexes=indexes)
+            self.replicator.clickhouse_api.create_table(clickhouse_structure, additional_indexes=indexes, additional_partition_bys=partition_bys)
 
     def validate_mysql_structure(self, mysql_structure: TableStructure):
         for key_idx in mysql_structure.primary_key_ids:

@@ -230,6 +230,11 @@ indexes:                        # optional
     tables: ['test_table']
     index: 'INDEX name_idx name TYPE ngrambf_v1(5, 65536, 4, 0) GRANULARITY 1'
 
+partition_bys:                  # optional
+  - databases: '*'
+    tables: ['test_table']
+    partition_by: 'toYYYYMM(created_at)'
+
 http_host: '0.0.0.0'    # optional
 http_port: 9128         # optional
 
@@ -258,6 +263,7 @@ ignore_deletes: false    # optional, set to true to ignore DELETE operations
 - `auto_restart_interval` - interval (seconds) between automatic db_replicator restart. Default 3600 (1 hour). This is done to reduce memory usage.
 - `binlog_retention_period` - how long to keep binlog files in seconds. Default 43200 (12 hours). This setting controls how long the local binlog files are retained before being automatically cleaned up.
 - `indexes` - you may want to add some indexes to accelerate performance, eg. ngram index for full-test search, etc. To apply indexes you need to start replication from scratch.
+- `partition_bys` - custom PARTITION BY expressions for tables. By default uses `intDiv(id, 4294967)` for integer primary keys. Useful for time-based partitioning like `toYYYYMM(created_at)`.
 - `http_host`, `http_port` - http endpoint to control replication, use `/docs` for abailable commands
 - `types_mappings` - custom types mapping, eg. you can map char(36) to UUID instead of String, etc.
 - `ignore_deletes` - when set to `true`, DELETE operations in MySQL will be ignored during replication. This creates an append-only model where data is only added, never removed. In this mode, the replicator doesn't create a temporary database and instead replicates directly to the target database.

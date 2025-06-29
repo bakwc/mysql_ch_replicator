@@ -134,6 +134,11 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 2)
 
+    # Check for custom partition_by configuration when using CONFIG_FILE (tests_config.yaml)
+    if config_file == CONFIG_FILE_MARIADB:
+        create_query = ch.show_create_table(TEST_TABLE_NAME)
+        assert 'PARTITION BY intDiv(id, 1000000)' in create_query, f"Custom partition_by not found in CREATE TABLE query: {create_query}"
+
     mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, age) VALUES ('Filipp', 50);", commit=True)
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Filipp'")[0]['age'] == 50)

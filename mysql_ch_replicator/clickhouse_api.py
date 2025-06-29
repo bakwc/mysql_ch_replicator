@@ -138,7 +138,7 @@ class ClickhouseApi:
     def set_last_used_version(self, table_name, last_used_version):
         self.tables_last_record_version[table_name] = last_used_version
 
-    def create_table(self, structure: TableStructure, additional_indexes: list | None = None):
+    def create_table(self, structure: TableStructure, additional_indexes: list | None = None, additional_partition_bys: list | None = None):
         if not structure.primary_keys:
             raise Exception(f'missing primary key for {structure.table_name}')
 
@@ -148,9 +148,15 @@ class ClickhouseApi:
         fields = ',\n'.join(fields)
         partition_by = ''
 
-        if len(structure.primary_keys) == 1:
-            if 'int' in structure.fields[structure.primary_key_ids[0]].field_type.lower():
-                partition_by = f'PARTITION BY intDiv({structure.primary_keys[0]}, 4294967)\n'
+        # Check for custom partition_by first
+        if additional_partition_bys:
+            # Use the first custom partition_by if available
+            partition_by = f'PARTITION BY {additional_partition_bys[0]}\n'
+        else:
+            # Fallback to default logic
+            if len(structure.primary_keys) == 1:
+                if 'int' in structure.fields[structure.primary_key_ids[0]].field_type.lower():
+                    partition_by = f'PARTITION BY intDiv({structure.primary_keys[0]}, 4294967)\n'
 
         indexes = [
             'INDEX _version _version TYPE minmax GRANULARITY 1',
