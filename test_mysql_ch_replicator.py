@@ -2607,3 +2607,49 @@ def test_ignore_deletes():
     finally:
         # Clean up the temporary config file
         os.unlink(config_file)
+
+def test_issue_160_unknown_mysql_type_bug():
+    """
+    Test to reproduce the bug from issue #160.
+    
+    Bug Description: Replication fails when adding a new table during realtime replication
+    with Exception: unknown mysql type ""
+    
+    This test should FAIL until the bug is fixed.
+    When the bug is present: parsing will fail with unknown mysql type and the test will FAIL
+    When the bug is fixed: parsing will succeed and the test will PASS
+    """
+    # The exact CREATE TABLE statement from the bug report
+    create_table_query = """create table test_table
+(
+    id    bigint          not null,
+    col_a datetime(6)     not null,
+    col_b datetime(6)     null,
+    col_c varchar(255)    not null,
+    col_d varchar(255)    not null,
+    col_e int             not null,
+    col_f decimal(20, 10) not null,
+    col_g decimal(20, 10) not null,
+    col_h datetime(6)     not null,
+    col_i date            not null,
+    col_j varchar(255)    not null,
+    col_k varchar(255)    not null,
+    col_l bigint          not null,
+    col_m varchar(50)     not null,
+    col_n bigint          null,
+    col_o decimal(20, 1)  null,
+    col_p date            null,
+    primary key (id, col_e)
+);"""
+
+    # Create a converter instance
+    converter = MysqlToClickhouseConverter()
+    
+    # This should succeed when the bug is fixed
+    # When the bug is present, this will raise "unknown mysql type """ and the test will FAIL
+    mysql_structure, ch_structure = converter.parse_create_table_query(create_table_query)
+    
+    # Verify the parsing worked correctly
+    assert mysql_structure.table_name == 'test_table'
+    assert len(mysql_structure.fields) == 17  # All columns should be parsed
+    assert mysql_structure.primary_keys == ['id', 'col_e']
