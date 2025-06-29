@@ -137,7 +137,11 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     # Check for custom partition_by configuration when using CONFIG_FILE (tests_config.yaml)
     if config_file == CONFIG_FILE:
         create_query = ch.show_create_table(TEST_TABLE_NAME)
-        assert 'PARTITION BY toYYYYMM(toDate(id))' in create_query, f"Custom partition_by not found in CREATE TABLE query: {create_query}"
+        assert 'PARTITION BY intDiv(id, 1000000)' in create_query, f"Custom partition_by not found in CREATE TABLE query: {create_query}"
+    else:
+        # Verify that the table was created successfully with default partitioning
+        create_query = ch.show_create_table(TEST_TABLE_NAME)
+        assert 'PARTITION BY intDiv(id, 4294967)' in create_query, f"Default partition_by not found in CREATE TABLE query: {create_query}"
 
     mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, age) VALUES ('Filipp', 50);", commit=True)
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
