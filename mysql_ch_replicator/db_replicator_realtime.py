@@ -191,6 +191,9 @@ class DbReplicatorRealtime:
         if query.lower().startswith('rename table'):
             self.upload_records()
             self.handle_rename_table_query(query, event.db_name)
+        if query.lower().startswith('truncate'):
+            self.upload_records()
+            self.handle_truncate_query(query, event.db_name)
 
     def handle_alter_query(self, query, db_name):
         self.replicator.converter.convert_alter_query(query, db_name)
@@ -252,6 +255,35 @@ class DbReplicatorRealtime:
 
             ch_clauses.append(f"`{src_db_name}`.`{src_table_name}` TO `{dest_db_name}`.`{dest_table_name}`")
         self.replicator.clickhouse_api.execute_command(f'RENAME TABLE {", ".join(ch_clauses)}')
+
+    def handle_truncate_query(self, query, db_name):
+        """Handle TRUNCATE TABLE operations by clearing data in ClickHouse"""
+        tokens = query.strip().split()
+        if len(tokens) < 3 or tokens[0].lower() != 'truncate' or tokens[1].lower() != 'table':
+            raise Exception('Invalid TRUNCATE query format', query)
+
+        # Get table name from the third token (after TRUNCATE TABLE)
+        table_token = tokens[2]
+        
+        # Parse database and table name from the token
+        db_name, table_name, matches_config = self.replicator.converter.get_db_and_table_name(table_token, db_name)
+        if not matches_config:
+            return
+
+        # Check if table exists in our tracking
+        if table_name not in self.replicator.state.tables_structure:
+            logger.warning(f'TRUNCATE: Table {table_name} not found in tracked tables, skipping')
+            return
+
+        # Clear any pending records for this table
+        if table_name in self.records_to_insert:
+            self.records_to_insert[table_name].clear()
+        if table_name in self.records_to_delete:
+            self.records_to_delete[table_name].clear()
+
+        # Execute TRUNCATE on ClickHouse
+        logger.info(f'Executing TRUNCATE on ClickHouse table: {db_name}.{table_name}')
+        self.replicator.clickhouse_api.execute_command(f'TRUNCATE TABLE `{db_name}`.`{table_name}`')
 
     def log_stats_if_required(self):
         curr_time = time.time()
