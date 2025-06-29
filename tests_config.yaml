@@ -28,6 +28,11 @@ indexes:
     tables: ['group']
     index: 'INDEX name_idx name TYPE ngrambf_v1(5, 65536, 4, 0) GRANULARITY 1'
 
+partition_bys:
+  - databases: '*test*'
+    tables: ['test_table']
+    partition_by: 'toYYYYMM(toDate(id))'
+
 http_host: 'localhost'
 http_port: 9128
 
