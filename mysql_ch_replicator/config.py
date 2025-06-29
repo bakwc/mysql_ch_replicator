@@ -37,6 +37,13 @@ class Index:
 
 
 @dataclass
+class PartitionBy:
+    databases: str | list = '*'
+    tables: str | list = '*'
+    partition_by: str = ''
+
+
+@dataclass
 class ClickhouseSettings:
     host: str = 'localhost'
     port: int = 3306
@@ -114,6 +121,7 @@ class Settings:
         self.optimize_interval = 0
         self.check_db_updated_interval = 0
         self.indexes: list[Index] = []
+        self.partition_bys: list[PartitionBy] = []
         self.auto_restart_interval = 0
         self.http_host = ''
         self.http_port = 0
@@ -153,6 +161,13 @@ class Settings:
             self.indexes.append(
                 Index(**index)
             )
+        
+        partition_bys = data.pop('partition_bys', [])
+        for partition_by in partition_bys:
+            self.partition_bys.append(
+                PartitionBy(**partition_by)
+            )
+        
         assert isinstance(self.databases, str) or isinstance(self.databases, list)
         assert isinstance(self.tables, str) or isinstance(self.tables, list)
         self.binlog_replicator = BinlogReplicatorSettings(**data.pop('binlog_replicator'))
@@ -197,6 +212,16 @@ class Settings:
             if not self.is_pattern_matches(table_name, index.tables):
                 continue
             results.append(index.index)
+        return results
+
+    def get_partition_bys(self, db_name, table_name):
+        results = []
+        for partition_by in self.partition_bys:
+            if not self.is_pattern_matches(db_name, partition_by.databases):
+                continue
+            if not self.is_pattern_matches(table_name, partition_by.tables):
+                continue
+            results.append(partition_by.partition_by)
         return results
 
     def validate(self):
