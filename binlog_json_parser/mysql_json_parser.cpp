@@ -120,24 +120,28 @@ static bool read_variable_length(const char *data, size_t data_length,
 
 std::string escape_json(const std::string &s) {
   std::ostringstream o;
-  for (auto c = s.cbegin(); c != s.cend(); c++) {
-    switch (*c) {
-      case '"': o << "\\\""; break;
+
+  for (const unsigned char uc : s) {
+    switch (uc) {
+      case '"':  o << "\\\""; break;
       case '\\': o << "\\\\"; break;
-      case '\b': o << "\\b"; break;
-      case '\f': o << "\\f"; break;
-      case '\n': o << "\\n"; break;
-      case '\r': o << "\\r"; break;
-      case '\t': o << "\\t"; break;
+      case '\b': o << "\\b";   break;
+      case '\f': o << "\\f";   break;
+      case '\n': o << "\\n";   break;
+      case '\r': o << "\\r";   break;
+      case '\t': o << "\\t";   break;
+
       default:
-        if (*c <= '\x1f') {
+        if (uc <= 0x1F) {
           o << "\\u"
-            << std::hex << std::setw(4) << std::setfill('0') << static_cast<int>(*c);
+            << std::hex << std::setw(4) << std::setfill('0') << static_cast<int>(uc)
+            << std::dec;
         } else {
-          o << *c;
+          o << static_cast<char>(uc);
         }
     }
   }
+
   return o.str();
 }
 
