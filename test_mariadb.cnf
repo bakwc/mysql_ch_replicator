@@ -7,6 +7,7 @@ default-character-set = utf8mb4
 [mysqld]
 # The defaults from /etc/my.cnf
 user = mysql
+bind-address = 0.0.0.0
 
 # Custom settings
 collation-server = utf8mb4_unicode_ci      # Changed to a collation supported by MariaDB
