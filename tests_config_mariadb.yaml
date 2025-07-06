@@ -1,12 +1,12 @@
 
 mysql:
-  host: 'localhost'
-  port: 9307
+  host: 'mariadb_db'
+  port: 3306
   user: 'root'
   password: 'admin'
 
 clickhouse:
-  host: 'localhost'
+  host: 'clickhouse_db'
   port: 9123
   user: 'default'
   password: 'admin'

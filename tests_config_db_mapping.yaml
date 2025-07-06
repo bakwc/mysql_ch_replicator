@@ -1,11 +1,11 @@
 mysql:
-  host: 'localhost'
-  port: 9306
+  host: 'mysql_db'
+  port: 3306
   user: 'root'
   password: 'admin'
 
 clickhouse:
-  host: 'localhost'
+  host: 'clickhouse_db'
   port: 9123
   user: 'default'
   password: 'admin'
@@ -24,5 +24,5 @@ check_db_updated_interval: 3
 target_databases:
   replication-test_db: mapped_target_db
 
-http_host: 'localhost'
+http_host: '0.0.0.0'
 http_port: 9128 
