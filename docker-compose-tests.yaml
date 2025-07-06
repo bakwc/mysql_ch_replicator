@@ -56,7 +56,7 @@ services:
     volumes:
       - ./test_mariadb.cnf:/etc/mysql/my.cnf:ro  # Adjust path to MariaDB config location if needed
     healthcheck:
-      test: ["CMD", "true"]
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-padmin"]
       interval: 5s
       timeout: 1s
       retries: 1

@@ -20,6 +20,7 @@ init-connect = 'SET NAMES utf8mb4'
 #skip-host-cache
 skip-name-resolve
 information_schema_stats_expiry = 0
+bind-address = 0.0.0.0
 
 # replication
 gtid_mode = on
