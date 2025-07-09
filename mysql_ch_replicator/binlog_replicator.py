@@ -536,7 +536,7 @@ class BinlogReplicator:
             except OperationalError as e:
                 logger.error(f'operational error {str(e)}', exc_info=True)
                 time.sleep(15)
-            except Exception:
+            except Exception as e:
                 logger.error(f'unhandled error {str(e)}', exc_info=True)
                 raise
 
