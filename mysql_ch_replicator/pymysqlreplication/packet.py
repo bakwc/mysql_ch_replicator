@@ -75,6 +75,7 @@ class BinLogPacketWrapper(object):
         ignore_decode_errors,
         verify_checksum,
         optional_meta_data,
+        mysql_timezone="UTC",
     ):
         # -1 because we ignore the ok byte
         self.read_bytes = 0
@@ -128,6 +129,7 @@ class BinLogPacketWrapper(object):
             ignore_decode_errors=ignore_decode_errors,
             verify_checksum=verify_checksum,
             optional_meta_data=optional_meta_data,
+            mysql_timezone=mysql_timezone,
         )
         if not self.event._processed:
             self.event = None

@@ -28,6 +28,7 @@ class BinLogEvent(object):
         ignore_decode_errors=False,
         verify_checksum=False,
         optional_meta_data=False,
+        mysql_timezone="UTC",
     ):
         self.packet = from_packet
         self.table_map = table_map
@@ -39,6 +40,7 @@ class BinLogEvent(object):
         self._ignore_decode_errors = ignore_decode_errors
         self._verify_checksum = verify_checksum
         self._is_event_valid = None
+        self.mysql_timezone = mysql_timezone
         # The event have been fully processed, if processed is false
         # the event will be skipped
         self._processed = True
