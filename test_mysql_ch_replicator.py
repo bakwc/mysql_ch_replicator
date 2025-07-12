@@ -2804,3 +2804,111 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     assert json.loads(ch.select(TEST_TABLE_NAME, "name='Peter'")[0]['data'])['в'] == 'б'
     db_replicator_runner.stop()
     binlog_replicator_runner.stop()
+
+def test_timezone_conversion():
+    """
+    Test that MySQL timestamp fields are converted to ClickHouse DateTime64 with custom timezone.
+    This test reproduces the issue from GitHub issue #170.
+    """
+    # Create a temporary config file with custom timezone
+    config_content = """
+mysql:
+  host: 'localhost'
+  port: 9306
+  user: 'root'
+  password: 'admin'
+
+clickhouse:
+  host: 'localhost'
+  port: 9123
+  user: 'default'
+  password: 'admin'
+
+binlog_replicator:
+  data_dir: '/app/binlog/'
+  records_per_file: 100000
+
+databases: '*test*'
+log_level: 'debug'
+mysql_timezone: 'America/New_York'
+"""
+    
+    # Create temporary config file
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        f.write(config_content)
+        temp_config_file = f.name
+    
+    try:
+        cfg = config.Settings()
+        cfg.load(temp_config_file)
+        
+        # Verify timezone is loaded correctly
+        assert cfg.mysql_timezone == 'America/New_York'
+        
+        mysql = mysql_api.MySQLApi(
+            database=None,
+            mysql_settings=cfg.mysql,
+        )
+
+        ch = clickhouse_api.ClickhouseApi(
+            database=TEST_DB_NAME,
+            clickhouse_settings=cfg.clickhouse,
+        )
+
+        prepare_env(cfg, mysql, ch)
+
+        # Create table with timestamp fields
+        mysql.execute(f'''
+        CREATE TABLE `{TEST_TABLE_NAME}` (
+            id int NOT NULL AUTO_INCREMENT,
+            name varchar(255),
+            created_at timestamp NULL,
+            updated_at timestamp(3) NULL,
+            PRIMARY KEY (id)
+        );
+        ''')
+
+        # Insert test data with specific timestamp
+        mysql.execute(
+            f"INSERT INTO `{TEST_TABLE_NAME}` (name, created_at, updated_at) "
+            f"VALUES ('test_timezone', '2023-08-15 14:30:00', '2023-08-15 14:30:00.123');",
+            commit=True,
+        )
+
+        # Run replication
+        run_all_runner = RunAllRunner(cfg_file=temp_config_file)
+        run_all_runner.run()
+
+        assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
+        ch.execute_command(f'USE `{TEST_DB_NAME}`')
+        assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
+        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1)
+
+        # Get the table structure from ClickHouse
+        table_info = ch.query(f'DESCRIBE `{TEST_TABLE_NAME}`')
+        
+        # Check that timestamp fields are converted to DateTime64 with timezone
+        created_at_type = None
+        updated_at_type = None
+        for row in table_info.result_rows:
+            if row[0] == 'created_at':
+                created_at_type = row[1]
+            elif row[0] == 'updated_at':
+                updated_at_type = row[1]
+        
+        # Verify the types include the timezone
+        assert created_at_type is not None
+        assert updated_at_type is not None
+        assert 'America/New_York' in created_at_type
+        assert 'America/New_York' in updated_at_type
+        
+        # Verify data was inserted correctly
+        results = ch.select(TEST_TABLE_NAME)
+        assert len(results) == 1
+        assert results[0]['name'] == 'test_timezone'
+        
+        run_all_runner.stop()
+        
+    finally:
+        # Clean up temporary config file
+        os.unlink(temp_config_file)

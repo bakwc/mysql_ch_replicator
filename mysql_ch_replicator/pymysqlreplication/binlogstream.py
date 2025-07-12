@@ -188,6 +188,7 @@ class BinLogStreamReader(object):
         ignore_decode_errors=False,
         verify_checksum=False,
         enable_logging=True,
+        mysql_timezone="UTC",
     ):
         """
         Attributes:
@@ -230,6 +231,7 @@ class BinLogStreamReader(object):
             verify_checksum: If true, verify events read from the binary log by examining checksums.
             enable_logging: When set to True, logs various details helpful for debugging and monitoring
                             When set to False, logging is disabled to enhance performance.
+            mysql_timezone: Timezone to use for MySQL timestamp conversion (e.g., 'UTC', 'America/New_York')
         """
 
         self.__connection_settings = connection_settings
@@ -254,6 +256,7 @@ class BinLogStreamReader(object):
         self.__ignore_decode_errors = ignore_decode_errors
         self.__verify_checksum = verify_checksum
         self.__optional_meta_data = False
+        self.__mysql_timezone = mysql_timezone
 
         # We can't filter on packet level TABLE_MAP and rotate event because
         # we need them for handling other operations
@@ -636,6 +639,7 @@ class BinLogStreamReader(object):
                 self.__ignore_decode_errors,
                 self.__verify_checksum,
                 self.__optional_meta_data,
+                self.__mysql_timezone,
             )
 
             if binlog_event.event_type == ROTATE_EVENT:

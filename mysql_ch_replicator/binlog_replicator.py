@@ -367,6 +367,7 @@ class BinlogReplicator:
             resume_stream=True,
             log_pos=log_pos,
             log_file=log_file,
+            mysql_timezone=settings.mysql_timezone,
         )
         self.last_state_update = 0
         self.last_binlog_clear_time = 0

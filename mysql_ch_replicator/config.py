@@ -1,5 +1,6 @@
 import yaml
 import fnmatch
+import zoneinfo
 
 from dataclasses import dataclass
 
@@ -129,6 +130,7 @@ class Settings:
         self.target_databases = {}
         self.initial_replication_threads = 0
         self.ignore_deletes = False
+        self.mysql_timezone = 'UTC'
 
     def load(self, settings_file):
         data = open(settings_file, 'r').read()
@@ -155,6 +157,7 @@ class Settings:
         self.target_databases = data.pop('target_databases', {})
         self.initial_replication_threads = data.pop('initial_replication_threads', 0)
         self.ignore_deletes = data.pop('ignore_deletes', False)
+        self.mysql_timezone = data.pop('mysql_timezone', 'UTC')
 
         indexes = data.pop('indexes', [])
         for index in indexes:
@@ -204,6 +207,16 @@ class Settings:
         if self.log_level == 'debug':
             self.debug_log_level = True
 
+    def validate_mysql_timezone(self):
+        if not isinstance(self.mysql_timezone, str):
+            raise ValueError(f'mysql_timezone should be string and not {stype(self.mysql_timezone)}')
+        
+        # Validate timezone by attempting to import and check if it's valid
+        try:
+            zoneinfo.ZoneInfo(self.mysql_timezone)
+        except zoneinfo.ZoneInfoNotFoundError:
+            raise ValueError(f'invalid timezone: {self.mysql_timezone}. Use IANA timezone names like "UTC", "Europe/London", "America/New_York", etc.')
+
     def get_indexes(self, db_name, table_name):
         results = []
         for index in self.indexes:
@@ -235,3 +248,4 @@ class Settings:
             raise ValueError(f'initial_replication_threads should be an integer, not {type(self.initial_replication_threads)}')
         if self.initial_replication_threads < 0:
             raise ValueError(f'initial_replication_threads should be non-negative')
+        self.validate_mysql_timezone()

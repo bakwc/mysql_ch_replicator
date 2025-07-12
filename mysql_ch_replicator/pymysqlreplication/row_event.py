@@ -1,6 +1,7 @@
 import struct
 import decimal
 import datetime
+import zoneinfo
 
 from pymysql.charset import charset_by_name
 from enum import Enum
@@ -99,6 +100,31 @@ class RowsEvent(BinLogEvent):
         if isinstance(bit, str):
             bit = ord(bit)
         return bit & (1 << (position % 8))
+
+    def _convert_timestamp_with_timezone(self, timestamp_value):
+        """
+        Convert timestamp from UTC to configured timezone
+
+        :param timestamp_value: Unix timestamp value
+        :return: datetime object in configured timezone
+        """
+        # Create UTC datetime first
+        utc_dt = datetime.datetime.utcfromtimestamp(timestamp_value)
+        
+        # If timezone is UTC, return timezone-aware UTC datetime
+        if self.mysql_timezone == "UTC":
+            return utc_dt.replace(tzinfo=datetime.timezone.utc)
+        
+        # Convert to configured timezone but keep timezone-aware
+        try:
+            # Start with UTC timezone-aware datetime
+            utc_dt_aware = utc_dt.replace(tzinfo=datetime.timezone.utc)
+            # Convert to target timezone
+            target_tz = zoneinfo.ZoneInfo(self.mysql_timezone)
+            return utc_dt_aware.astimezone(target_tz)
+        except zoneinfo.ZoneInfoNotFoundError:
+            # If timezone is invalid, fall back to UTC
+            return utc_dt.replace(tzinfo=datetime.timezone.utc)
 
     def _read_column_data(self, cols_bitmap, row_image_type=None):
         """Use for WRITE, UPDATE and DELETE events.
