@@ -226,9 +226,17 @@ def convert_timestamp_to_datetime64(input_str, timezone='UTC'):
         # If a precision is provided, include it in the replacement
         precision = match.group(1)
         if precision is not None:
-            return f'DateTime64({precision}, \'{timezone}\')'
+            # Only add timezone info if it's not UTC (to preserve original behavior)
+            if timezone == 'UTC':
+                return f'DateTime64({precision})'
+            else:
+                return f'DateTime64({precision}, \'{timezone}\')'
         else:
-            return f'DateTime64(3, \'{timezone}\')'
+            # Only add timezone info if it's not UTC (to preserve original behavior)
+            if timezone == 'UTC':
+                return 'DateTime64'
+            else:
+                return f'DateTime64(3, \'{timezone}\')'
     else:
         raise ValueError(f"Invalid input string format: '{input_str}'")
 

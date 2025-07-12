@@ -111,21 +111,20 @@ class RowsEvent(BinLogEvent):
         # Create UTC datetime first
         utc_dt = datetime.datetime.utcfromtimestamp(timestamp_value)
         
-        # If timezone is UTC, return as-is
+        # If timezone is UTC, return timezone-aware UTC datetime
         if self.mysql_timezone == "UTC":
-            return utc_dt
+            return utc_dt.replace(tzinfo=datetime.timezone.utc)
         
-        # Convert to configured timezone
+        # Convert to configured timezone but keep timezone-aware
         try:
-            # Treat the timestamp as if it were in the configured timezone
+            # Start with UTC timezone-aware datetime
+            utc_dt_aware = utc_dt.replace(tzinfo=datetime.timezone.utc)
+            # Convert to target timezone
             target_tz = zoneinfo.ZoneInfo(self.mysql_timezone)
-            # Replace timezone info to indicate it's in the target timezone
-            dt_with_tz = utc_dt.replace(tzinfo=target_tz)
-            # Convert back to naive datetime (removing timezone info)
-            return dt_with_tz.replace(tzinfo=None)
+            return utc_dt_aware.astimezone(target_tz)
         except zoneinfo.ZoneInfoNotFoundError:
             # If timezone is invalid, fall back to UTC
-            return utc_dt
+            return utc_dt.replace(tzinfo=datetime.timezone.utc)
 
     def _read_column_data(self, cols_bitmap, row_image_type=None):
         """Use for WRITE, UPDATE and DELETE events.
@@ -261,7 +260,7 @@ class RowsEvent(BinLogEvent):
                 self.__none_sources[name] = NONE_SOURCE.OUT_OF_DATE_RANGE
             return ret
         elif column.type == FIELD_TYPE.TIMESTAMP:
-            return self._convert_timestamp_with_timezone(self.packet.read_uint32())
+            return datetime.datetime.utcfromtimestamp(self.packet.read_uint32())
 
         # For new date format:
         elif column.type == FIELD_TYPE.DATETIME2:
@@ -273,7 +272,7 @@ class RowsEvent(BinLogEvent):
             return self.__read_time2(column)
         elif column.type == FIELD_TYPE.TIMESTAMP2:
             return self.__add_fsp_to_time(
-                self._convert_timestamp_with_timezone(self.packet.read_int_be_by_size(4)),
+                datetime.datetime.utcfromtimestamp(self.packet.read_int_be_by_size(4)),
                 column,
             )
         elif column.type == FIELD_TYPE.LONGLONG:
