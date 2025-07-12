@@ -214,7 +214,7 @@ def strip_sql_comments(sql_statement):
     return sqlparse.format(sql_statement, strip_comments=True).strip()
 
 
-def convert_timestamp_to_datetime64(input_str):
+def convert_timestamp_to_datetime64(input_str, timezone='UTC'):
 
     # Define the regex pattern
     pattern = r'^timestamp(?:\((\d+)\))?$'
@@ -226,9 +226,9 @@ def convert_timestamp_to_datetime64(input_str):
         # If a precision is provided, include it in the replacement
         precision = match.group(1)
         if precision is not None:
-            return f'DateTime64({precision})'
+            return f'DateTime64({precision}, \'{timezone}\')'
         else:
-            return 'DateTime64'
+            return f'DateTime64(3, \'{timezone}\')'
     else:
         raise ValueError(f"Invalid input string format: '{input_str}'")
 
@@ -372,7 +372,10 @@ class MysqlToClickhouseConverter:
         if 'real' in mysql_type:
             return 'Float64'
         if mysql_type.startswith('timestamp'):
-            return convert_timestamp_to_datetime64(mysql_type)
+            timezone = 'UTC'
+            if self.db_replicator is not None:
+                timezone = self.db_replicator.config.mysql_timezone
+            return convert_timestamp_to_datetime64(mysql_type, timezone)
         if mysql_type.startswith('time'):
             return 'String'
         if 'varbinary' in mysql_type:
