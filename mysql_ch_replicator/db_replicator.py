@@ -143,6 +143,11 @@ class DbReplicator:
         self.target_database_tmp = self.target_database + '_tmp'
         if self.is_parallel_worker:
             self.target_database_tmp = self.target_database
+        
+        # If ignore_deletes is enabled, we replicate directly into the target DB
+        # This must be set here to ensure consistency between first run and resume
+        if self.config.ignore_deletes:
+            self.target_database_tmp = self.target_database
 
         self.mysql_api = MySQLApi(
             database=self.database,
@@ -205,7 +210,6 @@ class DbReplicator:
             if self.config.ignore_deletes:
                 logger.info(f'using existing database (ignore_deletes=True)')
                 self.clickhouse_api.database = self.target_database
-                self.target_database_tmp = self.target_database
                 
                 # Create database if it doesn't exist
                 if self.target_database not in self.clickhouse_api.get_databases():
