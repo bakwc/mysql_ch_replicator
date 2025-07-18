@@ -1179,10 +1179,8 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
 
 
 def test_string_primary_key(monkeypatch):
-    monkeypatch.setattr(DbReplicatorInitial, 'INITIAL_REPLICATION_BATCH_SIZE', 1)
-
     cfg = config.Settings()
-    cfg.load(CONFIG_FILE)
+    cfg.load('tests_config_string_primary_key.yaml')
 
     mysql = mysql_api.MySQLApi(
         database=None,
@@ -1217,9 +1215,9 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
         commit=True,
     )
 
-    binlog_replicator_runner = BinlogReplicatorRunner()
+    binlog_replicator_runner = BinlogReplicatorRunner(cfg_file='tests_config_string_primary_key.yaml')
     binlog_replicator_runner.run()
-    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME)
+    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file='tests_config_string_primary_key.yaml')
     db_replicator_runner.run()
 
     assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
