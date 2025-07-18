@@ -20,7 +20,6 @@ logger = getLogger(__name__)
 
 class DbReplicatorInitial:
     
-    INITIAL_REPLICATION_BATCH_SIZE = 50000
     SAVE_STATE_INTERVAL = 10
     BINLOG_TOUCH_INTERVAL = 120
 
@@ -180,7 +179,7 @@ class DbReplicatorInitial:
             records = self.replicator.mysql_api.get_records(
                 table_name=table_name,
                 order_by=primary_keys,
-                limit=self.INITIAL_REPLICATION_BATCH_SIZE,
+                limit=self.replicator.config.initial_replication_batch_size,
                 start_value=query_start_values,
                 worker_id=self.replicator.worker_id,
                 total_workers=self.replicator.total_workers,
@@ -207,6 +206,16 @@ class DbReplicatorInitial:
             self.prevent_binlog_removal()
 
             stats_number_of_records += len(records)
+            
+            # Test flag: Exit early if we've replicated enough records for testing
+            if (self.replicator.initial_replication_test_fail_records is not None and 
+                stats_number_of_records >= self.replicator.initial_replication_test_fail_records):
+                logger.info(
+                    f'TEST MODE: Exiting initial replication after {stats_number_of_records} records '
+                    f'(limit: {self.replicator.initial_replication_test_fail_records})'
+                )
+                return
+            
             curr_time = time.time()
             if curr_time - last_stats_dump_time >= 60.0:
                 last_stats_dump_time = curr_time

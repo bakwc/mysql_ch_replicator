@@ -107,6 +107,7 @@ class Settings:
     DEFAULT_OPTIMIZE_INTERVAL = 86400
     DEFAULT_CHECK_DB_UPDATED_INTERVAL = 120
     DEFAULT_AUTO_RESTART_INTERVAL = 3600
+    DEFAULT_INITIAL_REPLICATION_BATCH_SIZE = 50000
 
     def __init__(self):
         self.mysql = MysqlSettings()
@@ -131,6 +132,7 @@ class Settings:
         self.initial_replication_threads = 0
         self.ignore_deletes = False
         self.mysql_timezone = 'UTC'
+        self.initial_replication_batch_size = 50000
 
     def load(self, settings_file):
         data = open(settings_file, 'r').read()
@@ -158,6 +160,7 @@ class Settings:
         self.initial_replication_threads = data.pop('initial_replication_threads', 0)
         self.ignore_deletes = data.pop('ignore_deletes', False)
         self.mysql_timezone = data.pop('mysql_timezone', 'UTC')
+        self.initial_replication_batch_size = data.pop('initial_replication_batch_size', Settings.DEFAULT_INITIAL_REPLICATION_BATCH_SIZE)
 
         indexes = data.pop('indexes', [])
         for index in indexes:

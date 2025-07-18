@@ -88,13 +88,14 @@ class State:
 
 class DbReplicator:
     def __init__(self, config: Settings, database: str, target_database: str = None, initial_only: bool = False, 
-                 worker_id: int = None, total_workers: int = None, table: str = None):
+                 worker_id: int = None, total_workers: int = None, table: str = None, initial_replication_test_fail_records: int = None):
         self.config = config
         self.database = database
         self.worker_id = worker_id
         self.total_workers = total_workers
         self.settings_file = config.settings_file
         self.single_table = table  # Store the single table to process
+        self.initial_replication_test_fail_records = initial_replication_test_fail_records  # Test flag for early exit
         
         # use same as source database by default
         self.target_database = database
@@ -142,6 +143,11 @@ class DbReplicator:
 
         self.target_database_tmp = self.target_database + '_tmp'
         if self.is_parallel_worker:
+            self.target_database_tmp = self.target_database
+        
+        # If ignore_deletes is enabled, we replicate directly into the target DB
+        # This must be set here to ensure consistency between first run and resume
+        if self.config.ignore_deletes:
             self.target_database_tmp = self.target_database
 
         self.mysql_api = MySQLApi(
@@ -205,7 +211,6 @@ class DbReplicator:
             if self.config.ignore_deletes:
                 logger.info(f'using existing database (ignore_deletes=True)')
                 self.clickhouse_api.database = self.target_database
-                self.target_database_tmp = self.target_database
                 
                 # Create database if it doesn't exist
                 if self.target_database not in self.clickhouse_api.get_databases():
