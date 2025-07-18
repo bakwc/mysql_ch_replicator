@@ -2966,7 +2966,7 @@ def test_resume_initial_replication_with_ignore_deletes():
         ''')
 
         # Insert many records to make initial replication take longer
-        for i in range(100):
+        for i in range(1000):
             mysql.execute(
                 f"INSERT INTO `{TEST_TABLE_NAME}` (name, data) VALUES ('test_{i}', 'data_{i}');",
                 commit=True
@@ -3002,7 +3002,7 @@ def test_resume_initial_replication_with_ignore_deletes():
                 f"INSERT INTO `{TEST_TABLE_NAME}` (name, data) VALUES ('test_{i}', 'data_{i}');",
                 commit=True
             )
-        
+
         # Verify that sirocco_tmp database does NOT exist (it should use sirocco directly)
         assert f"{TEST_DB_NAME}_tmp" not in ch.get_databases(), "Temporary database should not exist with ignore_deletes=True"
         
@@ -3010,16 +3010,16 @@ def test_resume_initial_replication_with_ignore_deletes():
         db_replicator_runner_2 = DbReplicatorRunner(TEST_DB_NAME, cfg_file=config_file)
         db_replicator_runner_2.run()
         
-        # Wait for all records to be replicated
-        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 150, max_wait_time=30)
+        # Wait for all records to be replicated (1000 original + 50 extra = 1050)
+        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1050, max_wait_time=30)
         
         # Verify the replication completed successfully
         records = ch.select(TEST_TABLE_NAME)
-        assert len(records) == 150, f"Expected 150 records, got {len(records)}"
+        assert len(records) == 1050, f"Expected 1050 records, got {len(records)}"
         
         # Verify we can continue with realtime replication
         mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, data) VALUES ('realtime_test', 'realtime_data');", commit=True)
-        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 151)
+        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1051)
         
         # Clean up
         db_replicator_runner_2.stop()
