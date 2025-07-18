@@ -109,6 +109,7 @@ def run_db_replicator(args, config: Settings):
         worker_id=args.worker_id,
         total_workers=args.total_workers,
         table=args.table,
+        initial_replication_test_fail_records=getattr(args, 'initial_replication_test_fail_records', None),
     )
     db_replicator.run()
 
@@ -168,6 +169,10 @@ def main():
     parser.add_argument(
         "--table", type=str, default=None,
         help="Specific table to process (used with --worker_id for parallel processing of a single table)",
+    )
+    parser.add_argument(
+        "--initial-replication-test-fail-records", type=int, default=None,
+        help="FOR TESTING ONLY: Exit initial replication after processing this many records",
     )
     args = parser.parse_args()
 

@@ -1179,10 +1179,8 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
 
 
 def test_string_primary_key(monkeypatch):
-    monkeypatch.setattr(DbReplicatorInitial, 'INITIAL_REPLICATION_BATCH_SIZE', 1)
-
     cfg = config.Settings()
-    cfg.load(CONFIG_FILE)
+    cfg.load('tests_config_string_primary_key.yaml')
 
     mysql = mysql_api.MySQLApi(
         database=None,
@@ -1217,9 +1215,9 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
         commit=True,
     )
 
-    binlog_replicator_runner = BinlogReplicatorRunner()
+    binlog_replicator_runner = BinlogReplicatorRunner(cfg_file='tests_config_string_primary_key.yaml')
     binlog_replicator_runner.run()
-    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME)
+    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file='tests_config_string_primary_key.yaml')
     db_replicator_runner.run()
 
     assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
@@ -1241,10 +1239,8 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
 
 
 def test_if_exists_if_not_exists(monkeypatch):
-    monkeypatch.setattr(DbReplicatorInitial, 'INITIAL_REPLICATION_BATCH_SIZE', 1)
-
     cfg = config.Settings()
-    cfg.load(CONFIG_FILE)
+    cfg.load('tests_config_string_primary_key.yaml')
 
     mysql = mysql_api.MySQLApi(
         database=None,
@@ -1258,9 +1254,9 @@ def test_if_exists_if_not_exists(monkeypatch):
 
     prepare_env(cfg, mysql, ch)
 
-    binlog_replicator_runner = BinlogReplicatorRunner()
+    binlog_replicator_runner = BinlogReplicatorRunner(cfg_file='tests_config_string_primary_key.yaml')
     binlog_replicator_runner.run()
-    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME)
+    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file='tests_config_string_primary_key.yaml')
     db_replicator_runner.run()
 
     assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
@@ -1282,10 +1278,8 @@ def test_if_exists_if_not_exists(monkeypatch):
 
 
 def test_percona_migration(monkeypatch):
-    monkeypatch.setattr(DbReplicatorInitial, 'INITIAL_REPLICATION_BATCH_SIZE', 1)
-
     cfg = config.Settings()
-    cfg.load(CONFIG_FILE)
+    cfg.load('tests_config_string_primary_key.yaml')
 
     mysql = mysql_api.MySQLApi(
         database=None,
@@ -1310,9 +1304,9 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
         commit=True,
     )
 
-    binlog_replicator_runner = BinlogReplicatorRunner()
+    binlog_replicator_runner = BinlogReplicatorRunner(cfg_file='tests_config_string_primary_key.yaml')
     binlog_replicator_runner.run()
-    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME)
+    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file='tests_config_string_primary_key.yaml')
     db_replicator_runner.run()
 
     assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
@@ -1360,10 +1354,8 @@ CREATE TABLE `{TEST_DB_NAME}`.`_{TEST_TABLE_NAME}_new` (
 
 
 def test_add_column_first_after_and_drop_column(monkeypatch):
-    monkeypatch.setattr(DbReplicatorInitial, 'INITIAL_REPLICATION_BATCH_SIZE', 1)
-
     cfg = config.Settings()
-    cfg.load(CONFIG_FILE)
+    cfg.load('tests_config_string_primary_key.yaml')
 
     mysql = mysql_api.MySQLApi(
         database=None,
@@ -1388,9 +1380,9 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
         commit=True,
     )
 
-    binlog_replicator_runner = BinlogReplicatorRunner()
+    binlog_replicator_runner = BinlogReplicatorRunner(cfg_file='tests_config_string_primary_key.yaml')
     binlog_replicator_runner.run()
-    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME)
+    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file='tests_config_string_primary_key.yaml')
     db_replicator_runner.run()
 
     assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
@@ -2912,3 +2904,124 @@ mysql_timezone: 'America/New_York'
     finally:
         # Clean up temporary config file
         os.unlink(temp_config_file)
+
+def test_resume_initial_replication_with_ignore_deletes():
+    """
+    Test that resuming initial replication works correctly with ignore_deletes=True.
+    
+    This reproduces the bug from https://github.com/bakwc/mysql_ch_replicator/issues/172
+    where resuming initial replication would fail with "Database sirocco_tmp does not exist"
+    when ignore_deletes=True because the code would try to use the _tmp database instead
+    of the target database directly.
+    """
+    # Create a temporary config file with ignore_deletes=True
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as temp_config_file:
+        config_file = temp_config_file.name
+        
+        # Read the original config
+        with open(CONFIG_FILE, 'r') as original_config:
+            config_data = yaml.safe_load(original_config)
+        
+        # Add ignore_deletes=True
+        config_data['ignore_deletes'] = True
+        
+        # Set initial_replication_batch_size to 1 for testing
+        config_data['initial_replication_batch_size'] = 1
+        
+        # Write to the temp file
+        yaml.dump(config_data, temp_config_file)
+
+    try:
+        cfg = config.Settings()
+        cfg.load(config_file)
+        
+        # Verify the ignore_deletes option was set
+        assert cfg.ignore_deletes is True
+
+        mysql = mysql_api.MySQLApi(
+            database=None,
+            mysql_settings=cfg.mysql,
+        )
+
+        ch = clickhouse_api.ClickhouseApi(
+            database=TEST_DB_NAME,
+            clickhouse_settings=cfg.clickhouse,
+        )
+
+        prepare_env(cfg, mysql, ch)
+
+        # Create a table with many records to ensure initial replication takes time
+        mysql.execute(f'''
+        CREATE TABLE `{TEST_TABLE_NAME}` (
+            id int NOT NULL AUTO_INCREMENT,
+            name varchar(255),
+            data varchar(1000),
+            PRIMARY KEY (id)
+        )
+        ''')
+
+        # Insert many records to make initial replication take longer
+        for i in range(100):
+            mysql.execute(
+                f"INSERT INTO `{TEST_TABLE_NAME}` (name, data) VALUES ('test_{i}', 'data_{i}');",
+                commit=True
+            )
+
+        # Start binlog replicator
+        binlog_replicator_runner = BinlogReplicatorRunner(cfg_file=config_file)
+        binlog_replicator_runner.run()
+
+        # Start db replicator for initial replication with test flag to exit early
+        db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file=config_file, 
+                                                 additional_arguments='--initial-replication-test-fail-records 30')
+        db_replicator_runner.run()
+        
+        # Wait for initial replication to start
+        assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
+        ch.execute_command(f'USE `{TEST_DB_NAME}`')
+        assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
+        
+        # Wait for some records to be replicated but not all (should hit the 30 record limit)
+        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) > 0)
+        
+        # The db replicator should have stopped automatically due to the test flag
+        # But we still call stop() to ensure proper cleanup
+        db_replicator_runner.stop()
+        
+        # Verify the state is still PERFORMING_INITIAL_REPLICATION
+        state_path = os.path.join(cfg.binlog_replicator.data_dir, TEST_DB_NAME, 'state.pckl')
+        state = DbReplicatorState(state_path)
+        assert state.status.value == 2  # PERFORMING_INITIAL_REPLICATION
+        
+        # Add more records while replication is stopped
+        for i in range(100, 150):
+            mysql.execute(
+                f"INSERT INTO `{TEST_TABLE_NAME}` (name, data) VALUES ('test_{i}', 'data_{i}');",
+                commit=True
+            )
+
+        # Verify that sirocco_tmp database does NOT exist (it should use sirocco directly)
+        assert f"{TEST_DB_NAME}_tmp" not in ch.get_databases(), "Temporary database should not exist with ignore_deletes=True"
+        
+        # Resume initial replication - this should NOT fail with "Database sirocco_tmp does not exist"
+        db_replicator_runner_2 = DbReplicatorRunner(TEST_DB_NAME, cfg_file=config_file)
+        db_replicator_runner_2.run()
+        
+        # Wait for all records to be replicated (100 original + 50 extra = 150)
+        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 150, max_wait_time=30)
+        
+        # Verify the replication completed successfully
+        records = ch.select(TEST_TABLE_NAME)
+        assert len(records) == 150, f"Expected 150 records, got {len(records)}"
+        
+        # Verify we can continue with realtime replication
+        mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, data) VALUES ('realtime_test', 'realtime_data');", commit=True)
+        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 151)
+        
+        # Clean up
+        db_replicator_runner_2.stop()
+        binlog_replicator_runner.stop()
+        
+    finally:
+        # Clean up temp config file
+        os.unlink(config_file)
