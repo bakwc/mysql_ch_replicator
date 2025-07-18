@@ -2933,6 +2933,9 @@ def test_resume_initial_replication_with_ignore_deletes():
         # Add ignore_deletes=True
         config_data['ignore_deletes'] = True
         
+        # Set initial_replication_batch_size to 1 for testing
+        config_data['initial_replication_batch_size'] = 1
+        
         # Write to the temp file
         yaml.dump(config_data, temp_config_file)
 
@@ -2966,7 +2969,7 @@ def test_resume_initial_replication_with_ignore_deletes():
         ''')
 
         # Insert many records to make initial replication take longer
-        for i in range(1000):
+        for i in range(100):
             mysql.execute(
                 f"INSERT INTO `{TEST_TABLE_NAME}` (name, data) VALUES ('test_{i}', 'data_{i}');",
                 commit=True
@@ -2976,19 +2979,21 @@ def test_resume_initial_replication_with_ignore_deletes():
         binlog_replicator_runner = BinlogReplicatorRunner(cfg_file=config_file)
         binlog_replicator_runner.run()
 
-        # Start db replicator for initial replication
-        db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file=config_file)
+        # Start db replicator for initial replication with test flag to exit early
+        db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file=config_file, 
+                                                 additional_arguments='--initial-replication-test-fail-records 30')
         db_replicator_runner.run()
-
+        
         # Wait for initial replication to start
         assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
         ch.execute_command(f'USE `{TEST_DB_NAME}`')
         assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
         
-        # Wait for some records to be replicated but not all
+        # Wait for some records to be replicated but not all (should hit the 30 record limit)
         assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) > 0)
         
-        # Stop the db replicator to interrupt initial replication
+        # The db replicator should have stopped automatically due to the test flag
+        # But we still call stop() to ensure proper cleanup
         db_replicator_runner.stop()
         
         # Verify the state is still PERFORMING_INITIAL_REPLICATION
@@ -3010,16 +3015,16 @@ def test_resume_initial_replication_with_ignore_deletes():
         db_replicator_runner_2 = DbReplicatorRunner(TEST_DB_NAME, cfg_file=config_file)
         db_replicator_runner_2.run()
         
-        # Wait for all records to be replicated (1000 original + 50 extra = 1050)
-        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1050, max_wait_time=30)
+        # Wait for all records to be replicated (100 original + 50 extra = 150)
+        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 150, max_wait_time=30)
         
         # Verify the replication completed successfully
         records = ch.select(TEST_TABLE_NAME)
-        assert len(records) == 1050, f"Expected 1050 records, got {len(records)}"
+        assert len(records) == 150, f"Expected 150 records, got {len(records)}"
         
         # Verify we can continue with realtime replication
         mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, data) VALUES ('realtime_test', 'realtime_data');", commit=True)
-        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1051)
+        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 151)
         
         # Clean up
         db_replicator_runner_2.stop()

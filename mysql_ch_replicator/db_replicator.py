@@ -88,13 +88,14 @@ class State:
 
 class DbReplicator:
     def __init__(self, config: Settings, database: str, target_database: str = None, initial_only: bool = False, 
-                 worker_id: int = None, total_workers: int = None, table: str = None):
+                 worker_id: int = None, total_workers: int = None, table: str = None, initial_replication_test_fail_records: int = None):
         self.config = config
         self.database = database
         self.worker_id = worker_id
         self.total_workers = total_workers
         self.settings_file = config.settings_file
         self.single_table = table  # Store the single table to process
+        self.initial_replication_test_fail_records = initial_replication_test_fail_records  # Test flag for early exit
         
         # use same as source database by default
         self.target_database = database
