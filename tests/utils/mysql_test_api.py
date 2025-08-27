@@ -1,46 +1,75 @@
 from contextlib import contextmanager
 from logging import getLogger
 
-from .config import MysqlSettings
-from .connection_pool import PooledConnection, get_pool_manager
+import mysql.connector
+
+from mysql_ch_replicator.config import MysqlSettings
 
 logger = getLogger(__name__)
 
 
-class MySQLApi:
+class MySQLTestApi:
+    """
+    MySQL API specifically designed for testing scenarios.
+
+    This class uses direct connections (no connection pooling) and is optimized
+    for test scenarios where we need:
+    - Persistent connection state for commands like SET sql_mode
+    - Simple connection management without pooling complexity
+    - Proper cleanup for test isolation
+    """
+
     def __init__(self, database: str, mysql_settings: MysqlSettings):
         self.database = database
         self.mysql_settings = mysql_settings
-        self.pool_manager = get_pool_manager()
-        self.connection_pool = self.pool_manager.get_or_create_pool(
-            mysql_settings=mysql_settings,
-            pool_name=mysql_settings.pool_name,
-            pool_size=mysql_settings.pool_size,
-            max_overflow=mysql_settings.max_overflow,
-        )
         logger.info(
-            f"MySQLApi initialized with database '{database}' using connection pool '{mysql_settings.pool_name}'"
+            f"MySQLTestApi initialized with database '{database}' using direct connections"
         )
 
     @contextmanager
     def get_connection(self):
-        """Get a connection from the pool with automatic cleanup"""
-        with PooledConnection(self.connection_pool) as (connection, cursor):
-            # Set database if specified
-            if self.database is not None:
-                cursor.execute(f"USE `{self.database}`")
-            yield connection, cursor
+        """Get a direct MySQL connection with automatic cleanup"""
+        connection = mysql.connector.connect(
+            host=self.mysql_settings.host,
+            port=self.mysql_settings.port,
+            user=self.mysql_settings.user,
+            password=self.mysql_settings.password,
+            database=self.database,
+            autocommit=False,
+        )
+        try:
+            cursor = connection.cursor()
+            try:
+                yield connection, cursor
+            finally:
+                # Properly handle any unread results before closing
+                try:
+                    cursor.fetchall()  # Consume any remaining results
+                except Exception:
+                    pass  # Ignore if there are no results to consume
+                finally:
+                    cursor.close()
+        finally:
+            connection.close()
 
     def close(self):
-        """Close method for compatibility - pool handles connection lifecycle"""
-        logger.debug("MySQLApi.close() called - connection pool will handle cleanup")
+        """Close method for compatibility - direct connections are auto-closed"""
+        logger.debug("MySQLTestApi.close() called - direct connections are auto-closed")
 
     def execute(self, command, commit=False, args=None):
+        """Execute a SQL command with optional commit"""
         with self.get_connection() as (connection, cursor):
             if args:
                 cursor.execute(command, args)
             else:
                 cursor.execute(command)
+
+            # Consume any results to avoid "Unread result found" errors
+            try:
+                cursor.fetchall()
+            except Exception:
+                pass  # Ignore if there are no results to fetch
+
             if commit:
                 connection.commit()
 
@@ -49,8 +78,6 @@ class MySQLApi:
 
     def get_databases(self):
         with self.get_connection() as (connection, cursor):
-            # Use connection without specific database for listing databases
-            cursor.execute("USE INFORMATION_SCHEMA")  # Ensure we can list all databases
             cursor.execute("SHOW DATABASES")
             res = cursor.fetchall()
             databases = [x[0] for x in res]

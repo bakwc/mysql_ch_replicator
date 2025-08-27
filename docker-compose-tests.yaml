@@ -16,7 +16,7 @@ services:
     ports:
       - 9123:9123
     volumes:
-      - ./tests_override.xml:/bitnami/clickhouse/etc/conf.d/override.xml:ro
+      - ./tests/configs/docker/tests_override.xml:/bitnami/clickhouse/etc/conf.d/override.xml:ro
     healthcheck:
       test: ["CMD", "true"]
       interval: 5s
@@ -33,7 +33,7 @@ services:
     ports:
       - "9306:3306"
     volumes:
-      - ./test_mysql.cnf:/etc/mysql/my.cnf:ro
+      - ./tests/configs/docker/test_mysql.cnf:/etc/mysql/my.cnf:ro
     networks:
       - default
     healthcheck:
@@ -54,7 +54,7 @@ services:
     ports:
       - 9307:3306
     volumes:
-      - ./test_mariadb.cnf:/etc/mysql/my.cnf:ro  # Adjust path to MariaDB config location if needed
+      - ./tests/configs/docker/test_mariadb.cnf:/etc/mysql/my.cnf:ro  # Adjust path to MariaDB config location if needed
     healthcheck:
       test: ["CMD", "true"]
       interval: 5s
