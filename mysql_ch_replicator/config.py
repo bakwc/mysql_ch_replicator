@@ -15,6 +15,7 @@ class MysqlSettings:
     port: int = 3306
     user: str = 'root'
     password: str = ''
+    charset: str = 'utf8mb4'  # Default to utf8mb4 for full Unicode support
 
     def validate(self):
         if not isinstance(self.host, str):
@@ -28,6 +29,9 @@ class MysqlSettings:
 
         if not isinstance(self.password, str):
             raise ValueError(f'mysql password should be string and not {stype(self.password)}')
+        
+        if not isinstance(self.charset, str):
+            raise ValueError(f'mysql charset should be string and not {stype(self.charset)}')
 
 
 @dataclass

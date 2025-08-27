@@ -3025,3 +3025,123 @@ def test_resume_initial_replication_with_ignore_deletes():
     finally:
         # Clean up temp config file
         os.unlink(config_file)
+
+
+def test_charset_configuration():
+    """
+    Test that charset configuration is properly loaded and used for MySQL connections.
+    This test verifies that utf8mb4 charset can be configured to properly handle
+    4-byte Unicode characters in JSON fields.
+    """
+    # Create a temporary config file with explicit charset configuration
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as temp_config_file:
+        config_file = temp_config_file.name
+        
+        # Load base config and add charset setting
+        with open(CONFIG_FILE, 'r') as f:
+            base_config = yaml.safe_load(f)
+        
+        # Ensure charset is set to utf8mb4
+        base_config['mysql']['charset'] = 'utf8mb4'
+        
+        yaml.dump(base_config, temp_config_file)
+    
+    try:
+        cfg = config.Settings()
+        cfg.load(config_file)
+        
+        # Verify charset is loaded correctly
+        assert hasattr(cfg.mysql, 'charset'), "MysqlSettings should have charset attribute"
+        assert cfg.mysql.charset == 'utf8mb4', f"Expected charset utf8mb4, got {cfg.mysql.charset}"
+        
+        mysql = mysql_api.MySQLApi(None, cfg.mysql)
+        ch = clickhouse_api.ClickhouseApi(None, cfg.clickhouse)
+        
+        prepare_env(cfg, mysql, ch)
+        
+        mysql.database = TEST_DB_NAME
+        ch.database = TEST_DB_NAME
+        
+        # Create table with JSON field
+        mysql.execute(f"""
+            CREATE TABLE IF NOT EXISTS {TEST_TABLE_NAME} (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                json_data JSON
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+        """, commit=True)
+        
+        # Insert data with 4-byte Unicode characters (emoji and Arabic text)
+        test_data = {
+            "ar": "مرحباً بالعالم",  # Arabic: Hello World
+            "emoji": "🌍🎉✨",
+            "cn": "你好世界",  # Chinese: Hello World
+            "en": "Hello World"
+        }
+        
+        mysql.execute(
+            f"INSERT INTO {TEST_TABLE_NAME} (json_data) VALUES (%s)",
+            args=(json.dumps(test_data, ensure_ascii=False),),
+            commit=True
+        )
+        
+        # Verify the data can be read back correctly
+        mysql.cursor.execute(f"SELECT json_data FROM {TEST_TABLE_NAME}")
+        result = mysql.cursor.fetchone()
+        assert result is not None, "Should have retrieved a record"
+        
+        retrieved_data = json.loads(result[0]) if isinstance(result[0], str) else result[0]
+        assert retrieved_data['ar'] == test_data['ar'], f"Arabic text mismatch: {retrieved_data['ar']} != {test_data['ar']}"
+        assert retrieved_data['emoji'] == test_data['emoji'], f"Emoji mismatch: {retrieved_data['emoji']} != {test_data['emoji']}"
+        assert retrieved_data['cn'] == test_data['cn'], f"Chinese text mismatch: {retrieved_data['cn']} != {test_data['cn']}"
+        
+        # Test binlog replication with charset
+        binlog_replicator_runner = BinlogReplicatorRunner(cfg_file=config_file)
+        binlog_replicator_runner.run()
+        
+        try:
+            # Start db replicator
+            db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file=config_file)
+            db_replicator_runner.run()
+            
+            # Wait for database and table to be created in ClickHouse
+            assert_wait(lambda: TEST_DB_NAME in ch.get_databases(), max_wait_time=20)
+            ch.execute_command(f'USE `{TEST_DB_NAME}`')
+            assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables(), max_wait_time=20)
+            
+            # Wait for replication
+            assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1, max_wait_time=20)
+            
+            # Verify data in ClickHouse
+            ch_records = ch.select(TEST_TABLE_NAME)
+            assert len(ch_records) == 1, f"Expected 1 record in ClickHouse, got {len(ch_records)}"
+            
+            # Access the json_data column using dictionary access
+            ch_record = ch_records[0]
+            ch_json_data = json.loads(ch_record['json_data']) if isinstance(ch_record['json_data'], str) else ch_record['json_data']
+            
+            # Verify Unicode characters are preserved correctly
+            assert ch_json_data['ar'] == test_data['ar'], f"Arabic text not preserved in CH: {ch_json_data.get('ar')}"
+            assert ch_json_data['emoji'] == test_data['emoji'], f"Emoji not preserved in CH: {ch_json_data.get('emoji')}"
+            assert ch_json_data['cn'] == test_data['cn'], f"Chinese text not preserved in CH: {ch_json_data.get('cn')}"
+            
+            # Test realtime replication with more Unicode data
+            more_data = {"test": "🔥 Real-time 测试 اختبار"}
+            mysql.execute(
+                f"INSERT INTO {TEST_TABLE_NAME} (json_data) VALUES (%s)",
+                args=(json.dumps(more_data, ensure_ascii=False),),
+                commit=True
+            )
+            
+            assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 2, max_wait_time=20)
+            
+            # Verify the second record
+            ch_records = ch.select(TEST_TABLE_NAME)
+            assert len(ch_records) == 2, f"Expected 2 records in ClickHouse, got {len(ch_records)}"
+            
+            db_replicator_runner.stop()
+        finally:
+            binlog_replicator_runner.stop()
+            
+    finally:
+        # Clean up temp config file
+        os.unlink(config_file)

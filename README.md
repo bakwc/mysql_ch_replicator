@@ -191,6 +191,7 @@ mysql:
   port: 8306
   user: 'root'
   password: 'root'
+  charset: 'utf8mb4'  # optional, default is utf8mb4 for full Unicode support
 
 clickhouse:
   host: 'localhost'
