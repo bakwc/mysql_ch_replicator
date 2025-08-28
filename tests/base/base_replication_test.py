@@ -71,10 +71,10 @@ class BaseReplicationTest:
                     lambda: len(self.ch.select(table_name, where=where_clause)) > 0
                 )
             else:
-                assert_wait(
-                    lambda: self.ch.select(table_name, where=where_clause)[0][field]
-                    == expected_value
-                )
+                def condition():
+                    results = self.ch.select(table_name, where=where_clause)
+                    return len(results) > 0 and results[0][field] == expected_value
+                assert_wait(condition)
         else:
             assert_wait(lambda: len(self.ch.select(table_name, where=where_clause)) > 0)
 

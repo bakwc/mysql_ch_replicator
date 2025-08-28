@@ -80,3 +80,16 @@ class SchemaTestMixin:
         """Drop table"""
         if_exists_clause = "IF EXISTS" if if_exists else ""
         self.mysql.execute(f"DROP TABLE {if_exists_clause} `{table_name}`")
+
+    def wait_for_ddl_replication(self, max_wait_time=10.0):
+        """Wait for DDL operations to replicate to ClickHouse"""
+        import time
+        # DDL operations typically replicate quickly, so we use a shorter wait
+        # This gives time for schema changes to propagate through the replication system
+        time.sleep(2.0)
+
+    def wait_for_database(self, database_name=None, max_wait_time=20.0):
+        """Wait for database to be created in ClickHouse"""
+        from tests.conftest import assert_wait, TEST_DB_NAME
+        db_name = database_name or TEST_DB_NAME
+        assert_wait(lambda: db_name in self.ch.get_databases(), max_wait_time=max_wait_time)
