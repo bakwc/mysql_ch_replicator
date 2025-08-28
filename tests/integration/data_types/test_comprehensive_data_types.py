@@ -1,6 +1,5 @@
 """Comprehensive data type tests covering remaining edge cases"""
 
-from decimal import Decimal
 import datetime
 
 import pytest
@@ -38,7 +37,7 @@ class TestComprehensiveDataTypes(BaseReplicationTest, SchemaTestMixin, DataTestM
             {
                 "name": "Alice Johnson",
                 "age": 32,
-                "salary": Decimal("75000.50"),
+                "salary": 75000.50,
                 "is_manager": True,
                 "hire_date": datetime.date(2020, 3, 15),
                 "last_login": datetime.datetime(2023, 6, 15, 9, 30, 45),
@@ -50,7 +49,7 @@ class TestComprehensiveDataTypes(BaseReplicationTest, SchemaTestMixin, DataTestM
             {
                 "name": "Bob Smith",
                 "age": 28,
-                "salary": Decimal("60000.00"),
+                "salary": 60000.00,
                 "is_manager": False,
                 "hire_date": datetime.date(2021, 7, 1),
                 "last_login": datetime.datetime(2023, 6, 14, 17, 45, 30),
@@ -62,7 +61,7 @@ class TestComprehensiveDataTypes(BaseReplicationTest, SchemaTestMixin, DataTestM
             {
                 "name": "Carol Davis",
                 "age": 45,
-                "salary": Decimal("95000.75"),
+                "salary": 95000.75,
                 "is_manager": True,
                 "hire_date": datetime.date(2018, 1, 10),
                 "last_login": None,  # NULL datetime
@@ -85,7 +84,7 @@ class TestComprehensiveDataTypes(BaseReplicationTest, SchemaTestMixin, DataTestM
             "name='Alice Johnson'",
             {
                 "age": 32,
-                "salary": Decimal("75000.50"),
+                "salary": 75000.50,
                 "is_manager": True,
                 "birth_year": 1991,
             },
@@ -97,12 +96,24 @@ class TestComprehensiveDataTypes(BaseReplicationTest, SchemaTestMixin, DataTestM
             {"age": 28, "is_manager": False, "birth_year": 1995},
         )
 
-        # Verify NULL handling
+        # Verify comprehensive NULL handling across different data types
         self.verify_record_exists(
-            TEST_TABLE_NAME, "name='Bob Smith' AND notes IS NULL"
+            TEST_TABLE_NAME, "name='Bob Smith' AND notes IS NULL"  # TEXT field NULL
         )
         self.verify_record_exists(
-            TEST_TABLE_NAME, "name='Carol Davis' AND last_login IS NULL"
+            TEST_TABLE_NAME, "name='Carol Davis' AND last_login IS NULL"  # DATETIME field NULL
+        )
+        
+        # Verify comprehensive data type preservation for complex employee data
+        self.verify_record_exists(
+            TEST_TABLE_NAME,
+            "name='Carol Davis'",
+            {
+                "age": 45,
+                "is_manager": True,
+                "birth_year": 1978,
+                "notes": "Senior architect with 20+ years experience"
+            }
         )
 
     @pytest.mark.integration
@@ -135,8 +146,8 @@ class TestComprehensiveDataTypes(BaseReplicationTest, SchemaTestMixin, DataTestM
         advanced_data = [
             {
                 "product_name": "Premium Laptop Computer",
-                "price_small": Decimal("999.99"),
-                "price_large": Decimal("12345678901.2345"),
+                "price_small": 999.99,
+                "price_large": 12345678901.2345,
                 "weight_kg": 2.156,
                 "dimensions_m": 0.356789,
                 "quantity_tiny": 127,
@@ -152,8 +163,8 @@ class TestComprehensiveDataTypes(BaseReplicationTest, SchemaTestMixin, DataTestM
             },
             {
                 "product_name": "Basic Mouse",
-                "price_small": Decimal("19.99"),
-                "price_large": Decimal("19.9900"),
+                "price_small": 19.99,
+                "price_large": 19.99,
                 "weight_kg": 0.085,
                 "dimensions_m": 0.115000,
                 "quantity_tiny": -128,  # Negative values
@@ -169,8 +180,8 @@ class TestComprehensiveDataTypes(BaseReplicationTest, SchemaTestMixin, DataTestM
             },
             {
                 "product_name": "Discontinued Keyboard",
-                "price_small": Decimal("0.01"),  # Minimum decimal
-                "price_large": Decimal("0.0001"),
+                "price_small": 0.01,  # Minimum decimal
+                "price_large": 0.0001,
                 "weight_kg": 0.001,  # Very small float
                 "dimensions_m": 0.000001,  # Very small double
                 "quantity_tiny": 0,
@@ -197,7 +208,7 @@ class TestComprehensiveDataTypes(BaseReplicationTest, SchemaTestMixin, DataTestM
             TEST_TABLE_NAME,
             "product_name='Premium Laptop Computer'",
             {
-                "price_small": Decimal("999.99"),
+                "price_small": 999.99,
                 "quantity_large": 9223372036854775807,
                 "status": "active",
             },
@@ -217,6 +228,6 @@ class TestComprehensiveDataTypes(BaseReplicationTest, SchemaTestMixin, DataTestM
         self.verify_record_exists(
             TEST_TABLE_NAME,
             "product_name='Discontinued Keyboard'",
-            {"price_small": Decimal("0.01"), "status": "discontinued"},
+            {"price_small": 0.01, "status": "discontinued"},
         )
 

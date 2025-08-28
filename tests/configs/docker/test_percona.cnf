@@ -5,37 +5,28 @@ default-character-set = utf8mb4
 default-character-set = utf8mb4
 
 [mysqld]
-# The defaults from /etc/my.cnf
-datadir = /var/lib/mysql
-pid-file = /var/run/mysqld/mysqld.pid
-secure-file-priv = /var/lib/mysql-files
-socket = /var/lib/mysql/mysql.sock
-user = mysql
+# Basic settings
 bind-address = 0.0.0.0
+skip-name-resolve
 
-# Custom settings
+# Character set configuration
 collation-server = utf8mb4_0900_ai_ci
 character-set-server = utf8mb4
 init-connect = 'SET NAMES utf8mb4'
-skip-name-resolve
-information_schema_stats_expiry = 0
 
-# replication
-gtid_mode = on
-enforce_gtid_consistency = 1
+# Replication settings
+gtid_mode = ON
+enforce_gtid_consistency = ON
+binlog_format = ROW
+log-bin = mysql-bin
 binlog_expire_logs_seconds = 864000
-max_binlog_size            = 500M
-binlog_format              = ROW #Very important if you want to receive write, update and delete row events
-log-bin                    = mysql-bin
+max_binlog_size = 500M
 
-# Percona-specific optimizations
-log_warnings_suppress = 1592
+# Performance settings
 innodb_buffer_pool_size = 128M
-innodb_log_file_size = 64M
 innodb_flush_log_at_trx_commit = 1
-innodb_file_per_table = 1
-
-# Performance optimizations
-query_cache_type = 0
-query_cache_size = 0
 max_connections = 200
+
+# Disable X Plugin to avoid socket conflicts
+mysqlx = OFF
+skip-mysqlx

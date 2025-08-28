@@ -50,8 +50,9 @@ class TestReferentialIntegrity(BaseReplicationTest, SchemaTestMixin, DataTestMix
         self.wait_for_table_sync("orders", expected_count=0)
 
         # Get user IDs for foreign key references
-        self.mysql.execute("SELECT user_id, username FROM users ORDER BY user_id")
-        user_mappings = {row[1]: row[0] for row in self.mysql.cursor.fetchall()}
+        with self.mysql.get_connection() as (connection, cursor):
+            cursor.execute("SELECT user_id, username FROM users ORDER BY user_id")
+            user_mappings = {row[1]: row[0] for row in cursor.fetchall()}
 
         # Insert child records with valid foreign keys
         orders_data = [
@@ -146,31 +147,35 @@ class TestReferentialIntegrity(BaseReplicationTest, SchemaTestMixin, DataTestMix
         ]
 
         for scenario in transaction_scenarios:
-            # Execute as atomic transaction
-            self.mysql.execute("BEGIN")
-            
-            # Get item_id
-            self.mysql.execute(
-                "SELECT item_id FROM inventory WHERE item_name = %s",
-                (scenario["item_name"],)
-            )
-            item_id = self.mysql.cursor.fetchone()[0]
-            
-            # Update inventory
-            self.mysql.execute(
-                "UPDATE inventory SET quantity = %s WHERE item_id = %s",
-                (scenario["new_quantity"], item_id)
-            )
-            
-            # Record transaction
-            self.mysql.execute(
-                "INSERT INTO transactions (item_id, quantity_changed, txn_type) VALUES (%s, %s, %s)",
-                (item_id, scenario["quantity_change"], scenario["txn_type"])
-            )
-            
-            self.mysql.execute("COMMIT", commit=True)
+            # Execute as atomic transaction within a single connection
+            with self.mysql.get_connection() as (connection, cursor):
+                # Begin transaction
+                cursor.execute("BEGIN")
+                
+                # Get item_id
+                cursor.execute(
+                    "SELECT item_id FROM inventory WHERE item_name = %s",
+                    (scenario["item_name"],)
+                )
+                item_id = cursor.fetchone()[0]
+                
+                # Update inventory
+                cursor.execute(
+                    "UPDATE inventory SET quantity = %s WHERE item_id = %s",
+                    (scenario["new_quantity"], item_id)
+                )
+                
+                # Record transaction
+                cursor.execute(
+                    "INSERT INTO transactions (item_id, quantity_changed, txn_type) VALUES (%s, %s, %s)",
+                    (item_id, scenario["quantity_change"], scenario["txn_type"])
+                )
+                
+                # Commit transaction
+                cursor.execute("COMMIT")
+                connection.commit()
 
-        # Wait for replication
+        # Wait for replication to complete
         self.wait_for_table_sync("transactions", expected_count=3)
 
         # Verify transaction integrity
@@ -201,16 +206,18 @@ class TestReferentialIntegrity(BaseReplicationTest, SchemaTestMixin, DataTestMix
 
     def _get_mysql_child_count(self, child_table, fk_column, parent_id):
         """Get child record count from MySQL"""
-        self.mysql.execute(f"SELECT COUNT(*) FROM {child_table} WHERE {fk_column} = %s", (parent_id,))
-        return self.mysql.cursor.fetchone()[0]
+        with self.mysql.get_connection() as (connection, cursor):
+            cursor.execute(f"SELECT COUNT(*) FROM {child_table} WHERE {fk_column} = %s", (parent_id,))
+            return cursor.fetchone()[0]
 
     def _verify_inventory_transaction_consistency(self):
         """Verify inventory quantities match transaction history"""
         # Get current inventory from both systems
         mysql_inventory = {}
-        self.mysql.execute("SELECT item_id, item_name, quantity FROM inventory")
-        for item_id, name, qty in self.mysql.cursor.fetchall():
-            mysql_inventory[item_id] = {"name": name, "quantity": qty}
+        with self.mysql.get_connection() as (connection, cursor):
+            cursor.execute("SELECT item_id, item_name, quantity FROM inventory")
+            for item_id, name, qty in cursor.fetchall():
+                mysql_inventory[item_id] = {"name": name, "quantity": qty}
 
         ch_inventory = {}
         for record in self.ch.select("inventory"):
@@ -233,9 +240,10 @@ class TestReferentialIntegrity(BaseReplicationTest, SchemaTestMixin, DataTestMix
 
     def _get_mysql_transaction_total(self, item_id):
         """Get transaction total for item from MySQL"""
-        self.mysql.execute("SELECT SUM(quantity_changed) FROM transactions WHERE item_id = %s", (item_id,))
-        result = self.mysql.cursor.fetchone()[0]
-        return result if result is not None else 0
+        with self.mysql.get_connection() as (connection, cursor):
+            cursor.execute("SELECT SUM(quantity_changed) FROM transactions WHERE item_id = %s", (item_id,))
+            result = cursor.fetchone()[0]
+            return result if result is not None else 0
 
     def _get_ch_transaction_total(self, item_id):
         """Get transaction total for item from ClickHouse"""

@@ -30,34 +30,65 @@ class TestUnsignedNumericLimits(BaseReplicationTest, SchemaTestMixin, DataTestMi
             """
         )
 
-        # Insert edge-ish values
-        self.mysql.execute(
-            f"""
-            INSERT INTO `{TEST_TABLE_NAME}` (name, test1, test2, test3, test4, test5, test6, test7, test8) VALUES
-            ('Ivan', -20000, 50000, -30, 100, 16777200, 4294967290, 18446744073709551586, NULL);
-            """,
-            commit=True,
-        )
+        # Insert edge-case unsigned numeric values using helper method
+        test_data = [
+            {
+                "name": "Ivan",
+                "test1": -20000,  # smallint signed
+                "test2": 50000,   # smallint unsigned
+                "test3": -30,     # tinyint signed
+                "test4": 100,     # tinyint unsigned
+                "test5": 16777200, # mediumint unsigned
+                "test6": 4294967290, # int unsigned
+                "test7": 18446744073709551586, # bigint unsigned
+                "test8": None,    # mediumint unsigned NULL
+            }
+        ]
+        self.insert_multiple_records(TEST_TABLE_NAME, test_data)
 
         # Start replication
         self.start_replication(db_name=TEST_DB_NAME)
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=1)
 
-        # Second row
-        self.mysql.execute(
-            f"""
-            INSERT INTO `{TEST_TABLE_NAME}` (name, test1, test2, test3, test4, test5, test6, test7, test8) VALUES
-            ('Peter', -10000, 60000, -120, 250, 16777200, 4294967280, 18446744073709551586, NULL);
-            """,
-            commit=True,
-        )
+        # Insert second row with different edge values
+        additional_data = [
+            {
+                "name": "Peter",
+                "test1": -10000,  # smallint signed
+                "test2": 60000,   # smallint unsigned
+                "test3": -120,    # tinyint signed
+                "test4": 250,     # tinyint unsigned
+                "test5": 16777200, # mediumint unsigned (same as first)
+                "test6": 4294967280, # int unsigned
+                "test7": 18446744073709551586, # bigint unsigned (same as first)
+                "test8": None,    # mediumint unsigned NULL
+            }
+        ]
+        self.insert_multiple_records(TEST_TABLE_NAME, additional_data)
 
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=2)
 
-        # Validate selected points
-        assert len(self.ch.select(TEST_TABLE_NAME, "test2=60000")) == 1
-        assert len(self.ch.select(TEST_TABLE_NAME, "test4=250")) == 1
-        assert len(self.ch.select(TEST_TABLE_NAME, "test5=16777200")) == 2
-        assert len(self.ch.select(TEST_TABLE_NAME, "test6=4294967290")) == 1
-        assert len(self.ch.select(TEST_TABLE_NAME, "test6=4294967280")) == 1
-        assert len(self.ch.select(TEST_TABLE_NAME, "test7=18446744073709551586")) == 2
+        # Validate unsigned numeric limits using helper methods
+        self.verify_record_exists(TEST_TABLE_NAME, "name='Ivan'", {
+            "test1": -20000,
+            "test2": 50000,
+            "test3": -30,
+            "test4": 100,
+            "test5": 16777200,
+            "test6": 4294967290,
+            "test7": 18446744073709551586
+        })
+        
+        self.verify_record_exists(TEST_TABLE_NAME, "name='Peter'", {
+            "test1": -10000,
+            "test2": 60000,
+            "test3": -120,
+            "test4": 250,
+            "test5": 16777200,
+            "test6": 4294967280,
+            "test7": 18446744073709551586
+        })
+        
+        # Verify NULL handling for unsigned types
+        self.verify_record_exists(TEST_TABLE_NAME, "name='Ivan' AND test8 IS NULL")
+        self.verify_record_exists(TEST_TABLE_NAME, "name='Peter' AND test8 IS NULL")
