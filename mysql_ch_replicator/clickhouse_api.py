@@ -102,8 +102,12 @@ class ClickhouseApi:
         self.stats = GeneralStats()
         return stats
 
-    def get_tables(self):
-        result = self.client.query('SHOW TABLES')
+    def get_tables(self, database_name=None):
+        if database_name:
+            query = f'SHOW TABLES FROM `{database_name}`'
+        else:
+            query = 'SHOW TABLES'
+        result = self.client.query(query)
         tables = result.result_rows
         table_list = [row[0] for row in tables]
         return table_list
@@ -292,8 +296,15 @@ class ClickhouseApi:
             # Handle system tables (which contain dots) differently from regular tables
             if '.' in table_name and table_name.startswith('system.'):
                 query = f'SELECT * FROM {table_name}'
-            else:
+            elif '.' in table_name:
+                # Table name already includes database
                 query = f'SELECT * FROM `{table_name}`'
+            else:
+                # Qualify table name with database if database is set
+                if self.database:
+                    query = f'SELECT * FROM `{self.database}`.`{table_name}`'
+                else:
+                    query = f'SELECT * FROM `{table_name}`'
                 
             if where:
                 query += f' WHERE {where}'

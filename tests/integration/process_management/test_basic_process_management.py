@@ -43,6 +43,10 @@ class TestBasicProcessManagement(BaseReplicationTest, SchemaTestMixin, DataTestM
         runner = RunAllRunner()
         runner.run()
 
+        # Wait for replication to start and set ClickHouse context
+        self.wait_for_condition(lambda: TEST_DB_NAME in self.ch.get_databases())
+        self.ch.execute_command(f"USE `{TEST_DB_NAME}`")
+
         # Wait for initial replication
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=3)
 
@@ -65,6 +69,10 @@ class TestBasicProcessManagement(BaseReplicationTest, SchemaTestMixin, DataTestM
         runner = RunAllRunner()
         runner.run()
 
+        # Wait for replication to start and set ClickHouse context
+        self.wait_for_condition(lambda: TEST_DB_NAME in self.ch.get_databases())
+        self.ch.execute_command(f"USE `{TEST_DB_NAME}`")
+
         # Verify recovery - new data should be replicated
         self.wait_for_data_sync(TEST_TABLE_NAME, "name='PostCrashUser'", 99, "age")
 
@@ -85,6 +93,10 @@ class TestBasicProcessManagement(BaseReplicationTest, SchemaTestMixin, DataTestM
         # Start replication
         runner = RunAllRunner()
         runner.run()
+
+        # Wait for replication to start and set ClickHouse context
+        self.wait_for_condition(lambda: TEST_DB_NAME in self.ch.get_databases())
+        self.ch.execute_command(f"USE `{TEST_DB_NAME}`")
 
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=1)
 
@@ -120,6 +132,10 @@ class TestBasicProcessManagement(BaseReplicationTest, SchemaTestMixin, DataTestM
         runner = RunAllRunner()
         runner.run()
 
+        # Wait for replication to start and set ClickHouse context
+        self.wait_for_condition(lambda: TEST_DB_NAME in self.ch.get_databases())
+        self.ch.execute_command(f"USE `{TEST_DB_NAME}`")
+
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=1)
 
         # Kill only db replicator
@@ -151,6 +167,10 @@ class TestBasicProcessManagement(BaseReplicationTest, SchemaTestMixin, DataTestM
         runner = RunAllRunner()
         runner.run()
 
+        # Wait for replication to start and set ClickHouse context
+        self.wait_for_condition(lambda: TEST_DB_NAME in self.ch.get_databases())
+        self.ch.execute_command(f"USE `{TEST_DB_NAME}`")
+
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=2)
 
         # Add data right before shutdown
@@ -165,6 +185,10 @@ class TestBasicProcessManagement(BaseReplicationTest, SchemaTestMixin, DataTestM
         # Restart and verify the last-minute data was saved
         runner = RunAllRunner()
         runner.run()
+
+        # Wait for replication to start and set ClickHouse context
+        self.wait_for_condition(lambda: TEST_DB_NAME in self.ch.get_databases())
+        self.ch.execute_command(f"USE `{TEST_DB_NAME}`")
 
         self.wait_for_data_sync(TEST_TABLE_NAME, "name='LastMinuteUser'", 55, "age")
 

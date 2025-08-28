@@ -42,9 +42,9 @@ class BaseReplicationTest:
         self.db_runner = DbReplicatorRunner(db_name, cfg_file=config_file)
         self.db_runner.run()
 
-        # Wait for replication to start
+        # Wait for replication to start and set database context for the ClickHouse client
         assert_wait(lambda: db_name in self.ch.get_databases())
-        self.ch.execute_command(f"USE `{db_name}`")
+        self.ch.database = db_name
 
     def stop_replication(self):
         """Stop both binlog and db replication"""
@@ -55,9 +55,22 @@ class BaseReplicationTest:
             self.binlog_runner.stop()
             self.binlog_runner = None
 
-    def wait_for_table_sync(self, table_name, expected_count=None):
+    def wait_for_table_sync(self, table_name, expected_count=None, database=None):
         """Wait for table to be synced to ClickHouse"""
-        assert_wait(lambda: table_name in self.ch.get_tables())
+        def table_exists():
+            # Check tables in the specified database or current context
+            target_db = database or self.ch.database or TEST_DB_NAME
+            tables = self.ch.get_tables(target_db)
+            if table_name not in tables:
+                # Debug: print available tables and current database context
+                databases = self.ch.get_databases()
+                print(f"DEBUG: Table '{table_name}' not found. Available tables: {tables}")
+                print(f"DEBUG: Available databases: {databases}")
+                print(f"DEBUG: ClickHouse database context: {target_db}")
+                return False
+            return True
+        
+        assert_wait(table_exists)
         if expected_count is not None:
             assert_wait(lambda: len(self.ch.select(table_name)) == expected_count)
 
