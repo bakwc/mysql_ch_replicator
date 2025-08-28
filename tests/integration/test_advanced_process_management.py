@@ -81,9 +81,7 @@ class TestAdvancedProcessManagement(
         # Check logs exist and contain expected entries
         logs = read_logs(TEST_DB_NAME)
         assert len(logs) > 0, "No logs found"
-        assert any("replication" in log.lower() for log in logs), (
-            "No replication logs found"
-        )
+        assert "replication" in logs.lower(), "No replication logs found"
 
         # Verify all data is still correctly replicated
         self.wait_for_table_sync(
