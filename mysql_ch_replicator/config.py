@@ -19,6 +19,10 @@ class MysqlSettings:
     pool_size: int = 5
     max_overflow: int = 10
     pool_name: str = "default"
+    # Optional charset specification (useful for MariaDB compatibility)
+    charset: str = None
+    # Optional collation specification (useful for MariaDB compatibility)
+    collation: str = None
 
     def validate(self):
         if not isinstance(self.host, str):
@@ -49,6 +53,40 @@ class MysqlSettings:
             raise ValueError(
                 f"mysql pool_name should be string and not {stype(self.pool_name)}"
             )
+
+        if self.charset is not None and not isinstance(self.charset, str):
+            raise ValueError(
+                f"mysql charset should be string or None and not {stype(self.charset)}"
+            )
+
+        if self.collation is not None and not isinstance(self.collation, str):
+            raise ValueError(
+                f"mysql collation should be string or None and not {stype(self.collation)}"
+            )
+
+    def get_connection_config(self, database=None, autocommit=True):
+        """Build standardized MySQL connection configuration"""
+        config = {
+            "host": self.host,
+            "port": self.port,
+            "user": self.user,
+            "password": self.password,
+            "autocommit": autocommit,
+        }
+
+        # Add database if specified
+        if database is not None:
+            config["database"] = database
+
+        # Add charset if specified (important for MariaDB compatibility)
+        if self.charset is not None:
+            config["charset"] = self.charset
+
+        # Add collation if specified (important for MariaDB compatibility)
+        if self.collation is not None:
+            config["collation"] = self.collation
+
+        return config
 
 
 @dataclass

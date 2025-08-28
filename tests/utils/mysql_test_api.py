@@ -29,14 +29,11 @@ class MySQLTestApi:
     @contextmanager
     def get_connection(self):
         """Get a direct MySQL connection with automatic cleanup"""
-        connection = mysql.connector.connect(
-            host=self.mysql_settings.host,
-            port=self.mysql_settings.port,
-            user=self.mysql_settings.user,
-            password=self.mysql_settings.password,
-            database=self.database,
-            autocommit=False,
+        # Use standardized connection configuration
+        config = self.mysql_settings.get_connection_config(
+            database=self.database, autocommit=False
         )
+        connection = mysql.connector.connect(**config)
         try:
             cursor = connection.cursor()
             try:
@@ -69,6 +66,27 @@ class MySQLTestApi:
                 cursor.fetchall()
             except Exception:
                 pass  # Ignore if there are no results to fetch
+
+            if commit:
+                connection.commit()
+
+    def execute_batch(self, commands, commit=False):
+        """Execute multiple SQL commands in the same connection context"""
+        with self.get_connection() as (connection, cursor):
+            for command in commands:
+                if isinstance(command, tuple):
+                    # Command with args
+                    cmd, args = command
+                    cursor.execute(cmd, args)
+                else:
+                    # Simple command
+                    cursor.execute(command)
+
+                # Consume any results to avoid "Unread result found" errors
+                try:
+                    cursor.fetchall()
+                except Exception:
+                    pass  # Ignore if there are no results to fetch
 
             if commit:
                 connection.commit()
