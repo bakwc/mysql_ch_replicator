@@ -46,6 +46,15 @@ class BaseReplicationTest:
         assert_wait(lambda: db_name in self.ch.get_databases())
         self.ch.execute_command(f"USE `{db_name}`")
 
+    def stop_replication(self):
+        """Stop both binlog and db replication"""
+        if self.db_runner:
+            self.db_runner.stop()
+            self.db_runner = None
+        if self.binlog_runner:
+            self.binlog_runner.stop()
+            self.binlog_runner = None
+
     def wait_for_table_sync(self, table_name, expected_count=None):
         """Wait for table to be synced to ClickHouse"""
         assert_wait(lambda: table_name in self.ch.get_tables())

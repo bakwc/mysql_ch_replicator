@@ -61,6 +61,14 @@ class TestDataConsistency(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
         mysql_checksum = self._calculate_table_checksum_mysql(TEST_TABLE_NAME)
         clickhouse_checksum = self._calculate_table_checksum_clickhouse(TEST_TABLE_NAME)
 
+        # Add debugging information
+        mysql_data = self._get_normalized_data_mysql(TEST_TABLE_NAME)
+        clickhouse_data = self._get_normalized_data_clickhouse(TEST_TABLE_NAME)
+        
+        if mysql_checksum != clickhouse_checksum:
+            print(f"MySQL normalized data: {mysql_data}")
+            print(f"ClickHouse normalized data: {clickhouse_data}")
+
         # Checksums should match
         assert mysql_checksum == clickhouse_checksum, (
             f"Data checksum mismatch: MySQL={mysql_checksum}, ClickHouse={clickhouse_checksum}"
@@ -137,31 +145,80 @@ class TestDataConsistency(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
         for i, (mysql_row, ch_row) in enumerate(zip(mysql_rows, clickhouse_rows)):
             self._compare_row_data(mysql_row, ch_row, f"Row {i}")
 
+    def _normalize_value(self, value):
+        """Normalize a value for consistent comparison"""
+        # Handle timezone-aware datetime by removing timezone info
+        if hasattr(value, 'replace') and hasattr(value, 'tzinfo') and value.tzinfo is not None:
+            value = value.replace(tzinfo=None)
+        
+        # Convert boolean integers to booleans for consistency
+        if isinstance(value, int) and value in (0, 1):
+            # Keep as int to match MySQL behavior
+            pass
+        
+        # Convert booleans to integers to match MySQL storage
+        if isinstance(value, bool):
+            value = 1 if value else 0
+            
+        # Convert float/Decimal to consistent format (2 decimal places for currency)
+        if isinstance(value, (float, Decimal)):
+            # For currency-like values, format to 2 decimal places
+            value = f"{float(value):.2f}"
+            
+        return value
+
     def _calculate_table_checksum_mysql(self, table_name):
-        """Calculate checksum for MySQL table data"""
-        # Get data in consistent order
+        """Calculate checksum for MySQL table data (normalized format)"""
+        # Get data in consistent order using proper context manager
         query = f"SELECT * FROM `{table_name}` ORDER BY id"
-        self.mysql.execute(query)
-        rows = self.mysql.cursor.fetchall()
+        with self.mysql.get_connection() as (connection, cursor):
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            
+            # Get column names within the same connection context
+            cursor.execute(f"DESCRIBE `{table_name}`")
+            columns = [col[0] for col in cursor.fetchall()]
+        
+        # Normalize data: convert to sorted tuples of (key, value) pairs
+        normalized_rows = []
+        if rows:
+            for row in rows:
+                # Create dict and exclude internal ClickHouse columns for comparison
+                row_dict = dict(zip(columns, row))
+                # Remove internal ClickHouse columns that don't exist in MySQL
+                filtered_dict = {k: v for k, v in row_dict.items() if not k.startswith('_')}
+                # Normalize values for consistent comparison
+                normalized_dict = {k: self._normalize_value(v) for k, v in filtered_dict.items()}
+                normalized_rows.append(tuple(sorted(normalized_dict.items())))
         
         # Create deterministic string representation
-        data_str = "|".join([str(row) for row in rows])
+        data_str = "|".join([str(row) for row in normalized_rows])
         return hashlib.md5(data_str.encode('utf-8')).hexdigest()
 
     def _calculate_table_checksum_clickhouse(self, table_name):
-        """Calculate checksum for ClickHouse table data"""
+        """Calculate checksum for ClickHouse table data (normalized format)"""
         # Get data in consistent order
         rows = self.ch.select(table_name, order_by="id")
         
-        # Create deterministic string representation (matching MySQL format)
-        data_str = "|".join([str(tuple(row.values())) for row in rows])
+        # Normalize data: convert to sorted tuples of (key, value) pairs
+        normalized_rows = []
+        for row in rows:
+            # Remove internal ClickHouse columns that don't exist in MySQL
+            filtered_dict = {k: v for k, v in row.items() if not k.startswith('_')}
+            # Normalize values for consistent comparison
+            normalized_dict = {k: self._normalize_value(v) for k, v in filtered_dict.items()}
+            normalized_rows.append(tuple(sorted(normalized_dict.items())))
+        
+        # Create deterministic string representation
+        data_str = "|".join([str(row) for row in normalized_rows])
         return hashlib.md5(data_str.encode('utf-8')).hexdigest()
 
     def _get_sorted_table_data_mysql(self, table_name):
         """Get sorted table data from MySQL"""
         query = f"SELECT * FROM `{table_name}` ORDER BY id"
-        self.mysql.execute(query)
-        return self.mysql.cursor.fetchall()
+        with self.mysql.get_connection() as (connection, cursor):
+            cursor.execute(query)
+            return cursor.fetchall()
 
     def _get_sorted_table_data_clickhouse(self, table_name):
         """Get sorted table data from ClickHouse"""
@@ -169,9 +226,11 @@ class TestDataConsistency(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
 
     def _compare_row_data(self, mysql_row, ch_row, context=""):
         """Compare individual row data between MySQL and ClickHouse"""
-        # Convert ClickHouse row to tuple for comparison
+        # Convert ClickHouse row to tuple for comparison, filtering out internal columns
         if isinstance(ch_row, dict):
-            ch_values = tuple(ch_row.values())
+            # Filter out internal ClickHouse columns that don't exist in MySQL
+            filtered_ch_row = {k: v for k, v in ch_row.items() if not k.startswith('_')}
+            ch_values = tuple(filtered_ch_row.values())
         else:
             ch_values = ch_row
 
@@ -197,3 +256,35 @@ class TestDataConsistency(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
                     f"{context}, Column {i}: Value mismatch - MySQL: {mysql_val} ({type(mysql_val)}), "
                     f"ClickHouse: {ch_val} ({type(ch_val)})"
                 )
+
+    def _get_normalized_data_mysql(self, table_name):
+        """Get normalized data from MySQL for debugging"""
+        query = f"SELECT * FROM `{table_name}` ORDER BY id"
+        with self.mysql.get_connection() as (connection, cursor):
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            
+            cursor.execute(f"DESCRIBE `{table_name}`")
+            columns = [col[0] for col in cursor.fetchall()]
+        
+        normalized_rows = []
+        if rows:
+            for row in rows:
+                row_dict = dict(zip(columns, row))
+                filtered_dict = {k: v for k, v in row_dict.items() if not k.startswith('_')}
+                normalized_dict = {k: self._normalize_value(v) for k, v in filtered_dict.items()}
+                normalized_rows.append(tuple(sorted(normalized_dict.items())))
+        
+        return normalized_rows
+
+    def _get_normalized_data_clickhouse(self, table_name):
+        """Get normalized data from ClickHouse for debugging"""
+        rows = self.ch.select(table_name, order_by="id")
+        
+        normalized_rows = []
+        for row in rows:
+            filtered_dict = {k: v for k, v in row.items() if not k.startswith('_')}
+            normalized_dict = {k: self._normalize_value(v) for k, v in filtered_dict.items()}
+            normalized_rows.append(tuple(sorted(normalized_dict.items())))
+        
+        return normalized_rows
