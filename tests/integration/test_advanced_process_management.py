@@ -35,6 +35,10 @@ class TestAdvancedProcessManagement(
         runner = RunAllRunner()
         runner.run()
 
+        # Wait for replication to start and set ClickHouse context
+        self.wait_for_condition(lambda: TEST_DB_NAME in self.ch.get_databases())
+        self.ch.execute_command(f"USE `{TEST_DB_NAME}`")
+
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=1)
 
         # Add data continuously to test restart doesn't break replication
@@ -60,6 +64,10 @@ class TestAdvancedProcessManagement(
         runner = RunAllRunner()
         runner.run()
 
+        # Wait for replication to start and set ClickHouse context
+        self.wait_for_condition(lambda: TEST_DB_NAME in self.ch.get_databases())
+        self.ch.execute_command(f"USE `{TEST_DB_NAME}`")
+
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=1)
 
         # Generate log activity by adding/updating data
@@ -71,7 +79,7 @@ class TestAdvancedProcessManagement(
                 )
 
         # Check logs exist and contain expected entries
-        logs = read_logs()
+        logs = read_logs(TEST_DB_NAME)
         assert len(logs) > 0, "No logs found"
         assert any("replication" in log.lower() for log in logs), (
             "No replication logs found"
@@ -97,6 +105,10 @@ class TestAdvancedProcessManagement(
         runner = RunAllRunner()
         runner.run()
 
+        # Wait for replication to start and set ClickHouse context
+        self.wait_for_condition(lambda: TEST_DB_NAME in self.ch.get_databases())
+        self.ch.execute_command(f"USE `{TEST_DB_NAME}`")
+
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=1)
 
         # Stop replication
@@ -114,6 +126,10 @@ class TestAdvancedProcessManagement(
         # Restart replication - should handle corruption gracefully
         runner = RunAllRunner()
         runner.run()
+
+        # Wait for replication to start and set ClickHouse context
+        self.wait_for_condition(lambda: TEST_DB_NAME in self.ch.get_databases())
+        self.ch.execute_command(f"USE `{TEST_DB_NAME}`")
 
         # Verify recovery and new data replication
         # May need to start from beginning due to state corruption

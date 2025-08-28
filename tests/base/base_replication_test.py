@@ -68,3 +68,7 @@ class BaseReplicationTest:
                 )
         else:
             assert_wait(lambda: len(self.ch.select(table_name, where=where_clause)) > 0)
+
+    def wait_for_condition(self, condition, max_wait_time=20.0):
+        """Wait for a condition to be true with timeout"""
+        assert_wait(condition, max_wait_time=max_wait_time)
