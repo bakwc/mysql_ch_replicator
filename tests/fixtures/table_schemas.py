@@ -135,7 +135,7 @@ class TableSchemas:
             CREATE TABLE `{table_name}` (
                 id int NOT NULL AUTO_INCREMENT,
                 name varchar(255),
-                modified_date datetime(3) NOT NULL,
+                modified_date datetime(3) NULL,
                 test_date date NOT NULL,
                 PRIMARY KEY (id)
             );

@@ -323,6 +323,28 @@ class MysqlToClickhouseConverter:
             return 'Bool'
         if mysql_type == 'bit(1)':
             return 'Bool'
+        if mysql_type.startswith('bit(') and mysql_type.endswith(')'):
+            # Handle bit(N) types where N > 1
+            # Extract the bit size
+            bit_size_str = mysql_type[4:-1]  # Remove 'bit(' and ')'
+            try:
+                bit_size = int(bit_size_str)
+                if bit_size == 1:
+                    return 'Bool'
+                elif bit_size <= 8:
+                    return 'UInt8'
+                elif bit_size <= 16:
+                    return 'UInt16'
+                elif bit_size <= 32:
+                    return 'UInt32'
+                elif bit_size <= 64:
+                    return 'UInt64'
+                else:
+                    # For larger bit sizes, use String as fallback
+                    return 'String'
+            except ValueError:
+                # If bit size parsing fails, treat as unknown type
+                pass
         if mysql_type == 'bool':
             return 'Bool'
         if 'smallint' in mysql_type:

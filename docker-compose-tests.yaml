@@ -67,19 +67,18 @@ services:
       MYSQL_DATABASE: admin
       MYSQL_ROOT_HOST: "%"
       MYSQL_ROOT_PASSWORD: admin
-      MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
     ports:
       - "9308:3306"
     volumes:
-      - ./tests/configs/docker/test_percona.cnf:/etc/my.cnf:ro
+      - ./tests/configs/docker/test_percona.cnf:/etc/mysql/conf.d/custom.cnf:ro
     networks:
       - default
     healthcheck:
-      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -padmin || exit 1"]
-      interval: 15s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-padmin"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
 
   replicator:
     build:
@@ -102,5 +101,8 @@ services:
         condition: service_healthy
       mariadb_db:
         condition: service_healthy
-      # percona_db:
-      #   condition: service_healthy  # Disabled until Percona container issue resolved
+      percona_db:
+        condition: service_started  # Start dependency only (not health check)
+
+volumes:
+  percona_data:

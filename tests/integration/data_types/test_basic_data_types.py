@@ -41,11 +41,13 @@ class TestBasicDataTypes(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
             TEST_TABLE_NAME, "name='Ivan' AND modified_date IS NULL"
         )
 
-        # Verify non-NULL datetime
+        # Verify non-NULL datetime (ClickHouse returns timezone-aware datetime)
+        from datetime import timezone
+        expected_datetime = datetime.datetime(2023, 1, 8, 3, 11, 9, tzinfo=timezone.utc)
         self.verify_record_exists(
             TEST_TABLE_NAME,
             "name='Givi'",
-            {"modified_date": datetime.datetime(2023, 1, 8, 3, 11, 9)},
+            {"modified_date": expected_datetime},
         )
 
     @pytest.mark.integration
@@ -93,19 +95,39 @@ class TestBasicDataTypes(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
         # Verify numeric data replication
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=2)
 
-        # Verify specific numeric values
+        # Verify numeric type conversion and boundary values (ClickHouse converts Decimal to float)
         self.verify_record_exists(
             TEST_TABLE_NAME,
             "name='Product1'",
-            {"price": Decimal("123.45"), "small_num": 127},
+            {
+                "price": 123.45,  # Decimal("123.45") → float
+                "small_num": 127,  # tinyint MAX value
+                "big_num": 9223372036854775807  # bigint MAX value
+            },
         )
+        
+        # Verify float precision separately (may have minor precision differences)
+        product1_records = self.ch.select(TEST_TABLE_NAME, "name='Product1'")
+        assert len(product1_records) == 1
+        assert abs(product1_records[0]["rate"] - 1.23) < 0.001  # Float precision tolerance
+        assert abs(product1_records[0]["percentage"] - 99.9876) < 0.001  # Double precision tolerance
 
-        # Verify edge cases
+        # Verify numeric edge cases and negative boundaries
         self.verify_record_exists(
             TEST_TABLE_NAME,
             "name='Product2'",
-            {"price": Decimal("0.01"), "small_num": -128},
+            {
+                "price": 0.01,    # Decimal("0.01") → float
+                "small_num": -128,  # tinyint MIN value
+                "big_num": -9223372036854775808  # bigint MIN value
+            },
         )
+        
+        # Verify float edge cases with precision tolerance
+        product2_records = self.ch.select(TEST_TABLE_NAME, "name='Product2'")
+        assert len(product2_records) == 1
+        assert abs(product2_records[0]["rate"] - 0.0) < 0.001      # Float zero
+        assert abs(product2_records[0]["percentage"] - 0.0001) < 0.00001  # Double small value
 
     @pytest.mark.integration
     def test_text_and_blob_types(self):

@@ -36,13 +36,21 @@ class TestEnumNormalization(BaseReplicationTest, SchemaTestMixin, DataTestMixin)
         # Start replication
         self.start_replication(db_name=TEST_DB_NAME)
 
-        # Verify normalization and NULL handling
+        # Verify ENUM normalization and NULL handling using helper methods
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=3)
-        results = self.ch.select(TEST_TABLE_NAME)
-        assert results[0]["status_mixed_case"] == "purchase"
-        assert results[1]["status_mixed_case"] == "sell"
-        assert results[2]["status_mixed_case"] == "transfer"
-
-        assert results[0]["status_empty"] == "yes"
-        assert results[1]["status_empty"] is None
-        assert results[2]["status_empty"] is None
+        
+        # Verify ENUM values are normalized to lowercase during replication
+        self.verify_record_exists(TEST_TABLE_NAME, "id=1", {
+            "status_mixed_case": "purchase",  # 'Purchase' → 'purchase'
+            "status_empty": "yes"           # 'Yes' → 'yes'
+        })
+        
+        self.verify_record_exists(TEST_TABLE_NAME, "id=2", {
+            "status_mixed_case": "sell"      # 'Sell' → 'sell'
+        })
+        self.verify_record_exists(TEST_TABLE_NAME, "id=2 AND status_empty IS NULL")
+        
+        self.verify_record_exists(TEST_TABLE_NAME, "id=3", {
+            "status_mixed_case": "transfer"  # 'Transfer' → 'transfer'
+        })
+        self.verify_record_exists(TEST_TABLE_NAME, "id=3 AND status_empty IS NULL")
