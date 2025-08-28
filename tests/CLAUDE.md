@@ -107,7 +107,8 @@ tests/
 │   ├── replication/         # Core replication functionality
 │   ├── process_management/  # Process lifecycle tests
 │   ├── edge_cases/          # Bug reproductions & edge cases
-│   └── data_integrity/      # Data consistency & validation
+│   ├── data_integrity/      # Data consistency & validation
+│   └── percona/             # Percona MySQL specific tests
 ├── unit/                    # Unit tests
 ├── performance/             # Performance benchmarks
 ├── base/                    # Base classes & mixins
@@ -194,6 +195,19 @@ Data consistency and validation:
   - Event sequence validation
   - Transaction boundaries
   - Ordering consistency
+
+#### Percona Tests (`tests/integration/percona/`)
+Percona MySQL Server specific features and optimizations:
+
+- **Percona Features**: `test_percona_features.py`
+  - Audit log plugin compatibility
+  - Query response time monitoring
+  - Slow query log enhancements
+  - InnoDB optimizations
+  - GTID consistency with Percona features
+  - Character set handling
+  
+**Configuration**: Uses port 9308 and dedicated config file `tests_config_percona.yaml`
 
 ## 🛠️ Writing New Tests
 
@@ -287,28 +301,86 @@ Use appropriate markers for test categorization:
 
 ## 🚀 Running Tests
 
-### Full Test Suite
+### Primary Test Command - ALWAYS USE THIS
+```bash
+./run_tests.sh
+```
+
+**⚠️ IMPORTANT**: Always use `./run_tests.sh` to verify test fixes. This script:
+- Properly sets up Docker containers (MySQL, ClickHouse, MariaDB)
+- Manages Percona DB container (currently disabled due to health check issues)
+- Provides consistent test environment across runs
+- Handles container lifecycle and cleanup
+- Is the definitive test verification method for this codebase
+
+### Alternative Test Commands (Use Sparingly)
+
+These are available but `./run_tests.sh` should be used for all test verification:
+
+#### Full Test Suite
 ```bash
 pytest tests/
 ```
 
-### By Category
+#### By Category
 ```bash
 pytest tests/integration/data_types/
 pytest tests/integration/ddl/
 pytest tests/integration/replication/
 ```
 
-### Individual Tests
+#### Individual Tests
 ```bash
 pytest tests/integration/data_types/test_json_data_types.py::TestJsonDataTypes::test_json_basic_operations
 ```
 
-### With Markers
+#### With Markers
 ```bash
 pytest -m integration  # Only integration tests
 pytest -m "not slow"   # Skip slow tests
 ```
+
+### Test Verification Workflow
+
+When fixing tests or implementing new features:
+
+1. **Run Tests**: `./run_tests.sh`
+2. **Identify Issues**: Review test output and failures
+3. **Fix Issues**: Apply necessary code changes
+4. **Verify Fixes**: `./run_tests.sh` (repeat until all pass)
+5. **Final Validation**: `./run_tests.sh` one more time
+
+### Expected Test Behavior
+
+- **Passing Tests**: All corruption detection, data consistency tests should pass
+- **Known Skips**: State file corruption recovery test is skipped (known behavior)
+- **Container Issues**: Percona DB container currently exits (health check needs fixing)
+- **Test Duration**: Full suite takes ~60-90 seconds to complete
+
+### Recent Test Fixes Applied
+
+The following issues were identified and resolved using `./run_tests.sh`:
+
+#### Data Consistency Test Fixes
+- **Checksum Validation**: Fixed MySQL/ClickHouse data format normalization
+  - Implemented `_normalize_value()` method to handle timezone, boolean, and decimal differences
+  - Added normalized checksum calculation for cross-database comparison
+  - File: `tests/integration/data_integrity/test_data_consistency.py`
+
+#### MySQL API Parameter Conflicts
+- **Parameter Ordering**: Fixed MySQL API calls mixing positional and keyword arguments
+  - Changed from `mysql.execute(query, args_tuple, commit=True)` to `mysql.execute(query, commit=True, args=args_tuple)`
+  - File: `tests/integration/data_integrity/test_duplicate_detection.py`
+
+#### ClickHouse API Improvements
+- **Order By Support**: Added `order_by` parameter to ClickHouse select method
+- **System Table Queries**: Fixed backtick handling for `system.settings` queries
+- **Internal Column Filtering**: Properly handle `_version` column in row comparisons
+
+#### Test Infrastructure Improvements
+- **Context Manager Usage**: Proper MySQL cursor context manager pattern
+- **Wait Conditions**: Fixed parameter naming (`wait_time` → `max_wait_time`)
+- **Flexible Assertions**: More robust handling of replication timing variations
 
 ## 📊 Best Practices
 

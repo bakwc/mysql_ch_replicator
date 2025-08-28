@@ -1,0 +1,39 @@
+mysql:
+  host: "localhost"
+  port: 9308  # Percona port
+  user: "root"
+  password: "admin"
+  pool_size: 3 # Reduced for tests to avoid connection exhaustion
+  max_overflow: 2
+
+clickhouse:
+  host: "localhost"
+  port: 9123
+  user: "default"
+  password: "admin"
+
+binlog_replicator:
+  data_dir: "/app/binlog_percona/"
+  records_per_file: 100000
+  binlog_retention_period: 43200 # 12 hours in seconds
+
+databases: "*test*"
+log_level: "debug"
+optimize_interval: 3
+check_db_updated_interval: 3
+
+target_databases:
+  replication-test_db_2: replication-destination
+
+indexes:
+  - databases: "*"
+    tables: ["group"]
+    columns: ["name"]
+    type: "bloom_filter"
+    granularity: 1
+
+# Percona-specific settings
+percona_features:
+  enable_audit_log: false
+  enable_query_response_time: true
+  enable_slow_query_log: true

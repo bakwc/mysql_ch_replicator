@@ -272,20 +272,49 @@ class ClickhouseApi:
     def create_database(self, db_name):
         self.execute_command(f'CREATE DATABASE `{db_name}`')
 
-    def select(self, table_name, where=None, final=None):
-        query = f'SELECT * FROM {table_name}'
-        if where:
-            query += f' WHERE {where}'
-        if final is not None:
-            query += f' SETTINGS final = {int(final)};'
-        result = self.client.query(query)
-        rows = result.result_rows
-        columns = result.column_names
+    def select(self, table_name, where=None, final=None, order_by=None):
+        """
+        Select records from table with optional conditions, ordering, and final setting
+        
+        Args:
+            table_name: Name of the table to query
+            where: Optional WHERE clause condition
+            final: Optional FINAL setting for ReplacingMergeTree tables
+            order_by: Optional ORDER BY clause for sorting results
+            
+        Returns:
+            List of dictionaries representing the query results
+            
+        Raises:
+            Exception: If the query fails or table doesn't exist
+        """
+        try:
+            # Handle system tables (which contain dots) differently from regular tables
+            if '.' in table_name and table_name.startswith('system.'):
+                query = f'SELECT * FROM {table_name}'
+            else:
+                query = f'SELECT * FROM `{table_name}`'
+                
+            if where:
+                query += f' WHERE {where}'
+            if order_by:
+                query += f' ORDER BY {order_by}'
+            if final is not None:
+                query += f' SETTINGS final = {int(final)}'
+            
+            result = self.client.query(query)
+            rows = result.result_rows
+            columns = result.column_names
 
-        results = []
-        for row in rows:
-            results.append(dict(zip(columns, row)))
-        return results
+            results = []
+            for row in rows:
+                results.append(dict(zip(columns, row)))
+            return results
+            
+        except Exception as e:
+            logger.error(f"ClickHouse select failed for table '{table_name}' with query: {query}")
+            logger.error(f"Error: {e}")
+            raise
 
     def query(self, query: str):
         return self.client.query(query)
