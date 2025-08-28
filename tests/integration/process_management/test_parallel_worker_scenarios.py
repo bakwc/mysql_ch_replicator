@@ -33,6 +33,10 @@ class TestParallelWorkerScenarios(BaseReplicationTest, SchemaTestMixin, DataTest
         )
         runner.run()
 
+        # Wait for replication to start and set ClickHouse database context
+        self.wait_for_condition(lambda: TEST_DB_NAME in self.ch.get_databases())
+        self.ch.database = TEST_DB_NAME
+
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=len(initial_data))
 
         # Update some records (this should create new versions)
@@ -64,6 +68,10 @@ class TestParallelWorkerScenarios(BaseReplicationTest, SchemaTestMixin, DataTest
             cfg_file="tests/configs/replicator/tests_config_parallel.yaml"
         )
         runner.run()
+
+        # Wait for replication to start and set ClickHouse database context
+        self.wait_for_condition(lambda: TEST_DB_NAME in self.ch.get_databases())
+        self.ch.database = TEST_DB_NAME
 
         # Wait for initial replication
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=50)
@@ -111,11 +119,16 @@ class TestParallelWorkerScenarios(BaseReplicationTest, SchemaTestMixin, DataTest
             )
             runner.run()
 
+            # Wait for replication to start and set ClickHouse context
+            self.wait_for_condition(lambda: TEST_DB_NAME in self.ch.get_databases())
+            self.ch.execute_command(f"USE `{TEST_DB_NAME}`")
+
             # Verify both databases are replicated
             self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=3)
 
-            # Switch to second database and verify
-            self.ch.execute_command(f"USE `{test_db_2}`")
+            # Switch to second database and verify (wait for it to be created first)
+            self.wait_for_condition(lambda: test_db_2 in self.ch.get_databases())
+            self.ch.database = test_db_2
             self.wait_for_table_sync("users_db2", expected_count=2)
 
             runner.stop()
@@ -155,6 +168,10 @@ class TestParallelWorkerScenarios(BaseReplicationTest, SchemaTestMixin, DataTest
         )
         runner.run()
 
+        # Wait for replication to start and set ClickHouse database context
+        self.wait_for_condition(lambda: TEST_DB_NAME in self.ch.get_databases())
+        self.ch.database = TEST_DB_NAME
+
         # Verify spatial data replication
         expected_count = len(spatial_data) + 10
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=expected_count)
@@ -181,6 +198,10 @@ class TestParallelWorkerScenarios(BaseReplicationTest, SchemaTestMixin, DataTest
             cfg_file="tests/configs/replicator/tests_config_parallel.yaml"
         )
         runner.run()
+
+        # Wait for replication to start and set ClickHouse database context
+        self.wait_for_condition(lambda: TEST_DB_NAME in self.ch.get_databases())
+        self.ch.database = TEST_DB_NAME
 
         # Verify reserved keyword table is handled correctly
         self.wait_for_table_sync("group", expected_count=len(reserved_data))
