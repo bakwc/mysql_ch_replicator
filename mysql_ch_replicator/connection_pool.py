@@ -55,14 +55,8 @@ class ConnectionPoolManager:
             with self._lock:
                 if pool_key not in self._pools:
                     try:
-                        # Connection configuration for the pool
-                        config = {
-                            "host": mysql_settings.host,
-                            "port": mysql_settings.port,
-                            "user": mysql_settings.user,
-                            "password": mysql_settings.password,
-                            "autocommit": True,
-                        }
+                        # Use standardized connection configuration
+                        config = mysql_settings.get_connection_config(autocommit=True)
 
                         # Calculate actual pool size (base + overflow)
                         actual_pool_size = min(

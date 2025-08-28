@@ -5,6 +5,8 @@ mysql:
   password: "admin"
   pool_size: 3 # Reduced for tests to avoid connection exhaustion
   max_overflow: 2
+  charset: "utf8mb4" # Explicit charset for MariaDB compatibility
+  collation: "utf8mb4_unicode_ci" # Explicit collation for MariaDB compatibility
 
 clickhouse:
   host: "localhost"

@@ -10,33 +10,32 @@ tests/
 ├── unit/                    # Unit tests (fast, isolated)
 │   └── test_connection_pooling.py
 ├── integration/             # Integration tests (require external services)
-│   ├── test_basic_replication.py
-│   ├── test_data_types.py
-│   └── test_schema_evolution.py
+│   ├── test_advanced_data_types.py
+│   ├── test_basic_crud_operations.py  
+│   ├── test_configuration_scenarios.py
+│   ├── test_ddl_operations.py
+│   ├── test_parallel_initial_replication.py
+│   ├── test_replication_edge_cases.py
+│   └── ... (11 focused test modules)
 ├── performance/             # Performance tests (long running)
 │   └── test_performance.py
-└── fixtures/                # Test data and configuration files
+└── configs/                 # Test configuration files
 ```
 
 ## Test Categories
 
-### Unit Tests
+### Unit Tests (`tests/unit/`)
 - Fast tests that don't require external dependencies
 - Test individual components in isolation
-- Mock external dependencies when needed
-- Run with: `pytest tests/unit/`
 
-### Integration Tests
-- Test complete workflows and component interactions
-- Require MySQL and ClickHouse to be running
-- Test real replication scenarios
-- Run with: `pytest tests/integration/`
+### Integration Tests (`tests/integration/`)
+- Test complete replication workflows
+- Require MySQL and ClickHouse to be running  
+- Organized into 11 focused modules by functionality
 
-### Performance Tests
-- Long-running tests that measure performance
-- Marked as `@pytest.mark.optional` and `@pytest.mark.performance`
-- May be skipped in CI environments
-- Run with: `pytest tests/performance/`
+### Performance Tests (`tests/performance/`)
+- Long-running performance benchmarks
+- Marked as `@pytest.mark.optional`
 
 ## Running Tests
 
@@ -52,47 +51,11 @@ pytest -m integration    # Integration tests only
 pytest -m performance    # Performance tests only
 ```
 
-### Exclude Slow Tests
+### Specific Test Module
 ```bash
-pytest -m "not slow"
+pytest tests/integration/test_basic_crud_operations.py -v
+pytest tests/integration/test_basic_data_types.py -v
 ```
-
-### Exclude Optional Tests
-```bash
-pytest -m "not optional"
-```
-
-### Verbose Output
-```bash
-pytest -v
-```
-
-### Run Specific Test File
-```bash
-pytest tests/unit/test_connection_pooling.py
-pytest tests/integration/test_basic_replication.py::test_e2e_regular
-```
-
-## Test Configuration
-
-- `conftest.py`: Contains shared fixtures and utilities used across all tests
-- `pytest.ini`: Pytest configuration with markers and settings
-- Test markers are defined to categorize tests by type and characteristics
-
-## Common Fixtures
-
-- `test_config`: Loads test configuration
-- `mysql_api_instance`: Creates MySQL API instance
-- `clickhouse_api_instance`: Creates ClickHouse API instance  
-- `clean_environment`: Sets up clean test environment with automatic cleanup
-- `temp_config_file`: Creates temporary config file for custom configurations
-
-## Test Utilities
-
-- `assert_wait()`: Wait for conditions with timeout
-- `prepare_env()`: Prepare clean test environment
-- `kill_process()`: Kill process by PID
-- Various test runners: `BinlogReplicatorRunner`, `DbReplicatorRunner`, `RunAllRunner`
 
 ## Prerequisites
 
@@ -100,24 +63,46 @@ Before running integration tests, ensure:
 
 1. MySQL is running and accessible
 2. ClickHouse is running and accessible
-3. Test configuration files exist:
-   - `tests_config.yaml`
-   - `tests_config_mariadb.yaml`
-   - `tests_config_perf.yaml`
+3. Test configuration files exist in `tests/configs/`
 
-## Adding New Tests
+## Test Refactoring
 
-1. **Unit tests**: Add to `tests/unit/` 
-   - Mark with `@pytest.mark.unit`
-   - Mock external dependencies
-   - Keep fast and isolated
+The test suite was recently refactored from large monolithic files into smaller, focused modules. All test files are now under 350 lines for better maintainability and easier understanding.
 
-2. **Integration tests**: Add to `tests/integration/`
-   - Mark with `@pytest.mark.integration`
-   - Use `clean_environment` fixture for setup/cleanup
-   - Test real functionality end-to-end
+### What Was Refactored
 
-3. **Performance tests**: Add to `tests/performance/`
-   - Mark with `@pytest.mark.performance` and `@pytest.mark.optional`
-   - Include timing and metrics
-   - Document expected performance characteristics
+These large files were broken down into focused modules:
+- `test_advanced_replication.py` (663 lines) → moved to focused files
+- `test_special_cases.py` (895 lines) → split into 3 files  
+- `test_basic_replication.py` (340 lines) → moved to CRUD operations
+- `test_data_types.py` (362 lines) → split into basic/advanced data types
+- `test_schema_evolution.py` (269 lines) → moved to DDL operations
+
+### Benefits of Refactoring
+
+1. **Smaller, Focused Files** - Each file focuses on specific functionality
+2. **Better Organization** - Tests grouped by functionality instead of mixed together  
+3. **Improved Maintainability** - Smaller files are easier to review and modify
+4. **Faster Execution** - Can run specific test categories independently
+
+## Integration Test Modules
+
+The integration tests are organized into focused modules:
+
+- **`test_basic_crud_operations.py`** (201 lines) - CRUD operations during replication
+- **`test_ddl_operations.py`** (268 lines) - DDL operations (ALTER TABLE, etc.)  
+- **`test_basic_data_types.py`** (282 lines) - Basic MySQL data type handling
+- **`test_advanced_data_types.py`** (220 lines) - Advanced data types (spatial, ENUM)
+- **`test_parallel_initial_replication.py`** (172 lines) - Parallel initial sync
+- **`test_parallel_worker_scenarios.py`** (191 lines) - Worker failure/recovery
+- **`test_basic_process_management.py`** (171 lines) - Basic restart/recovery
+- **`test_advanced_process_management.py`** (311 lines) - Complex process scenarios
+- **`test_configuration_scenarios.py`** (270 lines) - Special config options
+- **`test_replication_edge_cases.py`** (467 lines) - Bug reproductions, edge cases  
+- **`test_utility_functions.py`** (178 lines) - Parser and utility functions
+
+## Test Configuration
+
+- `conftest.py` contains shared fixtures and utilities
+- Configuration files in `tests/configs/` for different test scenarios
+- Use `clean_environment` fixture for test setup/cleanup
