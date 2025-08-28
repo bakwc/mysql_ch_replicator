@@ -306,6 +306,8 @@ Use appropriate markers for test categorization:
 ./run_tests.sh
 ```
 
+**🚨 CRITICAL REQUIREMENT**: ALWAYS use `./run_tests.sh` for ALL test verification - no exceptions!
+
 **⚠️ IMPORTANT**: Always use `./run_tests.sh` to verify test fixes. This script:
 - Properly sets up Docker containers (MySQL, ClickHouse, MariaDB)
 - Manages Percona DB container (currently disabled due to health check issues)

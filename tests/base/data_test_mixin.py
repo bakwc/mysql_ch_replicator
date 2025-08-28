@@ -91,9 +91,8 @@ class DataTestMixin:
 
     def get_clickhouse_count(self, table_name, where_clause=""):
         """Get count of records in ClickHouse table"""
-        where = f" WHERE {where_clause}" if where_clause else ""
-        result = self.ch.execute_query(f"SELECT COUNT(*) FROM `{table_name}`{where}")
-        return result[0][0] if result else 0
+        records = self.ch.select(table_name, where=where_clause)
+        return len(records) if records else 0
 
     def verify_record_exists(self, table_name, where_clause, expected_fields=None):
         """Verify a record exists in ClickHouse with expected field values"""

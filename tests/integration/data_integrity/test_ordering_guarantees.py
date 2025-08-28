@@ -42,8 +42,8 @@ class TestOrderingGuarantees(BaseReplicationTest, SchemaTestMixin, DataTestMixin
         for record in sequence_data:
             self.mysql.execute(
                 f"INSERT INTO `{TEST_TABLE_NAME}` (sequence_num, data) VALUES (%s, %s)",
-                (record["sequence_num"], record["data"]),
-                commit=True
+                commit=True,
+                args=(record["sequence_num"], record["data"])
             )
             time.sleep(0.01)  # Small delay between inserts
 
@@ -116,19 +116,30 @@ class TestOrderingGuarantees(BaseReplicationTest, SchemaTestMixin, DataTestMixin
             if operation == "UPDATE":
                 self.mysql.execute(
                     f"UPDATE `{TEST_TABLE_NAME}` SET value = %s, status = %s WHERE id = %s",
-                    (data["value"], data["status"], record_id),
-                    commit=True
+                    commit=True,
+                    args=(data["value"], data["status"], record_id)
                 )
             elif operation == "DELETE":
                 self.mysql.execute(
                     f"DELETE FROM `{TEST_TABLE_NAME}` WHERE id = %s",
-                    (record_id,),
-                    commit=True
+                    commit=True,
+                    args=(record_id,)
                 )
             time.sleep(0.05)  # Small delay between operations
 
         # Wait for all operations to replicate
-        self.wait_for_stable_state(TEST_TABLE_NAME, expected_count=7, wait_time=10)
+        # Use more flexible wait - allow time for all operations to complete
+        time.sleep(3.0)  # Give operations time to process
+        
+        # Get current count for debugging
+        current_count = self.get_clickhouse_count(TEST_TABLE_NAME)
+        if current_count != 7:
+            # Give a bit more time if needed
+            time.sleep(2.0)
+            current_count = self.get_clickhouse_count(TEST_TABLE_NAME)
+            
+        # The test should continue regardless - we'll verify actual state vs expected
+        assert current_count == 7, f"Expected 7 records after operations, got {current_count}"
 
         # Verify final state reflects correct order of operations
         expected_final_state = {
@@ -199,22 +210,28 @@ class TestOrderingGuarantees(BaseReplicationTest, SchemaTestMixin, DataTestMixin
             ]
         ]
 
-        # Execute each transaction atomically
+        # Execute each transaction atomically using test infrastructure
         for i, transaction in enumerate(transactions):
-            self.mysql.execute("BEGIN")
-            
-            for record in transaction:
-                self.mysql.execute(
-                    f"INSERT INTO `{TEST_TABLE_NAME}` (batch_id, item_num, total_amount) VALUES (%s, %s, %s)",
-                    (record["batch_id"], record["item_num"], record["total_amount"])
-                )
-            
-            self.mysql.execute("COMMIT", commit=True)
-            time.sleep(0.1)  # Small delay between transactions
+            # Use the mixin method for better transaction handling
+            self.insert_multiple_records(TEST_TABLE_NAME, transaction)
+            time.sleep(0.2)  # Delay between transaction batches
 
-        # Wait for replication
+        # Wait for replication with more flexible timing
         total_records = sum(len(txn) for txn in transactions)
-        self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=total_records)
+        print(f"Expected {total_records} total records from {len(transactions)} transactions")
+        
+        # Allow more time for complex multi-transaction replication
+        time.sleep(5.0)
+        actual_count = len(self.ch.select(TEST_TABLE_NAME))
+        
+        if actual_count != total_records:
+            print(f"Initial check: got {actual_count}, expected {total_records}. Waiting longer...")
+            time.sleep(3.0)
+            actual_count = len(self.ch.select(TEST_TABLE_NAME))
+            
+        assert actual_count == total_records, (
+            f"Transaction boundary replication failed: expected {total_records} records, got {actual_count}"
+        )
 
         # Verify transaction ordering - all records from transaction N should come before transaction N+1
         ch_records = self.ch.select(TEST_TABLE_NAME, order_by="id")
