@@ -12,6 +12,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          install: true
+      
       - name: Run tests with reporting
         run: |
           docker compose -f docker-compose-tests.yaml up --force-recreate --no-deps --wait -d
@@ -29,7 +34,7 @@ jobs:
         if: always()
         with:
           files: test-results.xml
-          comment_mode: create new
+          comment_mode: always
           
       - name: Upload test report
         uses: actions/upload-artifact@v4

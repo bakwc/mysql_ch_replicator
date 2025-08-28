@@ -39,7 +39,7 @@ def test_dynamic_column_addition_user_config(clean_environment):
         clickhouse_settings=cfg.clickhouse,
     )
 
-    prepare_env(cfg, mysql, ch, db_name="test_replication")
+    prepare_env(cfg, mysql, ch, db_name="test_replication", set_mysql_db=False)
 
     # Prepare environment - drop and recreate databases
     mysql_drop_database(mysql, "test_replication")
