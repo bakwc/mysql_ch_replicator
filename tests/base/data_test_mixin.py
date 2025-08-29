@@ -94,6 +94,47 @@ class DataTestMixin:
         records = self.ch.select(table_name, where=where_clause)
         return len(records) if records else 0
 
+    def _normalize_datetime_comparison(self, expected_value, actual_value):
+        """Normalize datetime values for comparison between MySQL and ClickHouse"""
+        import datetime
+        
+        # Handle datetime vs datetime comparison (timezone-aware vs naive)
+        if isinstance(expected_value, datetime.datetime) and isinstance(actual_value, datetime.datetime):
+            # If actual has timezone info but expected is naive, compare without timezone
+            if actual_value.tzinfo is not None and expected_value.tzinfo is None:
+                # Convert timezone-aware datetime to naive datetime
+                actual_naive = actual_value.replace(tzinfo=None)
+                return expected_value == actual_naive
+            # If both are timezone-aware or both are naive, direct comparison
+            return expected_value == actual_value
+        
+        # Handle datetime vs string comparison
+        if isinstance(expected_value, datetime.datetime) and isinstance(actual_value, str):
+            try:
+                # Remove timezone info if present for comparison
+                if '+' in actual_value and actual_value.endswith('+00:00'):
+                    actual_value = actual_value[:-6]
+                elif actual_value.endswith('Z'):
+                    actual_value = actual_value[:-1]
+                
+                # Parse the string back to datetime
+                actual_datetime = datetime.datetime.fromisoformat(actual_value)
+                return expected_value == actual_datetime
+            except (ValueError, TypeError):
+                # If parsing fails, fall back to string comparison
+                return str(expected_value) == str(actual_value)
+        
+        # Handle date vs string comparison
+        if isinstance(expected_value, datetime.date) and isinstance(actual_value, str):
+            try:
+                actual_date = datetime.datetime.fromisoformat(actual_value).date()
+                return expected_value == actual_date
+            except (ValueError, TypeError):
+                return str(expected_value) == str(actual_value)
+        
+        # Default comparison for all other cases
+        return expected_value == actual_value
+
     def verify_record_exists(self, table_name, where_clause, expected_fields=None):
         """Verify a record exists in ClickHouse with expected field values"""
         records = self.ch.select(table_name, where=where_clause)
@@ -103,6 +144,13 @@ class DataTestMixin:
             record = records[0]
             for field, expected_value in expected_fields.items():
                 actual_value = record.get(field)
+                
+                # Use normalized comparison for datetime values
+                if self._normalize_datetime_comparison(expected_value, actual_value):
+                    # Normalized comparison passed, continue to next field
+                    continue
+                
+                # If normalized comparison failed or not applicable, use standard comparison
                 assert actual_value == expected_value, (
                     f"Field {field}: expected {expected_value}, got {actual_value}"
                 )

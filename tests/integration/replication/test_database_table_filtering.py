@@ -6,6 +6,8 @@ from tests.conftest import (
     RunAllRunner,
     assert_wait,
     prepare_env,
+    mysql_drop_database,
+    mysql_create_database,
 )
 
 
@@ -16,10 +18,10 @@ def test_database_tables_filtering(clean_environment):
     cfg.load(cfg_file)
 
     # Prepare MySQL and ClickHouse state
-    mysql.drop_database("test_db_3")
-    mysql.drop_database("test_db_12")
-    mysql.create_database("test_db_3")
-    mysql.create_database("test_db_12")
+    mysql_drop_database(mysql, "test_db_3")
+    mysql_drop_database(mysql, "test_db_12")
+    mysql_create_database(mysql, "test_db_3")
+    mysql_create_database(mysql, "test_db_12")
     ch.drop_database("test_db_3")
     ch.drop_database("test_db_12")
 
@@ -97,8 +99,9 @@ def test_database_tables_filtering(clean_environment):
     assert "test_db_3" not in ch.get_databases()
     assert "test_db_12" not in ch.get_databases()
 
-    ch.execute_command("USE test_db_2")
+    ch.database = "test_db_2"
 
+    
     # Included tables
     assert_wait(lambda: "test_table_2" in ch.get_tables())
     assert_wait(lambda: len(ch.select("test_table_2")) == 1)

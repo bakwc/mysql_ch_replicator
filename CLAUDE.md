@@ -43,7 +43,7 @@ tests/
 
 ### Running Tests
 
-**⚠️ CRITICAL**: Always use the test script:
+**⚠️ CRITICAL**: Always use the test script when ready to test the full suite after fixing little tests:
 ```bash
 ./run_tests.sh
 ```
