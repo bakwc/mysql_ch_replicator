@@ -35,7 +35,7 @@ class TestYearType(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
         )
 
         # Start replication
-        self.start_replication(db_name=TEST_DB_NAME)
+        self.start_replication()
 
         # Verify initial YEAR type replication using helper methods
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=4)

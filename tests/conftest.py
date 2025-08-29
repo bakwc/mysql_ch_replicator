@@ -66,12 +66,16 @@ def update_test_constants():
     
     reset_test_id()  # Generate new test ID
     
-    TEST_DB_NAME = get_test_db_name()
-    TEST_DB_NAME_2 = get_test_db_name("_2")
-    TEST_DB_NAME_2_DESTINATION = f"replication_dest_{get_worker_id()}_{get_test_id()}"
-    TEST_TABLE_NAME = get_test_table_name()
-    TEST_TABLE_NAME_2 = get_test_table_name("_2")
-    TEST_TABLE_NAME_3 = get_test_table_name("_3")
+    # Capture the same test_id for all constants to ensure consistency
+    worker_id = get_worker_id()
+    test_id = get_test_id()
+    
+    TEST_DB_NAME = f"test_db_{worker_id}_{test_id}"
+    TEST_DB_NAME_2 = f"test_db_{worker_id}_{test_id}_2"
+    TEST_DB_NAME_2_DESTINATION = f"replication_dest_{worker_id}_{test_id}"
+    TEST_TABLE_NAME = f"test_table_{worker_id}_{test_id}"
+    TEST_TABLE_NAME_2 = f"test_table_{worker_id}_{test_id}_2"
+    TEST_TABLE_NAME_3 = f"test_table_{worker_id}_{test_id}_3"
 
 
 # Test runners
@@ -287,12 +291,19 @@ def dynamic_clickhouse_api_instance(dynamic_config):
 @pytest.fixture
 def clean_environment(test_config, mysql_api_instance, clickhouse_api_instance):
     """Provide clean test environment with automatic cleanup"""
+    # Generate new test-specific database names for this test
+    update_test_constants()
+    
     # Capture current test-specific database names
     current_test_db = TEST_DB_NAME
     current_test_db_2 = TEST_DB_NAME_2
     current_test_dest = TEST_DB_NAME_2_DESTINATION
     
     prepare_env(test_config, mysql_api_instance, clickhouse_api_instance, db_name=current_test_db)
+    
+    # Store the database name in the test config so it can be used consistently
+    test_config.test_db_name = current_test_db
+    
     yield test_config, mysql_api_instance, clickhouse_api_instance
     
     # Cleanup after test - test-specific
@@ -315,6 +326,9 @@ def dynamic_clean_environment(
     dynamic_config, dynamic_mysql_api_instance, dynamic_clickhouse_api_instance
 ):
     """Provide clean test environment with dynamic config and automatic cleanup"""
+    # Generate new test-specific database names for this test
+    update_test_constants()
+    
     # Capture current test-specific database names
     current_test_db = TEST_DB_NAME
     current_test_db_2 = TEST_DB_NAME_2

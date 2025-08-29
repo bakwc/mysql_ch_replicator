@@ -34,7 +34,7 @@ class TestBinaryPadding(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
         )
 
         # Start replication
-        self.start_replication(db_name=TEST_DB_NAME)
+        self.start_replication()
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=2)
 
         # Validate padded representation and NULL handling

@@ -32,7 +32,7 @@ class TestMultiAlterStatements(BaseReplicationTest, SchemaTestMixin, DataTestMix
         )
 
         # Start replication
-        self.start_replication(db_name=TEST_DB_NAME)
+        self.start_replication()
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=1)
 
         # Multi-ADD in a single statement

@@ -12,7 +12,7 @@ class TestIfExistsDdl(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
     @pytest.mark.integration
     def test_if_exists_if_not_exists(self):
         # Start replication first (schema operations will be observed live)
-        self.start_replication(db_name=TEST_DB_NAME)
+        self.start_replication()
 
         # Create and drop using IF NOT EXISTS / IF EXISTS with qualified and unqualified names
         self.mysql.execute(
@@ -22,11 +22,11 @@ class TestIfExistsDdl(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
         )
         self.mysql.execute(
             f"""
-            CREATE TABLE IF NOT EXISTS `{TEST_DB_NAME}`.`test_table_2` (id int NOT NULL, PRIMARY KEY(id));
+            CREATE TABLE IF NOT EXISTS `{self.ch.database}`.`test_table_2` (id int NOT NULL, PRIMARY KEY(id));
             """
         )
 
-        self.mysql.execute(f"DROP TABLE IF EXISTS `{TEST_DB_NAME}`.`test_table`")
+        self.mysql.execute(f"DROP TABLE IF EXISTS `{self.ch.database}`.`test_table`")
         self.mysql.execute("DROP TABLE IF EXISTS test_table")
 
         # Verify side effects in ClickHouse
