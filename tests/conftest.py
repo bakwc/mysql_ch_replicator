@@ -51,6 +51,22 @@ def get_test_table_name(suffix=""):
     test_id = get_test_id()
     return f"test_table_{worker_id}_{test_id}{suffix}"
 
+def get_test_data_dir(suffix=""):
+    """Get worker and test isolated data directory (unique per test per worker)"""
+    worker_id = get_worker_id()
+    test_id = get_test_id()
+    return f"/app/binlog_{worker_id}_{test_id}{suffix}"
+
+def get_test_log_dir(suffix=""):
+    """Get worker-isolated log directory (unique per worker)"""
+    return get_test_data_dir(f"/logs{suffix}")
+
+def get_isolated_binlog_path(database_name=None):
+    """Get isolated binlog path for specific database or worker"""
+    if database_name:
+        return os.path.join(get_test_data_dir(), database_name)
+    return get_test_data_dir()
+
 # Initialize with default values - will be updated per test
 TEST_DB_NAME = get_test_db_name()
 TEST_DB_NAME_2 = get_test_db_name("_2") 
@@ -59,10 +75,15 @@ TEST_TABLE_NAME = get_test_table_name()
 TEST_TABLE_NAME_2 = get_test_table_name("_2")
 TEST_TABLE_NAME_3 = get_test_table_name("_3")
 
+# Isolated path constants
+TEST_DATA_DIR = get_test_data_dir()
+TEST_LOG_DIR = get_test_log_dir()
+
 def update_test_constants():
     """Update module-level constants with new test IDs"""
     global TEST_DB_NAME, TEST_DB_NAME_2, TEST_DB_NAME_2_DESTINATION
     global TEST_TABLE_NAME, TEST_TABLE_NAME_2, TEST_TABLE_NAME_3
+    global TEST_DATA_DIR, TEST_LOG_DIR
     
     reset_test_id()  # Generate new test ID
     
@@ -76,6 +97,10 @@ def update_test_constants():
     TEST_TABLE_NAME = f"test_table_{worker_id}_{test_id}"
     TEST_TABLE_NAME_2 = f"test_table_{worker_id}_{test_id}_2"
     TEST_TABLE_NAME_3 = f"test_table_{worker_id}_{test_id}_3"
+    
+    # Update path constants
+    TEST_DATA_DIR = f"/app/binlog_{worker_id}_{test_id}"
+    TEST_LOG_DIR = f"/app/binlog_{worker_id}_{test_id}/logs"
 
 
 # Test runners
@@ -145,9 +170,14 @@ def prepare_env(
     set_mysql_db: bool = True,
 ):
     """Prepare clean test environment"""
-    if os.path.exists(cfg.binlog_replicator.data_dir):
-        shutil.rmtree(cfg.binlog_replicator.data_dir)
-    os.mkdir(cfg.binlog_replicator.data_dir)
+    # Always ensure the base binlog directory exists (safe for parallel tests)
+    os.makedirs(cfg.binlog_replicator.data_dir, exist_ok=True)
+    
+    # Clean only database-specific subdirectory, never remove the base directory
+    db_binlog_dir = os.path.join(cfg.binlog_replicator.data_dir, db_name)
+    if os.path.exists(db_binlog_dir):
+        # Clean the specific database directory but preserve the base directory
+        shutil.rmtree(db_binlog_dir)
     mysql_drop_database(mysql, db_name)
     mysql_create_database(mysql, db_name)
     if set_mysql_db:
@@ -251,6 +281,68 @@ def dynamic_config(request):
     cfg.config_file = config_file
     return cfg
 
+def load_isolated_config(config_file=CONFIG_FILE):
+    """Load configuration with worker-isolated paths applied"""
+    cfg = config.Settings()
+    cfg.load(config_file)
+    
+    # Apply path isolation
+    cfg.binlog_replicator.data_dir = get_test_data_dir()
+    
+    return cfg
+
+def get_isolated_config_with_paths():
+    """Get configuration with all isolated paths configured"""
+    cfg = load_isolated_config()
+    return cfg
+
+@pytest.fixture
+def isolated_config(request):
+    """Load configuration with isolated paths for parallel testing"""
+    config_file = getattr(request, "param", CONFIG_FILE)
+    cfg = load_isolated_config(config_file)
+    cfg.config_file = config_file
+    return cfg
+
+def cleanup_test_directory():
+    """Clean up current test's isolated directory"""
+    test_dir = get_test_data_dir()
+    if os.path.exists(test_dir):
+        shutil.rmtree(test_dir)
+        print(f"Cleaned up test directory: {test_dir}")
+
+def cleanup_worker_directories(worker_id=None):
+    """Clean up all test directories for a specific worker"""
+    import glob
+    if worker_id is None:
+        worker_id = get_worker_id()
+    
+    pattern = f"/app/binlog_{worker_id}_*"
+    worker_test_dirs = glob.glob(pattern)
+    for dir_path in worker_test_dirs:
+        if os.path.exists(dir_path):
+            shutil.rmtree(dir_path)
+            print(f"Cleaned up worker test directory: {dir_path}")
+
+def cleanup_all_isolated_directories():
+    """Clean up all isolated test directories"""
+    import glob
+    patterns = ["/app/binlog_w*", "/app/binlog_main_*"]
+    for pattern in patterns:
+        test_dirs = glob.glob(pattern)
+        for dir_path in test_dirs:
+            if os.path.exists(dir_path):
+                shutil.rmtree(dir_path)
+                print(f"Cleaned up directory: {dir_path}")
+
+def ensure_isolated_directory_exists():
+    """Ensure worker-isolated directory exists and is clean"""
+    worker_dir = get_test_data_dir()
+    if os.path.exists(worker_dir):
+        shutil.rmtree(worker_dir)
+    os.makedirs(worker_dir, exist_ok=True)
+    return worker_dir
+
 
 @pytest.fixture
 def mysql_api_instance(test_config):
@@ -353,6 +445,105 @@ def dynamic_clean_environment(
     except Exception:
         pass  # Ignore cleanup errors
 
+
+@pytest.fixture  
+def isolated_clean_environment(isolated_config, mysql_api_instance, clickhouse_api_instance):
+    """Provide isolated clean test environment for parallel testing"""
+    import tempfile
+    import yaml
+    
+    # Generate new test-specific database names and paths for this test
+    update_test_constants()
+    
+    # Capture current test-specific database names
+    current_test_db = TEST_DB_NAME
+    current_test_db_2 = TEST_DB_NAME_2
+    current_test_dest = TEST_DB_NAME_2_DESTINATION
+    
+    # Create temporary config file with isolated paths
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as temp_config_file:
+        # Convert config object back to dictionary for YAML serialization
+        config_dict = {
+            'mysql': {
+                'host': isolated_config.mysql.host,
+                'port': isolated_config.mysql.port,
+                'user': isolated_config.mysql.user,
+                'password': isolated_config.mysql.password,
+                'pool_size': isolated_config.mysql.pool_size,
+                'max_overflow': isolated_config.mysql.max_overflow
+            },
+            'clickhouse': {
+                'host': isolated_config.clickhouse.host,
+                'port': isolated_config.clickhouse.port,
+                'user': isolated_config.clickhouse.user,
+                'password': isolated_config.clickhouse.password,
+            },
+            'binlog_replicator': {
+                'data_dir': isolated_config.binlog_replicator.data_dir,
+                'records_per_file': isolated_config.binlog_replicator.records_per_file,
+                'binlog_retention_period': isolated_config.binlog_replicator.binlog_retention_period,
+            },
+            'databases': isolated_config.databases,
+            'log_level': isolated_config.log_level,
+            'optimize_interval': isolated_config.optimize_interval,
+            'check_db_updated_interval': isolated_config.check_db_updated_interval,
+        }
+        
+        # Add optional fields if they exist
+        if hasattr(isolated_config, 'target_databases') and isolated_config.target_databases:
+            config_dict['target_databases'] = isolated_config.target_databases
+        if hasattr(isolated_config, 'indexes') and isolated_config.indexes:
+            # Convert Index objects to dictionaries for YAML serialization
+            config_dict['indexes'] = []
+            for index in isolated_config.indexes:
+                if hasattr(index, '__dict__'):
+                    # Convert Index object to dict manually
+                    index_dict = {
+                        'databases': index.databases,
+                        'tables': index.tables if hasattr(index, 'tables') else [],
+                        'index': index.index if hasattr(index, 'index') else ''
+                    }
+                    config_dict['indexes'].append(index_dict)
+                else:
+                    config_dict['indexes'].append(index)
+        if hasattr(isolated_config, 'http_host'):
+            config_dict['http_host'] = isolated_config.http_host
+        if hasattr(isolated_config, 'http_port'):
+            config_dict['http_port'] = isolated_config.http_port
+        if hasattr(isolated_config, 'types_mapping') and isolated_config.types_mapping:
+            config_dict['types_mapping'] = isolated_config.types_mapping
+            
+        yaml.dump(config_dict, temp_config_file)
+        temp_config_path = temp_config_file.name
+    
+    # Store the config file path in the config object
+    isolated_config.config_file = temp_config_path
+    
+    # Prepare environment with isolated paths
+    prepare_env(isolated_config, mysql_api_instance, clickhouse_api_instance, db_name=current_test_db)
+    
+    # Store the database name in the test config so it can be used consistently  
+    isolated_config.test_db_name = current_test_db
+    
+    yield isolated_config, mysql_api_instance, clickhouse_api_instance
+    
+    # Cleanup the test databases
+    try:
+        cleanup_databases = [current_test_db, current_test_db_2, current_test_dest]
+        for db_name in cleanup_databases:
+            mysql_drop_database(mysql_api_instance, db_name)
+            clickhouse_drop_database(clickhouse_api_instance, db_name)
+    except Exception:
+        pass  # Ignore cleanup errors
+    
+    # Clean up the isolated test directory
+    cleanup_test_directory()
+    
+    # Clean up the temporary config file
+    try:
+        os.unlink(temp_config_path)
+    except:
+        pass
 
 @pytest.fixture
 def temp_config_file():

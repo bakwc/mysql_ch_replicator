@@ -16,20 +16,42 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Database configurations for testing different DB types
+DB_CONFIGS = [
+    pytest.param(
+        {"host": "localhost", "port": 9306, "name": "MySQL"}, 
+        id="mysql"
+    ),
+    pytest.param(
+        {"host": "localhost", "port": 9307, "name": "MariaDB"}, 
+        id="mariadb"
+    ),
+    pytest.param(
+        {"host": "localhost", "port": 9308, "name": "Percona"}, 
+        id="percona",
+        marks=pytest.mark.skip(reason="Percona container has connection issues")
+    ),
+]
+
 
 @pytest.mark.unit
-def test_basic_pooling():
+@pytest.mark.parametrize("db_config", DB_CONFIGS)
+def test_basic_pooling(db_config):
     """Test basic connection pooling functionality"""
-    logger.info("Testing basic connection pooling...")
+    logger.info(f"Testing basic connection pooling for {db_config['name']}...")
+    
+    # Use compatible collation for MariaDB
+    collation = "utf8mb4_general_ci" if db_config["name"] == "MariaDB" else None
 
     mysql_settings = MysqlSettings(
-        host="localhost",
-        port=3306,
+        host=db_config["host"],
+        port=db_config["port"],
         user="root",
-        password="",
+        password="admin",
         pool_size=3,
         max_overflow=2,
-        pool_name="test_pool",
+        pool_name=f"test_pool_{db_config['name'].lower()}",
+        collation=collation,
     )
 
     # Create multiple MySQLApi instances - they should share the same pool
@@ -58,18 +80,23 @@ def test_basic_pooling():
 
 
 @pytest.mark.unit
-def test_concurrent_access():
+@pytest.mark.parametrize("db_config", DB_CONFIGS)
+def test_concurrent_access(db_config):
     """Test concurrent access to the connection pool"""
-    logger.info("Testing concurrent access to connection pool...")
+    logger.info(f"Testing concurrent access to connection pool for {db_config['name']}...")
+    
+    # Use compatible collation for MariaDB
+    collation = "utf8mb4_general_ci" if db_config["name"] == "MariaDB" else None
 
     mysql_settings = MysqlSettings(
-        host="localhost",
-        port=3306,
+        host=db_config["host"],
+        port=db_config["port"],
         user="root",
-        password="",
+        password="admin",
         pool_size=2,
         max_overflow=3,
-        pool_name="concurrent_test_pool",
+        pool_name=f"concurrent_test_pool_{db_config['name'].lower()}",
+        collation=collation,
     )
 
     def worker(worker_id):
@@ -108,21 +135,26 @@ def test_concurrent_access():
 
 
 @pytest.mark.unit
-def test_pool_reuse():
+@pytest.mark.parametrize("db_config", DB_CONFIGS)
+def test_pool_reuse(db_config):
     """Test that connection pools are properly reused"""
-    logger.info("Testing connection pool reuse...")
+    logger.info(f"Testing connection pool reuse for {db_config['name']}...")
 
     pool_manager = get_pool_manager()
     initial_pool_count = len(pool_manager._pools)
+    
+    # Use compatible collation for MariaDB
+    collation = "utf8mb4_general_ci" if db_config["name"] == "MariaDB" else None
 
     mysql_settings = MysqlSettings(
-        host="localhost",
-        port=3306,
+        host=db_config["host"],
+        port=db_config["port"],
         user="root",
-        password="",
+        password="admin",
         pool_size=2,
         max_overflow=1,
-        pool_name="reuse_test_pool",
+        pool_name=f"reuse_test_pool_{db_config['name'].lower()}",
+        collation=collation,
     )
 
     # Create multiple API instances with same settings
@@ -149,16 +181,21 @@ def test_pool_reuse():
 
 
 @pytest.mark.unit
-def test_pool_configuration():
+@pytest.mark.parametrize("db_config", DB_CONFIGS)
+def test_pool_configuration(db_config):
     """Test that pool configuration is applied correctly"""
+    # Use compatible collation for MariaDB
+    collation = "utf8mb4_general_ci" if db_config["name"] == "MariaDB" else None
+    
     mysql_settings = MysqlSettings(
-        host="localhost",
-        port=3306,
+        host=db_config["host"],
+        port=db_config["port"],
         user="root",
-        password="",
+        password="admin",
         pool_size=8,
         max_overflow=5,
-        pool_name="config_test_pool",
+        pool_name=f"config_test_pool_{db_config['name'].lower()}",
+        collation=collation,
     )
 
     pool_manager = get_pool_manager()
@@ -175,19 +212,24 @@ def test_pool_configuration():
     assert pool.pool_size == expected_pool_size
 
 
-def test_pool_cleanup():
+@pytest.mark.parametrize("db_config", DB_CONFIGS)
+def test_pool_cleanup(db_config):
     """Test pool cleanup functionality"""
     pool_manager = get_pool_manager()
+    
+    # Use compatible collation for MariaDB
+    collation = "utf8mb4_general_ci" if db_config["name"] == "MariaDB" else None
 
     # Create a pool
     mysql_settings = MysqlSettings(
-        host="localhost",
-        port=3306,
+        host=db_config["host"],
+        port=db_config["port"],
         user="root",
-        password="",
+        password="admin",
         pool_size=2,
         max_overflow=1,
-        pool_name="cleanup_test_pool",
+        pool_name=f"cleanup_test_pool_{db_config['name'].lower()}",
+        collation=collation,
     )
 
     pool = pool_manager.get_or_create_pool(

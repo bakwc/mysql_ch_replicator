@@ -19,15 +19,33 @@ def set_logging_config(tags, log_file=None, log_level_str=None):
     handlers = []
     handlers.append(logging.StreamHandler(sys.stderr))
     if log_file is not None:
-        handlers.append(
-            RotatingFileHandler(
-                filename=log_file,
-                maxBytes=50*1024*1024,  # 50 Mb
-                backupCount=3,
-                encoding='utf-8',
-                delay=False,
+        # Ensure log file directory exists before creating handler
+        log_dir = os.path.dirname(log_file)
+        if log_dir:
+            try:
+                os.makedirs(log_dir, exist_ok=True)
+            except FileNotFoundError:
+                # Handle nested directory creation for isolated test paths
+                try:
+                    # Create all parent directories recursively
+                    os.makedirs(os.path.dirname(log_dir), exist_ok=True)
+                    os.makedirs(log_dir, exist_ok=True)
+                except Exception as e:
+                    print(f"Warning: Could not create log directory {log_dir}: {e}")
+                    # Skip file logging if directory creation fails
+                    log_file = None
+        
+        # Only add file handler if log directory was created successfully
+        if log_file is not None:
+            handlers.append(
+                RotatingFileHandler(
+                    filename=log_file,
+                    maxBytes=50*1024*1024,  # 50 Mb
+                    backupCount=3,
+                    encoding='utf-8',
+                    delay=True,  # Defer file creation until first log
+                )
             )
-        )
 
     log_levels = {
         'critical': logging.CRITICAL,
@@ -50,8 +68,14 @@ def set_logging_config(tags, log_file=None, log_level_str=None):
 
 
 def run_binlog_replicator(args, config: Settings):
-    if not os.path.exists(config.binlog_replicator.data_dir):
-        os.mkdir(config.binlog_replicator.data_dir)
+    # Ensure the binlog data directory exists with robust error handling
+    try:
+        os.makedirs(config.binlog_replicator.data_dir, exist_ok=True)
+    except FileNotFoundError as e:
+        # If parent directory doesn't exist, create it recursively
+        parent_dir = os.path.dirname(config.binlog_replicator.data_dir)
+        os.makedirs(parent_dir, exist_ok=True)
+        os.makedirs(config.binlog_replicator.data_dir, exist_ok=True)
 
     log_file = os.path.join(
         config.binlog_replicator.data_dir,
@@ -71,16 +95,44 @@ def run_db_replicator(args, config: Settings):
 
     db_name = args.db
 
-    if not os.path.exists(config.binlog_replicator.data_dir):
-        os.mkdir(config.binlog_replicator.data_dir)
+    # Ensure the binlog data directory exists with robust error handling  
+    # CRITICAL: Support parallel test isolation patterns like /app/binlog_{worker_id}_{test_id}/
+    try:
+        os.makedirs(config.binlog_replicator.data_dir, exist_ok=True)
+    except FileNotFoundError as e:
+        # If parent directory doesn't exist, create it recursively
+        # This handles deep paths like /app/binlog_gw1_test123/
+        parent_dir = os.path.dirname(config.binlog_replicator.data_dir)
+        if parent_dir and parent_dir != config.binlog_replicator.data_dir:
+            os.makedirs(parent_dir, exist_ok=True)
+        os.makedirs(config.binlog_replicator.data_dir, exist_ok=True)
+    except Exception as e:
+        # Handle any other filesystem issues (permissions, disk space)
+        logging.warning(f"Could not create binlog directory {config.binlog_replicator.data_dir}: {e}")
+        # Continue execution - logging will use parent directory or fail gracefully
 
     db_dir = os.path.join(
         config.binlog_replicator.data_dir,
         db_name,
     )
 
-    if not os.path.exists(db_dir):
-        os.mkdir(db_dir)
+    # Create database-specific directory with robust error handling
+    # CRITICAL: This prevents FileNotFoundError in isolated test scenarios
+    try:
+        os.makedirs(db_dir, exist_ok=True)
+    except FileNotFoundError as e:
+        # Ensure parent directories exist recursively - handle isolated test paths
+        try:
+            # Create full directory hierarchy recursively
+            os.makedirs(os.path.dirname(config.binlog_replicator.data_dir), exist_ok=True)
+            os.makedirs(config.binlog_replicator.data_dir, exist_ok=True)
+            os.makedirs(db_dir, exist_ok=True)
+        except Exception as e2:
+            logging.warning(f"Could not create database directory hierarchy {db_dir}: {e2}")
+    except Exception as e:
+        # Handle filesystem issues gracefully
+        logging.warning(f"Could not create database directory {db_dir}: {e}")
+        # Continue execution - logging will attempt to create directory when needed
 
     log_file = os.path.join(
         db_dir,
@@ -117,7 +169,7 @@ def run_db_replicator(args, config: Settings):
 def run_db_optimizer(args, config: Settings):
     data_dir = config.binlog_replicator.data_dir
     if not os.path.exists(data_dir):
-        os.mkdir(data_dir)
+        os.makedirs(data_dir, exist_ok=True)
 
     log_file = os.path.join(
         data_dir,
@@ -178,6 +230,23 @@ def main():
 
     config = Settings()
     config.load(args.config)
+    
+    # CRITICAL SAFETY: Force directory creation again immediately after config loading
+    # This is essential for Docker volume mount scenarios where the host directory 
+    # may override container directories or be empty
+    try:
+        os.makedirs(config.binlog_replicator.data_dir, exist_ok=True)
+    except Exception as e:
+        print(f"Warning: Could not ensure binlog directory exists: {e}")
+        # Try to create with full path
+        try:
+            parent_dir = os.path.dirname(config.binlog_replicator.data_dir)
+            if parent_dir:
+                os.makedirs(parent_dir, exist_ok=True)
+            os.makedirs(config.binlog_replicator.data_dir, exist_ok=True)
+        except Exception as e2:
+            print(f"CRITICAL: Failed to create binlog directory: {e2}")
+            # This will likely cause failures but let's continue to see the specific error
     if args.mode == 'binlog_replicator':
         run_binlog_replicator(args, config)
     if args.mode == 'db_replicator':

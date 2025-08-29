@@ -13,7 +13,7 @@ clickhouse:
   password: "admin"
 
 binlog_replicator:
-  data_dir: "/app/binlog/"
+  data_dir: "/app/binlog/" # For parallel testing: automatic isolation to /app/binlog_{worker_id}_{test_id}
   records_per_file: 100000
   binlog_retention_period: 43200 # 12 hours in seconds
 

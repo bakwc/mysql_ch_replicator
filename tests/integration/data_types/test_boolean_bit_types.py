@@ -2,11 +2,11 @@
 
 import pytest
 
-from tests.base import BaseReplicationTest, DataTestMixin, SchemaTestMixin
+from tests.base import IsolatedBaseReplicationTest, DataTestMixin, SchemaTestMixin
 from tests.conftest import TEST_TABLE_NAME
 
 
-class TestBooleanBitTypes(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
+class TestBooleanBitTypes(IsolatedBaseReplicationTest, SchemaTestMixin, DataTestMixin):
     """Test replication of boolean and bit types"""
 
     @pytest.mark.integration

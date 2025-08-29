@@ -212,8 +212,8 @@ class TestStressOperations(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
                     update_id = random.randint(1, min(operations_executed, 100))
                     self.mysql.execute(
                         f"UPDATE `{table_name}` SET score = %s WHERE id = %s",
-                        (random.randint(0, 100), update_id),
-                        commit=True
+                        commit=True,
+                        args=(random.randint(0, 100), update_id)
                     )
             
             operations_executed += 1

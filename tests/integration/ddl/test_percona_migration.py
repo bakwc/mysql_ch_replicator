@@ -2,11 +2,11 @@
 
 import pytest
 
-from tests.base import BaseReplicationTest, DataTestMixin, SchemaTestMixin
+from tests.base import IsolatedBaseReplicationTest, DataTestMixin, SchemaTestMixin
 from tests.conftest import TEST_DB_NAME, TEST_TABLE_NAME
 
 
-class TestPerconaMigration(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
+class TestPerconaMigration(IsolatedBaseReplicationTest, SchemaTestMixin, DataTestMixin):
     """Validate rename/copy flow used by pt-online-schema-change."""
 
     @pytest.mark.integration

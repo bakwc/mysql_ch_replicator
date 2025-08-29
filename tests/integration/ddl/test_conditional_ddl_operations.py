@@ -2,11 +2,11 @@
 
 import pytest
 
-from tests.base import BaseReplicationTest, DataTestMixin, SchemaTestMixin
+from tests.base import IsolatedBaseReplicationTest, DataTestMixin, SchemaTestMixin
 from tests.conftest import TEST_TABLE_NAME
 
 
-class TestConditionalDdlOperations(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
+class TestConditionalDdlOperations(IsolatedBaseReplicationTest, SchemaTestMixin, DataTestMixin):
     """Test conditional DDL operations and duplicate statement handling"""
 
     @pytest.mark.integration

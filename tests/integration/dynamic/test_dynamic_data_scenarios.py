@@ -3,12 +3,12 @@
 import pytest
 from decimal import Decimal
 
-from tests.base import BaseReplicationTest, DataTestMixin, SchemaTestMixin
+from tests.base import IsolatedBaseReplicationTest, DataTestMixin, SchemaTestMixin
 from tests.conftest import TEST_TABLE_NAME
 from tests.fixtures.advanced_dynamic_generator import AdvancedDynamicGenerator
 
 
-class TestDynamicDataScenarios(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
+class TestDynamicDataScenarios(IsolatedBaseReplicationTest, SchemaTestMixin, DataTestMixin):
     """Test replication with dynamically generated schemas and data"""
     
     def setup_method(self):
@@ -65,7 +65,7 @@ class TestDynamicDataScenarios(BaseReplicationTest, SchemaTestMixin, DataTestMix
         # Focus on data types with well-defined boundaries
         boundary_types = ["int", "bigint", "varchar", "decimal"]
         
-        schema_sql, boundary_data = self.dynamic_gen.create_boundary_test_scenario(boundary_types)
+        schema_sql, boundary_data = self.dynamic_gen.create_boundary_test_scenario(boundary_types, TEST_TABLE_NAME)
         
         # Create table with boundary test schema
         self.mysql.execute(schema_sql)

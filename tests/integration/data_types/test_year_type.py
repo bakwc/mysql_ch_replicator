@@ -2,11 +2,11 @@
 
 import pytest
 
-from tests.base import BaseReplicationTest, DataTestMixin, SchemaTestMixin
+from tests.base import IsolatedBaseReplicationTest, DataTestMixin, SchemaTestMixin
 from tests.conftest import TEST_DB_NAME, TEST_TABLE_NAME
 
 
-class TestYearType(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
+class TestYearType(IsolatedBaseReplicationTest, SchemaTestMixin, DataTestMixin):
     """Verify YEAR columns replicate correctly."""
 
     @pytest.mark.integration

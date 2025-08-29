@@ -2,11 +2,11 @@
 
 import pytest
 
-from tests.base import BaseReplicationTest, DataTestMixin, SchemaTestMixin
+from tests.base import IsolatedBaseReplicationTest, DataTestMixin, SchemaTestMixin
 from tests.conftest import TEST_TABLE_NAME
 
 
-class TestNullValueHandling(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
+class TestNullValueHandling(IsolatedBaseReplicationTest, SchemaTestMixin, DataTestMixin):
     """Test replication of NULL values across different data types"""
 
     @pytest.mark.integration

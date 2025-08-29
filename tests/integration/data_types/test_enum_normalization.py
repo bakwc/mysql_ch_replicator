@@ -2,11 +2,11 @@
 
 import pytest
 
-from tests.base import BaseReplicationTest, DataTestMixin, SchemaTestMixin
+from tests.base import IsolatedBaseReplicationTest, DataTestMixin, SchemaTestMixin
 from tests.conftest import TEST_DB_NAME, TEST_TABLE_NAME
 
 
-class TestEnumNormalization(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
+class TestEnumNormalization(IsolatedBaseReplicationTest, SchemaTestMixin, DataTestMixin):
     """Verify ENUM values normalize to lowercase and handle NULL/zero values properly."""
 
     @pytest.mark.integration

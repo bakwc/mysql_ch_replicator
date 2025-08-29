@@ -2,11 +2,11 @@
 
 import pytest
 
-from tests.base import BaseReplicationTest, DataTestMixin, SchemaTestMixin
+from tests.base import IsolatedBaseReplicationTest, DataTestMixin, SchemaTestMixin
 from tests.conftest import TEST_TABLE_NAME
 
 
-class TestTextBlobTypes(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
+class TestTextBlobTypes(IsolatedBaseReplicationTest, SchemaTestMixin, DataTestMixin):
     """Test replication of text and blob types"""
 
     @pytest.mark.integration
