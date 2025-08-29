@@ -8,3 +8,4 @@ monitoring.log
 dist/
 test-report.html
 test-results.xml
+.pytest_cache/
