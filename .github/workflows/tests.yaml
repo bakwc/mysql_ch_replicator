@@ -19,15 +19,9 @@ jobs:
       
       - name: Run tests with reporting
         run: |
-          docker compose -f docker-compose-tests.yaml up --force-recreate --no-deps --wait -d
-          CONTAINER_ID=$(docker ps | grep mysql_ch_replicator-replicator | awk '{print $1;}')
-          sudo docker exec -w /app/ -i $CONTAINER_ID \
-            python3 -m pytest -x -v -s tests/ \
-            --junitxml=test-results.xml \
-            --html=test-report.html --self-contained-html
-          # Copy test results from container to host
-          sudo docker cp $CONTAINER_ID:/app/test-results.xml ./test-results.xml
-          sudo docker cp $CONTAINER_ID:/app/test-report.html ./test-report.html
+          chmod +x ./run_tests.sh
+          # Run tests in CI mode with parallel execution and automatic report generation
+          ./run_tests.sh --ci
 
       - name: Publish test results
         uses: EnricoMi/publish-unit-test-result-action@v2

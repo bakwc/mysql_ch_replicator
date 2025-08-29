@@ -75,10 +75,10 @@ services:
       - default
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-padmin"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 90s
+      interval: 5s      # Reduced from 10s
+      timeout: 2s       # Reduced from 5s  
+      retries: 5        # Reduced from 10
+      start_period: 30s # Reduced from 90s
 
   replicator:
     build:

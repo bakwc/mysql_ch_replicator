@@ -16,12 +16,62 @@ from tests.utils.mysql_test_api import MySQLTestApi
 # Constants
 CONFIG_FILE = "tests/configs/replicator/tests_config.yaml"
 CONFIG_FILE_MARIADB = "tests/configs/replicator/tests_config_mariadb.yaml"
-TEST_DB_NAME = "replication-test_db"
-TEST_DB_NAME_2 = "replication-test_db_2"
-TEST_DB_NAME_2_DESTINATION = "replication-destination"
-TEST_TABLE_NAME = "test_table"
-TEST_TABLE_NAME_2 = "test_table_2"
-TEST_TABLE_NAME_3 = "test_table_3"
+
+# Test isolation for parallel testing
+import uuid
+import threading
+
+# Thread-local storage for test-specific names
+_test_local = threading.local()
+
+def get_worker_id():
+    """Get pytest-xdist worker ID for database isolation"""
+    worker_id = os.environ.get('PYTEST_XDIST_WORKER', 'master')
+    return worker_id.replace('gw', 'w')  # gw0 -> w0, gw1 -> w1, etc.
+
+def get_test_id():
+    """Get unique test identifier for complete isolation"""
+    if not hasattr(_test_local, 'test_id'):
+        _test_local.test_id = uuid.uuid4().hex[:8]
+    return _test_local.test_id
+
+def reset_test_id():
+    """Reset test ID for new test (called by fixture)"""
+    _test_local.test_id = uuid.uuid4().hex[:8]
+
+def get_test_db_name(suffix=""):
+    """Get test-specific database name (unique per test per worker)"""
+    worker_id = get_worker_id()
+    test_id = get_test_id()
+    return f"test_db_{worker_id}_{test_id}{suffix}"
+
+def get_test_table_name(suffix=""):
+    """Get test-specific table name (unique per test per worker)"""  
+    worker_id = get_worker_id()
+    test_id = get_test_id()
+    return f"test_table_{worker_id}_{test_id}{suffix}"
+
+# Initialize with default values - will be updated per test
+TEST_DB_NAME = get_test_db_name()
+TEST_DB_NAME_2 = get_test_db_name("_2") 
+TEST_DB_NAME_2_DESTINATION = f"replication_dest_{get_worker_id()}_{get_test_id()}"
+TEST_TABLE_NAME = get_test_table_name()
+TEST_TABLE_NAME_2 = get_test_table_name("_2")
+TEST_TABLE_NAME_3 = get_test_table_name("_3")
+
+def update_test_constants():
+    """Update module-level constants with new test IDs"""
+    global TEST_DB_NAME, TEST_DB_NAME_2, TEST_DB_NAME_2_DESTINATION
+    global TEST_TABLE_NAME, TEST_TABLE_NAME_2, TEST_TABLE_NAME_3
+    
+    reset_test_id()  # Generate new test ID
+    
+    TEST_DB_NAME = get_test_db_name()
+    TEST_DB_NAME_2 = get_test_db_name("_2")
+    TEST_DB_NAME_2_DESTINATION = f"replication_dest_{get_worker_id()}_{get_test_id()}"
+    TEST_TABLE_NAME = get_test_table_name()
+    TEST_TABLE_NAME_2 = get_test_table_name("_2")
+    TEST_TABLE_NAME_3 = get_test_table_name("_3")
 
 
 # Test runners
@@ -170,6 +220,14 @@ def get_last_insert_from_binlog(cfg, db_name: str):
     return last_insert
 
 
+# Per-test isolation fixture
+@pytest.fixture(autouse=True, scope="function")
+def isolate_test_databases():
+    """Automatically isolate databases for each test"""
+    update_test_constants()
+    yield
+    # Note: cleanup handled by clean_environment fixtures
+
 # Pytest fixtures
 @pytest.fixture
 def test_config():
@@ -229,15 +287,25 @@ def dynamic_clickhouse_api_instance(dynamic_config):
 @pytest.fixture
 def clean_environment(test_config, mysql_api_instance, clickhouse_api_instance):
     """Provide clean test environment with automatic cleanup"""
-    prepare_env(test_config, mysql_api_instance, clickhouse_api_instance)
+    # Capture current test-specific database names
+    current_test_db = TEST_DB_NAME
+    current_test_db_2 = TEST_DB_NAME_2
+    current_test_dest = TEST_DB_NAME_2_DESTINATION
+    
+    prepare_env(test_config, mysql_api_instance, clickhouse_api_instance, db_name=current_test_db)
     yield test_config, mysql_api_instance, clickhouse_api_instance
-    # Cleanup after test
+    
+    # Cleanup after test - test-specific
     try:
-        mysql_drop_database(mysql_api_instance, TEST_DB_NAME)
-        mysql_drop_database(mysql_api_instance, TEST_DB_NAME_2)
-        clickhouse_api_instance.drop_database(TEST_DB_NAME)
-        clickhouse_api_instance.drop_database(TEST_DB_NAME_2)
-        clickhouse_api_instance.drop_database(TEST_DB_NAME_2_DESTINATION)
+        cleanup_databases = [
+            current_test_db,
+            current_test_db_2, 
+            current_test_dest,
+        ]
+        
+        for db_name in cleanup_databases:
+            mysql_drop_database(mysql_api_instance, db_name)
+            clickhouse_api_instance.drop_database(db_name)
     except Exception:
         pass  # Ignore cleanup errors
 
@@ -247,17 +315,27 @@ def dynamic_clean_environment(
     dynamic_config, dynamic_mysql_api_instance, dynamic_clickhouse_api_instance
 ):
     """Provide clean test environment with dynamic config and automatic cleanup"""
+    # Capture current test-specific database names
+    current_test_db = TEST_DB_NAME
+    current_test_db_2 = TEST_DB_NAME_2
+    current_test_dest = TEST_DB_NAME_2_DESTINATION
+    
     prepare_env(
-        dynamic_config, dynamic_mysql_api_instance, dynamic_clickhouse_api_instance
+        dynamic_config, dynamic_mysql_api_instance, dynamic_clickhouse_api_instance, db_name=current_test_db
     )
     yield dynamic_config, dynamic_mysql_api_instance, dynamic_clickhouse_api_instance
-    # Cleanup after test
+    
+    # Cleanup after test - test-specific
     try:
-        mysql_drop_database(dynamic_mysql_api_instance, TEST_DB_NAME)
-        mysql_drop_database(dynamic_mysql_api_instance, TEST_DB_NAME_2)
-        dynamic_clickhouse_api_instance.drop_database(TEST_DB_NAME)
-        dynamic_clickhouse_api_instance.drop_database(TEST_DB_NAME_2)
-        dynamic_clickhouse_api_instance.drop_database(TEST_DB_NAME_2_DESTINATION)
+        cleanup_databases = [
+            current_test_db,
+            current_test_db_2,
+            current_test_dest,
+        ]
+        
+        for db_name in cleanup_databases:
+            mysql_drop_database(dynamic_mysql_api_instance, db_name)
+            dynamic_clickhouse_api_instance.drop_database(db_name)
     except Exception:
         pass  # Ignore cleanup errors
 

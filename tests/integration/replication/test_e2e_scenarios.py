@@ -83,36 +83,40 @@ class TestE2EScenarios(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
         # Wait for table to be created
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=0)
 
-        # Execute multi-statement transaction
-        self.mysql.execute("BEGIN;")
-        self.mysql.execute(
-            f"INSERT INTO `{TEST_TABLE_NAME}` (name, age) VALUES ('John', 25);"
-        )
-        self.mysql.execute(
-            f"INSERT INTO `{TEST_TABLE_NAME}` (name, age) VALUES ('Jane', 30);"
-        )
-        self.mysql.execute(
-            f"UPDATE `{TEST_TABLE_NAME}` SET age = 26 WHERE name = 'John';"
-        )
-        self.mysql.execute("COMMIT;", commit=True)
+        # Execute multi-statement transaction using proper connection context
+        with self.mysql.get_connection() as (connection, cursor):
+            cursor.execute("BEGIN")
+            cursor.execute(
+                f"INSERT INTO `{TEST_TABLE_NAME}` (name, age) VALUES ('John', 25)"
+            )
+            cursor.execute(
+                f"INSERT INTO `{TEST_TABLE_NAME}` (name, age) VALUES ('Jane', 30)"
+            )
+            cursor.execute(
+                f"UPDATE `{TEST_TABLE_NAME}` SET age = 26 WHERE name = 'John'"
+            )
+            cursor.execute("COMMIT")
+            connection.commit()
 
         # Verify all changes replicated correctly
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=2)
         self.verify_record_exists(TEST_TABLE_NAME, "name='John'", {"age": 26})
         self.verify_record_exists(TEST_TABLE_NAME, "name='Jane'", {"age": 30})
 
-        # Test rollback scenario
-        self.mysql.execute("BEGIN;")
-        self.mysql.execute(
-            f"INSERT INTO `{TEST_TABLE_NAME}` (name, age) VALUES ('Bob', 35);"
-        )
-        self.mysql.execute(
-            f"UPDATE `{TEST_TABLE_NAME}` SET age = 27 WHERE name = 'John';"
-        )
-        self.mysql.execute("ROLLBACK;", commit=True)
+        # Test rollback scenario using proper connection context
+        with self.mysql.get_connection() as (connection, cursor):
+            cursor.execute("BEGIN")
+            cursor.execute(
+                f"INSERT INTO `{TEST_TABLE_NAME}` (name, age) VALUES ('Bob', 35)"
+            )
+            cursor.execute(
+                f"UPDATE `{TEST_TABLE_NAME}` SET age = 27 WHERE name = 'John'"
+            )
+            cursor.execute("ROLLBACK")
+            connection.commit()
 
         # Verify rollback - should still have original data
-        self.wait_for_stable_state(TEST_TABLE_NAME, expected_count=2, wait_time=5)
+        self.wait_for_stable_state(TEST_TABLE_NAME, expected_count=2, max_wait_time=5)
         self.verify_record_exists(TEST_TABLE_NAME, "name='John'", {"age": 26})
         self.verify_record_does_not_exist(TEST_TABLE_NAME, "name='Bob'")
 
