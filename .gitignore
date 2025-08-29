@@ -6,3 +6,5 @@ binlog*
 monitoring.log
 .DS_Store
 dist/
+test-report.html
+test-results.xml
