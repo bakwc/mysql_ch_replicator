@@ -4,12 +4,12 @@ import datetime
 
 import pytest
 
-from tests.base import BaseReplicationTest, DataTestMixin, SchemaTestMixin
+from tests.base import IsolatedBaseReplicationTest, DataTestMixin, SchemaTestMixin
 from tests.conftest import TEST_TABLE_NAME
 from tests.fixtures import TableSchemas, TestDataGenerator
 
 
-class TestAdvancedDataTypes(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
+class TestAdvancedDataTypes(IsolatedBaseReplicationTest, SchemaTestMixin, DataTestMixin):
     """Test replication of advanced MySQL data types"""
 
     @pytest.mark.integration

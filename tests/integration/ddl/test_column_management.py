@@ -2,11 +2,11 @@
 
 import pytest
 
-from tests.base import BaseReplicationTest, DataTestMixin, SchemaTestMixin
+from tests.base import IsolatedBaseReplicationTest, DataTestMixin, SchemaTestMixin
 from tests.conftest import TEST_TABLE_NAME
 
 
-class TestColumnManagement(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
+class TestColumnManagement(IsolatedBaseReplicationTest, SchemaTestMixin, DataTestMixin):
     """Test column management DDL operations during replication"""
 
     @pytest.mark.integration

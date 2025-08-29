@@ -4,11 +4,11 @@ import json
 
 import pytest
 
-from tests.base import BaseReplicationTest, DataTestMixin, SchemaTestMixin
+from tests.base import IsolatedBaseReplicationTest, DataTestMixin, SchemaTestMixin
 from tests.conftest import TEST_TABLE_NAME
 
 
-class TestJsonComprehensive(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
+class TestJsonComprehensive(IsolatedBaseReplicationTest, SchemaTestMixin, DataTestMixin):
     """Test comprehensive JSON data type handling including Unicode keys"""
 
     @pytest.mark.integration

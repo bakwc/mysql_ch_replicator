@@ -2,11 +2,11 @@
 
 import pytest
 
-from tests.base import BaseReplicationTest, DataTestMixin, SchemaTestMixin
+from tests.base import IsolatedBaseReplicationTest, DataTestMixin, SchemaTestMixin
 from tests.conftest import TEST_DB_NAME, TEST_TABLE_NAME
 
 
-class TestBinaryPadding(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
+class TestBinaryPadding(IsolatedBaseReplicationTest, SchemaTestMixin, DataTestMixin):
     """Verify MySQL BINARY(N) pads with NULs and replicates consistently."""
 
     @pytest.mark.integration

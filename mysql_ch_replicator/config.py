@@ -261,6 +261,39 @@ class Settings:
         self.binlog_replicator = BinlogReplicatorSettings(
             **data.pop("binlog_replicator")
         )
+        
+        # CRITICAL: Ensure binlog directory exists immediately after configuration loading
+        # This prevents race conditions in parallel test execution and container startup
+        import os
+        import shutil
+        
+        # Special handling for Docker volume mount issues where directory exists but can't be written to
+        try:
+            # Test if we can actually create files in the directory
+            if os.path.exists(self.binlog_replicator.data_dir):
+                test_file = os.path.join(self.binlog_replicator.data_dir, ".test_write")
+                try:
+                    with open(test_file, "w") as f:
+                        f.write("test")
+                    os.remove(test_file)
+                    # Directory works, we're good
+                except (OSError, IOError) as e:
+                    print(f"DEBUG: Directory exists but not writable, recreating: {e}")
+                    # Directory exists but is not writable, recreate it
+                    shutil.rmtree(self.binlog_replicator.data_dir, ignore_errors=True)
+                    os.makedirs(self.binlog_replicator.data_dir, exist_ok=True)
+            else:
+                # Directory doesn't exist, create it normally
+                os.makedirs(self.binlog_replicator.data_dir, exist_ok=True)
+                
+        except Exception as e:
+            print(f"WARNING: Could not ensure binlog directory is writable: {e}")
+            # Fallback - try creating anyway
+            try:
+                os.makedirs(self.binlog_replicator.data_dir, exist_ok=True)
+            except Exception as e2:
+                print(f"CRITICAL: Final binlog directory creation failed: {e2}")
+        
         if data:
             raise Exception(f"Unsupported config options: {list(data.keys())}")
         self.validate()

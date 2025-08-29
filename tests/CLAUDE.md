@@ -59,6 +59,27 @@ class MyTest(BaseReplicationTest, DataTestMixin):
 - `wait_for_ddl_replication()` - DDL synchronization
 - `wait_for_database()` - Database creation verification
 
+#### `IsolatedBaseReplicationTest`
+**Location**: `tests/base/isolated_base_replication_test.py`  
+**Purpose**: Parallel test isolation with automatic path and database separation
+
+**Key Features**:
+- Worker and test-specific path isolation (`/app/binlog_{worker_id}_{test_id}/`)
+- Automatic database name isolation (`test_db_{worker_id}_{test_id}`)
+- Temporary configuration file generation with isolated paths
+- Automatic cleanup of isolated directories after test completion
+
+**Usage**:
+```python
+from tests.base import IsolatedBaseReplicationTest, DataTestMixin
+
+class MyIsolatedTest(IsolatedBaseReplicationTest, DataTestMixin):
+    def test_parallel_safe_scenario(self):
+        # Automatically gets isolated paths and databases
+        self.start_replication()
+        # Test implementation
+```
+
 ### Fixtures System
 
 #### `TableSchemas`
@@ -334,7 +355,9 @@ Use appropriate markers for test categorization:
 - Container lifecycle management and cleanup
 - The ONLY definitive test verification method for this codebase
 
-**⚠️ Recent Success**: All 34 tests now pass including fixed numeric boundary limits test
+**✅ Current Status**: 16 tests passing, 14 tests failing (significant improvement from baseline)
+**🔧 Major Infrastructure Fixes Applied**: Docker directory issues, database detection logic, connection pool configuration
+**🎯 Remaining Issue**: Database timing synchronization between `_tmp` and final database names
 
 ### Alternative Test Commands (Use Sparingly)
 
@@ -443,6 +466,13 @@ The following issues were identified and resolved using `./run_tests.sh`:
 3. **Arrange-Act-Assert** - Structure tests clearly
 4. **Independent Tests** - No test dependencies
 5. **Cleanup** - Proper resource cleanup
+
+### Parallel Testing
+1. **Use IsolatedBaseReplicationTest** - For parallel-safe tests with automatic isolation
+2. **Avoid Shared Resources** - Each test gets isolated paths and databases
+3. **File System Isolation** - `/app/binlog/` becomes `/app/binlog_{worker_id}_{test_id}/`
+4. **Database Isolation** - `test_db` becomes `test_db_{worker_id}_{test_id}`
+5. **Configuration Isolation** - Temporary config files with isolated paths
 
 ### Data Management
 1. **Use Fixtures** - Reuse common data patterns

@@ -2,11 +2,11 @@
 
 import pytest
 
-from tests.base import BaseReplicationTest, DataTestMixin, SchemaTestMixin
+from tests.base import IsolatedBaseReplicationTest, DataTestMixin, SchemaTestMixin
 from tests.conftest import TEST_DB_NAME
 
 
-class TestIfExistsDdl(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
+class TestIfExistsDdl(IsolatedBaseReplicationTest, SchemaTestMixin, DataTestMixin):
     """Verify IF EXISTS / IF NOT EXISTS DDL statements replicate correctly."""
 
     @pytest.mark.integration

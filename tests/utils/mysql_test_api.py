@@ -168,3 +168,17 @@ class MySQLTestApi:
             res = cursor.fetchall()
             records = [x for x in res]
             return records
+
+    def fetch_all(self, query):
+        """Execute a SELECT query and return all results"""
+        with self.get_connection() as (connection, cursor):
+            cursor.execute(query)
+            res = cursor.fetchall()
+            return res
+    
+    def fetch_one(self, query):
+        """Execute a SELECT query and return one result"""
+        with self.get_connection() as (connection, cursor):
+            cursor.execute(query)
+            res = cursor.fetchone()
+            return res

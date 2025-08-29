@@ -4,11 +4,11 @@ from decimal import Decimal
 
 import pytest
 
-from tests.base import BaseReplicationTest, DataTestMixin, SchemaTestMixin
+from tests.base import IsolatedBaseReplicationTest, DataTestMixin, SchemaTestMixin
 from tests.conftest import TEST_TABLE_NAME
 
 
-class TestNumericComprehensive(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
+class TestNumericComprehensive(IsolatedBaseReplicationTest, SchemaTestMixin, DataTestMixin):
     """Test comprehensive numeric types including boundaries and unsigned limits"""
 
     @pytest.mark.integration

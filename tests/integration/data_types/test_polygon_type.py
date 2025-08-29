@@ -2,11 +2,11 @@
 
 import pytest
 
-from tests.base import BaseReplicationTest, DataTestMixin, SchemaTestMixin
+from tests.base import IsolatedBaseReplicationTest, DataTestMixin, SchemaTestMixin
 from tests.conftest import TEST_DB_NAME, TEST_TABLE_NAME
 
 
-class TestPolygonType(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
+class TestPolygonType(IsolatedBaseReplicationTest, SchemaTestMixin, DataTestMixin):
     """Verify POLYGON columns replicate and materialize as arrays of points."""
 
     @pytest.mark.integration

@@ -2,11 +2,11 @@
 
 import pytest
 
-from tests.base import BaseReplicationTest, DataTestMixin, SchemaTestMixin
+from tests.base import IsolatedBaseReplicationTest, DataTestMixin, SchemaTestMixin
 from tests.conftest import TEST_TABLE_NAME
 
 
-class TestPerconaMigrationScenarios(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
+class TestPerconaMigrationScenarios(IsolatedBaseReplicationTest, SchemaTestMixin, DataTestMixin):
     """Test Percona-specific DDL migration scenarios"""
 
     @pytest.mark.integration

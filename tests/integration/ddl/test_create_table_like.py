@@ -2,11 +2,11 @@
 
 import pytest
 
-from tests.base import BaseReplicationTest, DataTestMixin, SchemaTestMixin
+from tests.base import IsolatedBaseReplicationTest, DataTestMixin, SchemaTestMixin
 from tests.conftest import TEST_DB_NAME
 
 
-class TestCreateTableLike(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
+class TestCreateTableLike(IsolatedBaseReplicationTest, SchemaTestMixin, DataTestMixin):
     """Verify CREATE TABLE ... LIKE is replicated and usable."""
 
     @pytest.mark.integration

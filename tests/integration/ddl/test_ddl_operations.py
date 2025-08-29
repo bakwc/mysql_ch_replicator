@@ -2,12 +2,12 @@
 
 import pytest
 
-from tests.base import BaseReplicationTest, DataTestMixin, SchemaTestMixin
+from tests.base import IsolatedBaseReplicationTest, DataTestMixin, SchemaTestMixin
 from tests.conftest import TEST_TABLE_NAME
 from tests.fixtures import TableSchemas, TestDataGenerator
 
 
-class TestDdlOperations(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
+class TestDdlOperations(IsolatedBaseReplicationTest, SchemaTestMixin, DataTestMixin):
     """Test DDL operations like ALTER TABLE, CREATE TABLE, etc."""
 
     @pytest.mark.integration

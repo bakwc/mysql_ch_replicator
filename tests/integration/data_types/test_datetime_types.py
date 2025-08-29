@@ -4,12 +4,12 @@ import datetime
 
 import pytest
 
-from tests.base import BaseReplicationTest, DataTestMixin, SchemaTestMixin
+from tests.base import IsolatedBaseReplicationTest, DataTestMixin, SchemaTestMixin
 from tests.conftest import TEST_TABLE_NAME
 from tests.fixtures import TableSchemas, TestDataGenerator
 
 
-class TestDatetimeTypes(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
+class TestDatetimeTypes(IsolatedBaseReplicationTest, SchemaTestMixin, DataTestMixin):
     """Test replication of datetime and date types"""
 
     @pytest.mark.integration

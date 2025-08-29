@@ -2,11 +2,11 @@
 
 import pytest
 
-from tests.base import BaseReplicationTest, DataTestMixin, SchemaTestMixin
+from tests.base import IsolatedBaseReplicationTest, DataTestMixin, SchemaTestMixin
 from tests.conftest import TEST_DB_NAME, TEST_TABLE_NAME
 
 
-class TestMultiAlterStatements(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
+class TestMultiAlterStatements(IsolatedBaseReplicationTest, SchemaTestMixin, DataTestMixin):
     """Validate parser and replication for multi-op ALTER statements."""
 
     @pytest.mark.integration

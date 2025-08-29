@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Enhanced run_tests.sh script with parallel execution and CI reporting support
+# Enhanced run_tests.sh script with intelligent parallel execution and CI reporting support
 # Usage: ./run_tests.sh [options] [pytest arguments]
 # 
 # Options:
@@ -9,16 +9,20 @@
 #   --junit-xml <file>                              # Generate JUnit XML report
 #   --html-report <file>                            # Generate HTML report
 #   --copy-reports                                  # Copy reports from container to host
-#   -n <num>                                        # Number of parallel workers
+#   -n <num>                                        # Number of parallel workers (overrides defaults)
+#   
+# Default Parallel Behavior:
+#   Local:    -n auto (CPU core detection, ~4-14 workers)
+#   CI/GitHub: -n 2 (conservative for GitHub Actions runners)
 #   
 # Examples:
-#   ./run_tests.sh                                    # Run all tests (parallel)
+#   ./run_tests.sh                                    # Run all tests (intelligent parallel)
 #   ./run_tests.sh --serial                          # Run all tests (sequential)
-#   ./run_tests.sh --ci                              # Run with CI reporting (parallel)
+#   ./run_tests.sh --ci                              # Run with CI reporting (auto-detected)
 #   ./run_tests.sh -k "mariadb"                      # Run only MariaDB tests
 #   ./run_tests.sh tests/integration/ddl/            # Run only DDL tests
 #   ./run_tests.sh -x -v -s                         # Run with specific pytest flags
-#   ./run_tests.sh -n 2                             # Run with 2 parallel workers
+#   ./run_tests.sh -n 4                             # Force 4 parallel workers
 
 echo "🐳 Starting Docker services..."
 docker compose -f docker-compose-tests.yaml up --force-recreate --no-deps --wait -d
@@ -42,6 +46,8 @@ JUNIT_XML=""
 HTML_REPORT=""
 COPY_REPORTS=false
 SKIP_NEXT=false
+
+rm -rf binlog*
 
 # Set defaults for CI environment
 if [ "$CI" = "true" ] || [ "$GITHUB_ACTIONS" = "true" ]; then
@@ -133,7 +139,14 @@ elif [ -n "$PARALLEL_ARGS" ]; then
     echo "⚙️  Running tests with custom parallel configuration$([ "$CI_MODE" = true ] && echo " (CI mode)")..."
     docker exec -w /app/ -i $CONTAINER_ID python3 -m pytest $PARALLEL_ARGS -x -v -s tests/ $REPORTING_ARGS $PYTEST_ARGS
 else
-    # Default: Auto-parallel execution
-    echo "🚀 Running tests in parallel mode (auto-scaling)$([ "$CI_MODE" = true ] && echo " (CI mode)")..."
-    docker exec -w /app/ -i $CONTAINER_ID python3 -m pytest -n auto --dist worksteal -x -v -s tests/ $REPORTING_ARGS $PYTEST_ARGS
+    # Default: Intelligent parallel execution with CI-aware scaling
+    if [ "$CI" = "true" ] || [ "$GITHUB_ACTIONS" = "true" ]; then
+        # Conservative defaults for GitHub Actions runners (2 CPU cores typically)
+        echo "🚀 Running tests in parallel mode (CI-optimized: 2 workers)$([ "$CI_MODE" = true ] && echo " (CI mode)")..."
+        docker exec -w /app/ -i $CONTAINER_ID python3 -m pytest -n 2 --dist worksteal --maxfail=5 -v tests/ $REPORTING_ARGS $PYTEST_ARGS
+    else
+        # Aggressive scaling for local development (detect CPU cores)
+        echo "🚀 Running tests in parallel mode (local-optimized: auto-scaling)$([ "$CI_MODE" = true ] && echo " (CI mode)")..."
+        docker exec -w /app/ -i $CONTAINER_ID python3 -m pytest -n auto --dist worksteal --maxfail=11 -v tests/ $REPORTING_ARGS $PYTEST_ARGS
+    fi
 fi

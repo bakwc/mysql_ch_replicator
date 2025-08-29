@@ -309,17 +309,19 @@ class AdvancedDynamicGenerator:
         import json
         return json.dumps(generate_json_value())
     
-    def create_boundary_test_scenario(self, data_types: List[str]) -> Tuple[str, List[Dict]]:
+    def create_boundary_test_scenario(self, data_types: List[str], table_name: str = None) -> Tuple[str, List[Dict]]:
         """
         Create a test scenario focusing on boundary values for specific data types
         
         Args:
             data_types: List of data types to test boundary values for
+            table_name: Name of the table to create (if None, generates random name)
             
         Returns:
             Tuple of (schema_sql, test_data)
         """
-        table_name = f"boundary_test_{random.randint(1000, 9999)}"
+        if table_name is None:
+            table_name = f"boundary_test_{random.randint(1000, 9999)}"
         
         columns = ["id int NOT NULL AUTO_INCREMENT"]
         test_records = []
@@ -352,7 +354,7 @@ class AdvancedDynamicGenerator:
                     ])
         
         columns.append("PRIMARY KEY (id)")
-        schema_sql = f"CREATE TABLE `{table_name}` (\\n    {',\\n    '.join(columns)}\\n);"
+        schema_sql = f"CREATE TABLE `{table_name}` (\n    {',\n    '.join(columns)}\n);"
         
         # Combine individual field records into complete records
         combined_records = []
