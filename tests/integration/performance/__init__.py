@@ -1,0 +1,1 @@
+"""Performance testing module for MySQL-ClickHouse replication"""

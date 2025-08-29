@@ -47,7 +47,7 @@ class TestCreateTableLike(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
         """)
 
         # Start replication
-        self.start_replication(db_name=TEST_DB_NAME)
+        self.start_replication()
 
         # Wait for both tables to exist in CH
         self.wait_for_table_sync("source_table", expected_count=1)

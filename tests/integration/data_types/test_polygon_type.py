@@ -36,7 +36,7 @@ class TestPolygonType(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
         )
 
         # Start replication
-        self.start_replication(db_name=TEST_DB_NAME)
+        self.start_replication()
 
         # Verify initial rows
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=3)

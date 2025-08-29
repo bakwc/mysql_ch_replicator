@@ -214,7 +214,7 @@ class TestBasicCrudOperations(BaseReplicationTest, SchemaTestMixin, DataTestMixi
 
         # Start replication using standard approach (RunAllRunner was missing database context)
         from tests.conftest import TEST_DB_NAME
-        self.start_replication(db_name=TEST_DB_NAME)
+        self.start_replication()
 
         # Wait for replication
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=6)

@@ -32,8 +32,16 @@ class BaseReplicationTest:
         if self.binlog_runner:
             self.binlog_runner.stop()
 
-    def start_replication(self, db_name=TEST_DB_NAME, config_file=None):
+    def start_replication(self, db_name=None, config_file=None):
         """Start binlog and db replication with common setup"""
+        # Use the database name from the test config if available, otherwise fallback
+        if db_name is None and hasattr(self.cfg, 'test_db_name'):
+            db_name = self.cfg.test_db_name
+        elif db_name is None:
+            # Import TEST_DB_NAME dynamically to get current per-test value
+            from tests.conftest import TEST_DB_NAME
+            db_name = TEST_DB_NAME
+            
         config_file = config_file or self.config_file
 
         self.binlog_runner = BinlogReplicatorRunner(cfg_file=config_file)
@@ -46,6 +54,30 @@ class BaseReplicationTest:
         assert_wait(lambda: db_name in self.ch.get_databases())
         self.ch.database = db_name
 
+    def setup_and_replicate_table(self, schema_func, test_data, table_name=None, expected_count=None):
+        """Standard replication test pattern: create table → insert data → replicate → verify"""
+        from tests.conftest import TEST_TABLE_NAME
+        
+        table_name = table_name or TEST_TABLE_NAME
+        expected_count = expected_count or len(test_data) if test_data else 0
+        
+        # Create table using schema factory
+        schema = schema_func(table_name)
+        self.mysql.execute(schema.sql if hasattr(schema, 'sql') else schema)
+        
+        # Insert test data if provided
+        if test_data:
+            from tests.base.data_test_mixin import DataTestMixin
+            if hasattr(self, 'insert_multiple_records'):
+                self.insert_multiple_records(table_name, test_data)
+        
+        # Start replication and wait for sync
+        self.start_replication()
+        if hasattr(self, 'wait_for_table_sync'):
+            self.wait_for_table_sync(table_name, expected_count=expected_count)
+            
+        return expected_count
+    
     def stop_replication(self):
         """Stop both binlog and db replication"""
         if self.db_runner:

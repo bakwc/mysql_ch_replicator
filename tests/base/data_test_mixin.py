@@ -1,7 +1,7 @@
 """Mixin for data-related test operations"""
 
 import datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any, Dict, List
 
 
@@ -130,6 +130,23 @@ class DataTestMixin:
                 actual_date = datetime.datetime.fromisoformat(actual_value).date()
                 return expected_value == actual_date
             except (ValueError, TypeError):
+                return str(expected_value) == str(actual_value)
+        
+        # Handle Decimal comparisons - ClickHouse may return float or string for decimals
+        if isinstance(expected_value, Decimal):
+            try:
+                if isinstance(actual_value, (float, int)):
+                    # Convert float/int to Decimal for comparison
+                    actual_decimal = Decimal(str(actual_value))
+                    return expected_value == actual_decimal
+                elif isinstance(actual_value, str):
+                    # Parse string as Decimal
+                    actual_decimal = Decimal(actual_value)
+                    return expected_value == actual_decimal
+                elif isinstance(actual_value, Decimal):
+                    return expected_value == actual_value
+            except (ValueError, TypeError, InvalidOperation):
+                # Fall back to string comparison if decimal parsing fails
                 return str(expected_value) == str(actual_value)
         
         # Default comparison for all other cases
