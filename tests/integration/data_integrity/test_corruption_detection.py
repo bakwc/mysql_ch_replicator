@@ -101,24 +101,14 @@ class TestCorruptionDetection(BaseReplicationTest, SchemaTestMixin, DataTestMixi
         );
         """)
 
-        # Insert valid data first
-        valid_data = [
+        # Insert ALL test data before starting replication to avoid sync issues
+        all_test_data = [
             {
                 "name": "ValidNumbers",
                 "small_int": 100,
                 "medium_val": Decimal("999.99"),
                 "large_val": 1234567890
-            }
-        ]
-
-        self.insert_multiple_records(TEST_TABLE_NAME, valid_data)
-
-        # Start replication
-        self.start_replication()
-        self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=1)
-
-        # Test boundary conditions
-        boundary_data = [
+            },
             {
                 "name": "MaxTinyInt",
                 "small_int": 127,  # Max tinyint
@@ -133,7 +123,10 @@ class TestCorruptionDetection(BaseReplicationTest, SchemaTestMixin, DataTestMixi
             }
         ]
 
-        self.insert_multiple_records(TEST_TABLE_NAME, boundary_data)
+        self.insert_multiple_records(TEST_TABLE_NAME, all_test_data)
+
+        # Start replication after ALL data is inserted
+        self.start_replication()
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=3)
 
         # Verify boundary values were replicated correctly

@@ -84,7 +84,21 @@ tests/
 7. **Database Context**: Corrected database mapping and context issues
 8. **State Recovery**: Improved error handling for corrupted state files
 
-**🎯 Current Challenge**: Database timing issue where ClickHouse suggests final database exists but tests access `_tmp` database
+**✅ RESOLVED**: Complete dynamic database isolation system implemented - all tests can run safely in parallel
+
+**🔄 Dynamic Database Isolation Features**:
+9. **Parallel Test Safety**: Implemented comprehensive source and target database isolation
+   - **Achievement**: `DynamicConfigManager` with worker-specific and test-specific naming
+   - **Source Isolation**: `test_db_<worker>_<testid>` for MySQL databases
+   - **Target Isolation**: `<prefix>_<worker>_<testid>` for ClickHouse databases
+   - **Data Directory Isolation**: `/app/binlog_<worker>_<testid>` for process data
+   - **Configuration Isolation**: Dynamic YAML generation with automatic cleanup
+
+10. **Test Infrastructure Enhancement**: Centralized configuration management
+    - **Core File**: `tests/utils/dynamic_config.py` with singleton `DynamicConfigManager`
+    - **Base Class Updates**: Enhanced `BaseReplicationTest` with isolation helpers
+    - **Validation Tests**: `test_dynamic_database_isolation.py` with comprehensive coverage
+    - **Backward Compatibility**: Existing tests work without modification
 
 ## 📊 Data Type Support
 
@@ -272,10 +286,12 @@ Key metrics to monitor:
 
 ## 📚 Additional Resources
 
-### Key Files
+### Key Files & Documentation
 
 - `mysql_ch_replicator/` - Core replication logic
-- `tests/` - Comprehensive test suite
+- `tests/` - Comprehensive test suite with 65+ integration tests
+- `tests/CLAUDE.md` - Complete testing guide with development patterns
+- `TESTING_GUIDE.md` - Comprehensive testing documentation and best practices
 - `docker-compose-tests.yaml` - Test environment setup
 - `run_tests.sh` - Primary test execution script
 

@@ -36,7 +36,7 @@ class TestReferentialIntegrity(BaseReplicationTest, SchemaTestMixin, DataTestMix
         );
         """)
 
-        # Insert parent records
+        # Insert parent records first
         users_data = [
             {"username": "alice", "email": "alice@example.com"},
             {"username": "bob", "email": "bob@example.com"},
@@ -44,17 +44,12 @@ class TestReferentialIntegrity(BaseReplicationTest, SchemaTestMixin, DataTestMix
         ]
         self.insert_multiple_records("users", users_data)
 
-        # Start replication
-        self.start_replication()
-        self.wait_for_table_sync("users", expected_count=3)
-        self.wait_for_table_sync("orders", expected_count=0)
-
         # Get user IDs for foreign key references
         with self.mysql.get_connection() as (connection, cursor):
             cursor.execute("SELECT user_id, username FROM users ORDER BY user_id")
             user_mappings = {row[1]: row[0] for row in cursor.fetchall()}
 
-        # Insert child records with valid foreign keys
+        # Insert child records with valid foreign keys BEFORE starting replication
         orders_data = [
             {"user_id": user_mappings["alice"], "order_amount": 99.99, "status": "completed"},
             {"user_id": user_mappings["bob"], "order_amount": 149.50, "status": "pending"},
@@ -63,7 +58,9 @@ class TestReferentialIntegrity(BaseReplicationTest, SchemaTestMixin, DataTestMix
         ]
         self.insert_multiple_records("orders", orders_data)
 
-        # Wait for replication
+        # Start replication AFTER all data is inserted
+        self.start_replication()
+        self.wait_for_table_sync("users", expected_count=3)
         self.wait_for_table_sync("orders", expected_count=4)
 
         # Verify referential integrity in ClickHouse
@@ -116,12 +113,7 @@ class TestReferentialIntegrity(BaseReplicationTest, SchemaTestMixin, DataTestMix
         ]
         self.insert_multiple_records("inventory", inventory_data)
 
-        # Start replication
-        self.start_replication()
-        self.wait_for_table_sync("inventory", expected_count=3)
-        self.wait_for_table_sync("transactions", expected_count=0)
-
-        # Perform multi-table transaction operations
+        # Perform multi-table transaction operations BEFORE starting replication
         transaction_scenarios = [
             # Purchase - increase inventory, record transaction
             {
@@ -175,7 +167,9 @@ class TestReferentialIntegrity(BaseReplicationTest, SchemaTestMixin, DataTestMix
                 cursor.execute("COMMIT")
                 connection.commit()
 
-        # Wait for replication to complete
+        # Start replication AFTER all transactions are complete
+        self.start_replication()
+        self.wait_for_table_sync("inventory", expected_count=3)
         self.wait_for_table_sync("transactions", expected_count=3)
 
         # Verify transaction integrity

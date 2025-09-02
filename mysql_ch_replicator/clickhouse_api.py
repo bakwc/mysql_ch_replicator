@@ -97,6 +97,10 @@ class ClickhouseApi:
         self.stats = GeneralStats()
         self.execute_command('SET final = 1;')
 
+    def update_database_context(self, database: str):
+        """Update the database context for subsequent queries"""
+        self.database = database
+
     def get_stats(self):
         stats = self.stats.to_dict()
         self.stats = GeneralStats()

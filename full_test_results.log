@@ -1,0 +1,34 @@
+🐳 Starting Docker services...
+🔍 Phase 1.75: Running infrastructure health check...
+================================================================================
+Phase 1.75 Infrastructure Monitoring Report
+Generated: 2025-08-31 12:39:38
+================================================================================
+
+SUMMARY: 1 passed, 0 warnings, 1 failures
+❌ FAILURES DETECTED - Immediate action required
+
+------------------------------------------------------------
+❌ PROCESS_HEALTH: Container issues detected: 3 missing, 0 unhealthy
+Details: {
+  "missing_containers": [
+    "mysql_ch_replicator_src-replicator-1",
+    "mysql_ch_replicator_src-mysql_db-1",
+    "mysql_ch_replicator_src-clickhouse_db-1"
+  ],
+  "unhealthy_containers": [],
+  "all_containers": {}
+}
+Recommendations:
+  • Restart Docker containers: docker compose -f docker-compose-tests.yaml up --force-recreate -d
+  • Check container logs: docker logs [container_name]
+
+------------------------------------------------------------
+✅ PERFORMANCE_BASELINE: Performance within acceptable range: 3.9s (baseline: 45s)
+Details: {
+  "runtime": 3.86785888671875,
+  "baseline": 45
+}
+
+================================================================================
+❌ Infrastructure health check failed - aborting test execution

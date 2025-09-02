@@ -34,21 +34,32 @@ class TestParallelInitialReplication(
         for i in range(10):
             self.insert_basic_record(TEST_TABLE_NAME, f"Employee_{i}", 25 + i)
 
-        # Use RunAllRunner for parallel processing
-        runner = RunAllRunner(cfg_file=config_file)
-        runner.run()
+        # ✅ CRITICAL FIX: Use isolated config for parallel processing
+        from tests.utils.dynamic_config import create_dynamic_config
+        
+        isolated_config = create_dynamic_config(base_config_path=config_file)
+        
+        try:
+            runner = RunAllRunner(cfg_file=isolated_config)
+            runner.run()
 
-        # Wait for replication to complete
-        self.wait_for_table_sync(TEST_TABLE_NAME)
+            # Wait for replication to complete
+            self.wait_for_table_sync(TEST_TABLE_NAME)
 
-        # Verify all data is replicated correctly
-        expected_count = len(test_data) + 10
-        self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=expected_count)
+            # Verify all data is replicated correctly
+            expected_count = len(test_data) + 10
+            self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=expected_count)
 
-        # Verify specific records
-        self.verify_record_exists(TEST_TABLE_NAME, "name='Employee_5'", {"age": 30})
+            # Verify specific records
+            self.verify_record_exists(TEST_TABLE_NAME, "name='Employee_5'", {"age": 30})
 
-        runner.stop()
+            runner.stop()
+        
+        finally:
+            # ✅ CLEANUP: Remove isolated config file
+            import os
+            if os.path.exists(isolated_config):
+                os.unlink(isolated_config)
 
     @pytest.mark.integration
     def test_parallel_initial_replication_record_versions_advanced(self):
@@ -60,8 +71,12 @@ class TestParallelInitialReplication(
 
         from tests.conftest import BinlogReplicatorRunner, DbReplicatorRunner
 
-        # Only run this test with parallel configuration
-        config_file = "tests/configs/replicator/tests_config_parallel.yaml"
+        # ✅ CRITICAL FIX: Use isolated config instead of hardcoded parallel config
+        from tests.utils.dynamic_config import create_dynamic_config
+        
+        config_file = create_dynamic_config(
+            base_config_path="tests/configs/replicator/tests_config_parallel.yaml"
+        )
 
         # Manually load config to check parallel settings
         self.cfg.load(config_file)
@@ -170,3 +185,8 @@ class TestParallelInitialReplication(
         binlog_replicator_runner.stop()
         realtime_db_replicator.stop()
         db_replicator_runner.stop()
+        
+        # ✅ CLEANUP: Remove isolated config file
+        import os
+        if os.path.exists(config_file):
+            os.unlink(config_file)

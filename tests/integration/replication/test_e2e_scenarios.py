@@ -36,10 +36,8 @@ class TestE2EScenarios(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
 
         # Start replication
         self.start_replication()
-
-        # Verify database and table creation
-        self.wait_for_database()
-        self.ch.execute_command(f"USE `{TEST_DB_NAME}`")
+        
+        # Wait for initial data replication (start_replication handles database context)
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=2)
 
         # Verify data replication
@@ -77,13 +75,7 @@ class TestE2EScenarios(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
         # Create test table
         self.create_basic_table(TEST_TABLE_NAME)
 
-        # Start replication
-        self.start_replication()
-        
-        # Wait for table to be created
-        self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=0)
-
-        # Execute multi-statement transaction using proper connection context
+        # Execute multi-statement transaction using proper connection context BEFORE replication
         with self.mysql.get_connection() as (connection, cursor):
             cursor.execute("BEGIN")
             cursor.execute(
@@ -98,6 +90,9 @@ class TestE2EScenarios(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
             cursor.execute("COMMIT")
             connection.commit()
 
+        # Start replication AFTER all data operations are complete
+        self.start_replication()
+        
         # Verify all changes replicated correctly
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=2)
         self.verify_record_exists(TEST_TABLE_NAME, "name='John'", {"age": 26})

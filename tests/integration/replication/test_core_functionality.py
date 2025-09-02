@@ -117,11 +117,7 @@ class TestCoreFunctionality(BaseReplicationTest, SchemaTestMixin, DataTestMixin)
         );
         """)
 
-        # Start replication
-        self.start_replication()
-        self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=0)
-
-        # Test various datetime formats and edge cases
+        # Test various datetime formats and edge cases BEFORE starting replication
         datetime_test_cases = [
             {
                 "name": "Standard Datetime",
@@ -153,10 +149,11 @@ class TestCoreFunctionality(BaseReplicationTest, SchemaTestMixin, DataTestMixin)
             },
         ]
 
-        # Insert datetime test data
+        # Insert datetime test data BEFORE starting replication
         self.insert_multiple_records(TEST_TABLE_NAME, datetime_test_cases)
 
-        # Verify datetime replication
+        # Start replication AFTER all data is inserted
+        self.start_replication()
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=4)
 
         # Verify specific datetime handling

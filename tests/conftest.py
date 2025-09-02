@@ -12,50 +12,64 @@ import yaml
 from mysql_ch_replicator import clickhouse_api, config, mysql_api
 from mysql_ch_replicator.runner import ProcessRunner
 from tests.utils.mysql_test_api import MySQLTestApi
+from tests.utils.dynamic_config import (
+    get_config_manager,
+    get_isolated_database_name,
+    get_isolated_table_name,
+    get_isolated_data_dir,
+    create_dynamic_config,
+    reset_test_isolation,
+    cleanup_config_files,
+)
+
+# Pytest session hooks for centralized test ID coordination
+def pytest_sessionstart(session):
+    """Initialize centralized test ID coordination at session start"""
+    from tests.utils.test_id_manager import initialize_test_coordination
+    initialize_test_coordination()
+    print("Test subprocess coordination initialized")
+
+def pytest_sessionfinish(session, exitstatus):
+    """Clean up test ID coordination at session end"""
+    if exitstatus != 0:
+        print(f"Tests completed with status: {exitstatus}")
+        # Optional: Debug output for failed tests
+        from tests.utils.test_id_manager import get_test_id_manager
+        manager = get_test_id_manager()
+        debug_info = manager.debug_status()
+        print(f"Final test ID state: {debug_info}")
 
 # Constants
 CONFIG_FILE = "tests/configs/replicator/tests_config.yaml"
 CONFIG_FILE_MARIADB = "tests/configs/replicator/tests_config_mariadb.yaml"
 
-# Test isolation for parallel testing
-import uuid
-import threading
+# Get the dynamic configuration manager
+_config_manager = get_config_manager()
 
-# Thread-local storage for test-specific names
-_test_local = threading.local()
-
+# Backward compatibility functions (delegate to dynamic config manager)
 def get_worker_id():
     """Get pytest-xdist worker ID for database isolation"""
-    worker_id = os.environ.get('PYTEST_XDIST_WORKER', 'master')
-    return worker_id.replace('gw', 'w')  # gw0 -> w0, gw1 -> w1, etc.
+    return _config_manager.get_worker_id()
 
 def get_test_id():
     """Get unique test identifier for complete isolation"""
-    if not hasattr(_test_local, 'test_id'):
-        _test_local.test_id = uuid.uuid4().hex[:8]
-    return _test_local.test_id
+    return _config_manager.get_test_id()
 
 def reset_test_id():
     """Reset test ID for new test (called by fixture)"""
-    _test_local.test_id = uuid.uuid4().hex[:8]
+    return _config_manager.reset_test_id()
 
 def get_test_db_name(suffix=""):
     """Get test-specific database name (unique per test per worker)"""
-    worker_id = get_worker_id()
-    test_id = get_test_id()
-    return f"test_db_{worker_id}_{test_id}{suffix}"
+    return _config_manager.get_isolated_database_name(suffix)
 
 def get_test_table_name(suffix=""):
     """Get test-specific table name (unique per test per worker)"""  
-    worker_id = get_worker_id()
-    test_id = get_test_id()
-    return f"test_table_{worker_id}_{test_id}{suffix}"
+    return _config_manager.get_isolated_table_name(suffix)
 
 def get_test_data_dir(suffix=""):
     """Get worker and test isolated data directory (unique per test per worker)"""
-    worker_id = get_worker_id()
-    test_id = get_test_id()
-    return f"/app/binlog_{worker_id}_{test_id}{suffix}"
+    return _config_manager.get_isolated_data_dir(suffix)
 
 def get_test_log_dir(suffix=""):
     """Get worker-isolated log directory (unique per worker)"""
@@ -70,7 +84,7 @@ def get_isolated_binlog_path(database_name=None):
 # Initialize with default values - will be updated per test
 TEST_DB_NAME = get_test_db_name()
 TEST_DB_NAME_2 = get_test_db_name("_2") 
-TEST_DB_NAME_2_DESTINATION = f"replication_dest_{get_worker_id()}_{get_test_id()}"
+TEST_DB_NAME_2_DESTINATION = _config_manager.get_isolated_target_database_name(TEST_DB_NAME, "replication_dest")
 TEST_TABLE_NAME = get_test_table_name()
 TEST_TABLE_NAME_2 = get_test_table_name("_2")
 TEST_TABLE_NAME_3 = get_test_table_name("_3")
@@ -80,33 +94,31 @@ TEST_DATA_DIR = get_test_data_dir()
 TEST_LOG_DIR = get_test_log_dir()
 
 def update_test_constants():
-    """Update module-level constants with new test IDs"""
+    """Update module-level constants with current test IDs (do NOT generate new ID)"""
     global TEST_DB_NAME, TEST_DB_NAME_2, TEST_DB_NAME_2_DESTINATION
     global TEST_TABLE_NAME, TEST_TABLE_NAME_2, TEST_TABLE_NAME_3
     global TEST_DATA_DIR, TEST_LOG_DIR
     
-    reset_test_id()  # Generate new test ID
+    # CRITICAL FIX: Do NOT reset test isolation here - use existing test ID
+    # reset_test_isolation()  # REMOVED - this was causing ID mismatches
     
-    # Capture the same test_id for all constants to ensure consistency
-    worker_id = get_worker_id()
-    test_id = get_test_id()
-    
-    TEST_DB_NAME = f"test_db_{worker_id}_{test_id}"
-    TEST_DB_NAME_2 = f"test_db_{worker_id}_{test_id}_2"
-    TEST_DB_NAME_2_DESTINATION = f"replication_dest_{worker_id}_{test_id}"
-    TEST_TABLE_NAME = f"test_table_{worker_id}_{test_id}"
-    TEST_TABLE_NAME_2 = f"test_table_{worker_id}_{test_id}_2"
-    TEST_TABLE_NAME_3 = f"test_table_{worker_id}_{test_id}_3"
+    # Update all constants using the centralized manager with CURRENT test ID
+    TEST_DB_NAME = get_test_db_name()
+    TEST_DB_NAME_2 = get_test_db_name("_2")
+    TEST_DB_NAME_2_DESTINATION = _config_manager.get_isolated_target_database_name(TEST_DB_NAME, "replication_dest")
+    TEST_TABLE_NAME = get_test_table_name()
+    TEST_TABLE_NAME_2 = get_test_table_name("_2")
+    TEST_TABLE_NAME_3 = get_test_table_name("_3")
     
     # Update path constants
-    TEST_DATA_DIR = f"/app/binlog_{worker_id}_{test_id}"
-    TEST_LOG_DIR = f"/app/binlog_{worker_id}_{test_id}/logs"
+    TEST_DATA_DIR = get_test_data_dir()
+    TEST_LOG_DIR = get_test_log_dir()
 
 
 # Test runners
 class BinlogReplicatorRunner(ProcessRunner):
     def __init__(self, cfg_file=CONFIG_FILE):
-        super().__init__(f"./main.py --config {cfg_file} binlog_replicator")
+        super().__init__(f"python ./main.py --config {cfg_file} binlog_replicator")
 
 
 class DbReplicatorRunner(ProcessRunner):
@@ -115,13 +127,13 @@ class DbReplicatorRunner(ProcessRunner):
         if not additional_arguments.startswith(" "):
             additional_arguments = " " + additional_arguments
         super().__init__(
-            f"./main.py --config {cfg_file} --db {db_name} db_replicator{additional_arguments}"
+            f"python ./main.py --config {cfg_file} --db {db_name} db_replicator{additional_arguments}"
         )
 
 
 class RunAllRunner(ProcessRunner):
     def __init__(self, cfg_file=CONFIG_FILE):
-        super().__init__(f"./main.py --config {cfg_file} run_all")
+        super().__init__(f"python ./main.py --config {cfg_file} run_all")
 
 
 # Database operation helpers
@@ -153,13 +165,52 @@ def kill_process(pid, force=False):
 
 
 def assert_wait(condition, max_wait_time=20.0, retry_interval=0.05):
-    """Wait for a condition to be true with timeout"""
+    """Wait for a condition to be true with timeout - circuit breaker for hanging tests"""
+    # Hard limit to prevent infinite hangs - no test should wait more than 5 minutes
+    ABSOLUTE_MAX_WAIT = 300.0  # 5 minutes
+    max_wait_time = min(max_wait_time, ABSOLUTE_MAX_WAIT)
+    
     max_time = time.time() + max_wait_time
+    iteration = 0
+    consecutive_failures = 0
+    
     while time.time() < max_time:
-        if condition():
-            return
+        try:
+            if condition():
+                return
+            consecutive_failures = 0  # Reset failure counter on success
+        except Exception as e:
+            consecutive_failures += 1
+            
+            # Circuit breaker: fail fast after many consecutive failures
+            if consecutive_failures >= 50:  # ~2.5 seconds of consecutive failures
+                print(f"CIRCUIT BREAKER: Too many consecutive failures ({consecutive_failures}), failing fast")
+                raise AssertionError(f"Circuit breaker triggered after {consecutive_failures} consecutive failures: {e}")
+            
+            # Log exceptions but continue trying for intermittent failures
+            if iteration % 20 == 0:  # Log every 20 iterations (~1 second)
+                print(f"DEBUG: assert_wait condition failed with: {e} (failures: {consecutive_failures})")
+            
         time.sleep(retry_interval)
-    assert condition()
+        iteration += 1
+        
+        # Add periodic progress reporting for long waits
+        if iteration % 100 == 0:  # Every ~5 seconds
+            elapsed = time.time() - (max_time - max_wait_time)
+            print(f"DEBUG: assert_wait still waiting... {elapsed:.1f}s/{max_wait_time}s elapsed (iteration {iteration})")
+            
+        # Emergency escape hatch: if we've been waiting too long, something is seriously wrong
+        if iteration > 4000:  # 200 seconds at 0.05 interval
+            print(f"EMERGENCY TIMEOUT: Test has been waiting for {iteration * retry_interval:.1f}s, aborting")
+            raise AssertionError(f"Emergency timeout after {iteration * retry_interval:.1f}s")
+    
+    # Final attempt with full error reporting
+    try:
+        assert condition()
+    except Exception as e:
+        elapsed = time.time() - (max_time - max_wait_time)
+        print(f"ERROR: assert_wait failed after {elapsed:.1f}s: {e}")
+        raise
 
 
 def prepare_env(
@@ -257,18 +308,35 @@ def get_last_insert_from_binlog(cfg, db_name: str):
 # Per-test isolation fixture
 @pytest.fixture(autouse=True, scope="function")
 def isolate_test_databases():
-    """Automatically isolate databases for each test"""
-    update_test_constants()
+    """Automatically isolate databases for each test with enhanced coordination"""
+    # STEP 1: Use existing test ID or generate one if none exists (preserves consistency)
+    # This prevents overwriting test IDs that may have already been used for database creation
+    from tests.utils.test_id_manager import get_test_id_manager
+    manager = get_test_id_manager()
+    
+    # Get or create test ID (doesn't overwrite existing)
+    current_test_id = manager.get_test_id()
+    
+    # STEP 2: Update test constants with the current ID (not a new one)
+    update_test_constants()  # Use existing ID for constants
+    
+    # STEP 3: Verify environment is correctly set for subprocess inheritance
+    test_id = os.environ.get('PYTEST_TEST_ID')
+    if not test_id:
+        worker_id = os.environ.get('PYTEST_XDIST_WORKER', 'master')
+        print(f"WARNING: PYTEST_TEST_ID not set in environment for worker {worker_id}")
+    else:
+        print(f"DEBUG: Using consistent test ID {test_id} for isolation")
+    
     yield
     # Note: cleanup handled by clean_environment fixtures
 
 # Pytest fixtures
 @pytest.fixture
 def test_config():
-    """Load test configuration"""
-    cfg = config.Settings()
-    cfg.load(CONFIG_FILE)
-    return cfg
+    """Load test configuration with proper binlog directory isolation"""
+    # ✅ CRITICAL FIX: Use isolated config instead of hardcoded CONFIG_FILE
+    return load_isolated_config(CONFIG_FILE)
 
 
 @pytest.fixture
@@ -317,7 +385,7 @@ def cleanup_worker_directories(worker_id=None):
     if worker_id is None:
         worker_id = get_worker_id()
     
-    pattern = f"/app/binlog_{worker_id}_*"
+    pattern = f"/app/binlog/{worker_id}_*"
     worker_test_dirs = glob.glob(pattern)
     for dir_path in worker_test_dirs:
         if os.path.exists(dir_path):
@@ -327,7 +395,7 @@ def cleanup_worker_directories(worker_id=None):
 def cleanup_all_isolated_directories():
     """Clean up all isolated test directories"""
     import glob
-    patterns = ["/app/binlog_w*", "/app/binlog_main_*"]
+    patterns = ["/app/binlog/w*", "/app/binlog/main_*", "/app/binlog/master_*"]
     for pattern in patterns:
         test_dirs = glob.glob(pattern)
         for dir_path in test_dirs:
@@ -383,8 +451,8 @@ def dynamic_clickhouse_api_instance(dynamic_config):
 @pytest.fixture
 def clean_environment(test_config, mysql_api_instance, clickhouse_api_instance):
     """Provide clean test environment with automatic cleanup"""
-    # Generate new test-specific database names for this test
-    update_test_constants()
+    # FIXED: Use current test-specific database names (already set by isolate_test_databases fixture)
+    # update_test_constants()  # REMOVED - redundant and could cause ID mismatches
     
     # Capture current test-specific database names
     current_test_db = TEST_DB_NAME
@@ -418,8 +486,8 @@ def dynamic_clean_environment(
     dynamic_config, dynamic_mysql_api_instance, dynamic_clickhouse_api_instance
 ):
     """Provide clean test environment with dynamic config and automatic cleanup"""
-    # Generate new test-specific database names for this test
-    update_test_constants()
+    # FIXED: Use current test-specific database names (already set by isolate_test_databases fixture)
+    # update_test_constants()  # REMOVED - redundant and could cause ID mismatches
     
     # Capture current test-specific database names
     current_test_db = TEST_DB_NAME
@@ -448,102 +516,59 @@ def dynamic_clean_environment(
 
 @pytest.fixture  
 def isolated_clean_environment(isolated_config, mysql_api_instance, clickhouse_api_instance):
-    """Provide isolated clean test environment for parallel testing"""
-    import tempfile
-    import yaml
+    """Provide isolated clean test environment for parallel testing using dynamic config system"""
     
-    # Generate new test-specific database names and paths for this test
-    update_test_constants()
+    # FIXED: Use current test-specific database names (already set by isolate_test_databases fixture)
+    # update_test_constants()  # REMOVED - redundant and could cause ID mismatches
     
     # Capture current test-specific database names
     current_test_db = TEST_DB_NAME
     current_test_db_2 = TEST_DB_NAME_2
     current_test_dest = TEST_DB_NAME_2_DESTINATION
     
-    # Create temporary config file with isolated paths
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as temp_config_file:
-        # Convert config object back to dictionary for YAML serialization
-        config_dict = {
-            'mysql': {
-                'host': isolated_config.mysql.host,
-                'port': isolated_config.mysql.port,
-                'user': isolated_config.mysql.user,
-                'password': isolated_config.mysql.password,
-                'pool_size': isolated_config.mysql.pool_size,
-                'max_overflow': isolated_config.mysql.max_overflow
-            },
-            'clickhouse': {
-                'host': isolated_config.clickhouse.host,
-                'port': isolated_config.clickhouse.port,
-                'user': isolated_config.clickhouse.user,
-                'password': isolated_config.clickhouse.password,
-            },
-            'binlog_replicator': {
-                'data_dir': isolated_config.binlog_replicator.data_dir,
-                'records_per_file': isolated_config.binlog_replicator.records_per_file,
-                'binlog_retention_period': isolated_config.binlog_replicator.binlog_retention_period,
-            },
-            'databases': isolated_config.databases,
-            'log_level': isolated_config.log_level,
-            'optimize_interval': isolated_config.optimize_interval,
-            'check_db_updated_interval': isolated_config.check_db_updated_interval,
-        }
-        
-        # Add optional fields if they exist
-        if hasattr(isolated_config, 'target_databases') and isolated_config.target_databases:
-            config_dict['target_databases'] = isolated_config.target_databases
-        if hasattr(isolated_config, 'indexes') and isolated_config.indexes:
-            # Convert Index objects to dictionaries for YAML serialization
-            config_dict['indexes'] = []
-            for index in isolated_config.indexes:
-                if hasattr(index, '__dict__'):
-                    # Convert Index object to dict manually
-                    index_dict = {
-                        'databases': index.databases,
-                        'tables': index.tables if hasattr(index, 'tables') else [],
-                        'index': index.index if hasattr(index, 'index') else ''
-                    }
-                    config_dict['indexes'].append(index_dict)
-                else:
-                    config_dict['indexes'].append(index)
-        if hasattr(isolated_config, 'http_host'):
-            config_dict['http_host'] = isolated_config.http_host
-        if hasattr(isolated_config, 'http_port'):
-            config_dict['http_port'] = isolated_config.http_port
-        if hasattr(isolated_config, 'types_mapping') and isolated_config.types_mapping:
-            config_dict['types_mapping'] = isolated_config.types_mapping
-            
-        yaml.dump(config_dict, temp_config_file)
-        temp_config_path = temp_config_file.name
+    # Create dynamic configuration file with complete isolation
+    original_config_file = getattr(isolated_config, 'config_file', CONFIG_FILE)
     
-    # Store the config file path in the config object
-    isolated_config.config_file = temp_config_path
+    # Prepare target database mappings if needed
+    target_mappings = None
+    if hasattr(isolated_config, 'target_databases') and isolated_config.target_databases:
+        # Convert any existing static mappings to dynamic
+        target_mappings = _config_manager.create_isolated_target_mappings(
+            source_databases=[current_test_db, current_test_db_2],
+            target_prefix="isolated_target"
+        )
+    
+    # Create dynamic config using centralized system
+    temp_config_path = create_dynamic_config(
+        base_config_path=original_config_file,
+        target_mappings=target_mappings
+    )
+    
+    # Load the dynamic config
+    dynamic_config = load_isolated_config(temp_config_path)
+    dynamic_config.config_file = temp_config_path
+    dynamic_config.test_db_name = current_test_db
     
     # Prepare environment with isolated paths
-    prepare_env(isolated_config, mysql_api_instance, clickhouse_api_instance, db_name=current_test_db)
+    prepare_env(dynamic_config, mysql_api_instance, clickhouse_api_instance, db_name=current_test_db)
     
-    # Store the database name in the test config so it can be used consistently  
-    isolated_config.test_db_name = current_test_db
-    
-    yield isolated_config, mysql_api_instance, clickhouse_api_instance
+    yield dynamic_config, mysql_api_instance, clickhouse_api_instance
     
     # Cleanup the test databases
     try:
         cleanup_databases = [current_test_db, current_test_db_2, current_test_dest]
+        if target_mappings:
+            cleanup_databases.extend(target_mappings.values())
+            
         for db_name in cleanup_databases:
             mysql_drop_database(mysql_api_instance, db_name)
-            clickhouse_drop_database(clickhouse_api_instance, db_name)
+            clickhouse_api_instance.drop_database(db_name)
     except Exception:
         pass  # Ignore cleanup errors
     
-    # Clean up the isolated test directory
+    # Clean up the isolated test directory and config files
     cleanup_test_directory()
-    
-    # Clean up the temporary config file
-    try:
-        os.unlink(temp_config_path)
-    except:
-        pass
+    cleanup_config_files()
 
 @pytest.fixture
 def temp_config_file():

@@ -57,6 +57,9 @@ class TestBasicCrudOperations(BaseReplicationTest, SchemaTestMixin, DataTestMixi
                 self.mysql = original_mysql
         else:
             # Use standard setup for default config
+            # Ensure database exists before creating table
+            self.ensure_database_exists(TEST_DB_NAME)
+            
             # Create table using schema helper
             schema = TableSchemas.basic_user_with_blobs(TEST_TABLE_NAME)
             self.mysql.execute(schema.sql)
@@ -68,6 +71,9 @@ class TestBasicCrudOperations(BaseReplicationTest, SchemaTestMixin, DataTestMixi
             # Start replication
             self.start_replication(db_name=TEST_DB_NAME, config_file=config_file)
 
+        # Update ClickHouse context to handle database lifecycle transitions
+        self.update_clickhouse_database_context(TEST_DB_NAME)
+        
         # Verify data sync
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=len(test_data))
 
@@ -103,6 +109,10 @@ class TestBasicCrudOperations(BaseReplicationTest, SchemaTestMixin, DataTestMixi
 
         # Start replication
         self.start_replication()
+        
+        # Update ClickHouse context to handle database lifecycle transitions
+        self.update_clickhouse_database_context()
+        
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=2)
 
         # Insert new data after replication started
@@ -123,6 +133,10 @@ class TestBasicCrudOperations(BaseReplicationTest, SchemaTestMixin, DataTestMixi
 
         # Start replication
         self.start_replication()
+        
+        # Update ClickHouse context to handle database lifecycle transitions
+        self.update_clickhouse_database_context()
+        
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=1)
 
         # Update record
@@ -145,6 +159,10 @@ class TestBasicCrudOperations(BaseReplicationTest, SchemaTestMixin, DataTestMixi
 
         # Start replication
         self.start_replication()
+        
+        # Update ClickHouse context to handle database lifecycle transitions
+        self.update_clickhouse_database_context()
+        
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=3)
 
         # Delete one record

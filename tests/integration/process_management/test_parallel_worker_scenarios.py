@@ -28,9 +28,14 @@ class TestParallelWorkerScenarios(BaseReplicationTest, SchemaTestMixin, DataTest
         self.insert_multiple_records(TEST_TABLE_NAME, initial_data)
 
         # Start parallel replication
-        runner = RunAllRunner(
-            cfg_file="tests/configs/replicator/tests_config_parallel.yaml"
+        # ✅ CRITICAL FIX: Use isolated config for parallel replication
+        from tests.utils.dynamic_config import create_dynamic_config
+        
+        isolated_config = create_dynamic_config(
+            base_config_path="tests/configs/replicator/tests_config_parallel.yaml"
         )
+        
+        runner = RunAllRunner(cfg_file=isolated_config)
         runner.run()
 
         # Wait for replication to start and set ClickHouse database context
@@ -64,9 +69,14 @@ class TestParallelWorkerScenarios(BaseReplicationTest, SchemaTestMixin, DataTest
             self.insert_basic_record(TEST_TABLE_NAME, f"User_{i:03d}", 20 + (i % 50))
 
         # Start parallel replication
-        runner = RunAllRunner(
-            cfg_file="tests/configs/replicator/tests_config_parallel.yaml"
+        # ✅ CRITICAL FIX: Use isolated config for parallel replication
+        from tests.utils.dynamic_config import create_dynamic_config
+        
+        isolated_config = create_dynamic_config(
+            base_config_path="tests/configs/replicator/tests_config_parallel.yaml"
         )
+        
+        runner = RunAllRunner(cfg_file=isolated_config)
         runner.run()
 
         # Wait for replication to start and set ClickHouse database context
@@ -163,9 +173,14 @@ class TestParallelWorkerScenarios(BaseReplicationTest, SchemaTestMixin, DataTest
             )
 
         # Start parallel replication
-        runner = RunAllRunner(
-            cfg_file="tests/configs/replicator/tests_config_parallel.yaml"
+        # ✅ CRITICAL FIX: Use isolated config for parallel replication
+        from tests.utils.dynamic_config import create_dynamic_config
+        
+        isolated_config = create_dynamic_config(
+            base_config_path="tests/configs/replicator/tests_config_parallel.yaml"
         )
+        
+        runner = RunAllRunner(cfg_file=isolated_config)
         runner.run()
 
         # Wait for replication to start and set ClickHouse database context
@@ -194,9 +209,14 @@ class TestParallelWorkerScenarios(BaseReplicationTest, SchemaTestMixin, DataTest
         self.insert_multiple_records("group", reserved_data)
 
         # Start parallel replication
-        runner = RunAllRunner(
-            cfg_file="tests/configs/replicator/tests_config_parallel.yaml"
+        # ✅ CRITICAL FIX: Use isolated config for parallel replication
+        from tests.utils.dynamic_config import create_dynamic_config
+        
+        isolated_config = create_dynamic_config(
+            base_config_path="tests/configs/replicator/tests_config_parallel.yaml"
         )
+        
+        runner = RunAllRunner(cfg_file=isolated_config)
         runner.run()
 
         # Wait for replication to start and set ClickHouse database context

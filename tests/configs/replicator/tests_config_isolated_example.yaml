@@ -20,7 +20,7 @@ binlog_replicator:
   # Original path: "/app/binlog/"
   # Automatically isolated to: "/app/binlog_{worker_id}_{test_id}/" 
   # Example result: "/app/binlog_w12_a1b2c3d4/"
-  data_dir: "/app/binlog_w12_a1b2c3d4/"
+  data_dir: "/tmp/binlog_w12_a1b2c3d4/"
   records_per_file: 100000
   binlog_retention_period: 43200 # 12 hours in seconds
 

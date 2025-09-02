@@ -11,7 +11,7 @@ clickhouse:
   password: 'admin'
 
 binlog_replicator:
-  data_dir: '/app/binlog/'
+  data_dir: '/tmp/binlog/'
   records_per_file: 100000
 
 databases: 'test_replication'

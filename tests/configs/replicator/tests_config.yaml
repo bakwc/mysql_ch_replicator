@@ -13,7 +13,7 @@ clickhouse:
   password: "admin"
 
 binlog_replicator:
-  data_dir: "/app/binlog/" # For parallel testing: automatic isolation to /app/binlog_{worker_id}_{test_id}
+  data_dir: "/tmp/binlog/" # Use writable temp directory instead of read-only /app/binlog/
   records_per_file: 100000
   binlog_retention_period: 43200 # 12 hours in seconds
 
@@ -22,8 +22,7 @@ log_level: "debug"
 optimize_interval: 3
 check_db_updated_interval: 3
 
-target_databases:
-  replication-test_db_2: replication-destination
+target_databases: {}
 
 indexes:
   - databases: "*"

@@ -8,6 +8,20 @@ from typing import Any, Dict, List
 class DataTestMixin:
     """Mixin providing common data operation methods"""
 
+    def _refresh_database_context(self):
+        """Refresh ClickHouse database context if database has transitioned from _tmp to final"""
+        try:
+            databases = self.ch.get_databases()
+            current_db = self.ch.database
+            if current_db and current_db.endswith('_tmp'):
+                target_db = current_db.replace('_tmp', '')
+                if target_db in databases and target_db != current_db:
+                    print(f"DEBUG: Database transitioned from '{current_db}' to '{target_db}' during replication")
+                    self.ch.update_database_context(target_db)
+        except Exception as e:
+            print(f"DEBUG: Error refreshing database context: {e}")
+            # Continue with current context - don't fail the test on context refresh issues
+
     def _format_sql_value(self, value):
         """Convert a Python value to SQL format with proper escaping"""
         if value is None:
@@ -51,17 +65,25 @@ class DataTestMixin:
 
     def insert_multiple_records(self, table_name, records: List[Dict[str, Any]]):
         """Insert multiple records from list of dictionaries using parameterized queries"""
+        if not records:
+            return
+        
+        # Build all INSERT commands with parameterized queries
+        commands = []
         for record in records:
             fields = ", ".join(f"`{field}`" for field in record.keys())
             placeholders = ", ".join(["%s"] * len(record))
             values = list(record.values())
             
-            # Use parameterized query for better SQL injection protection
-            self.mysql.execute(
+            # Add command and args as tuple for execute_batch
+            commands.append((
                 f"INSERT INTO `{table_name}` ({fields}) VALUES ({placeholders})",
-                commit=True,
-                args=values
-            )
+                values
+            ))
+        
+        # Execute all inserts in a single transaction using execute_batch
+        # This ensures atomicity and proper binlog event ordering
+        self.mysql.execute_batch(commands, commit=True)
 
     def update_record(self, table_name, where_clause, updates: Dict[str, Any]):
         """Update records with given conditions using parameterized queries"""
@@ -91,6 +113,8 @@ class DataTestMixin:
 
     def get_clickhouse_count(self, table_name, where_clause=""):
         """Get count of records in ClickHouse table"""
+        # Refresh database context before querying (might have changed during replication)
+        self._refresh_database_context()
         records = self.ch.select(table_name, where=where_clause)
         return len(records) if records else 0
 
@@ -154,6 +178,8 @@ class DataTestMixin:
 
     def verify_record_exists(self, table_name, where_clause, expected_fields=None):
         """Verify a record exists in ClickHouse with expected field values"""
+        # Refresh database context before querying (might have changed during replication)
+        self._refresh_database_context()
         records = self.ch.select(table_name, where=where_clause)
         assert len(records) > 0, f"No records found with condition: {where_clause}"
 
@@ -208,6 +234,8 @@ class DataTestMixin:
             self.wait_for_condition(condition, max_wait_time=max_wait_time)
         except AssertionError:
             # Provide helpful debugging information on timeout
+            # Refresh database context before debugging query
+            self._refresh_database_context()
             current_records = self.ch.select(table_name)
             raise AssertionError(
                 f"Record not found in table '{table_name}' with condition '{where_clause}' "
@@ -228,16 +256,22 @@ class DataTestMixin:
 
     def verify_record_does_not_exist(self, table_name, where_clause):
         """Verify a record does not exist in ClickHouse"""
+        # Refresh database context before querying (might have changed during replication)
+        self._refresh_database_context()
         records = self.ch.select(table_name, where=where_clause)
         assert len(records) == 0, f"Unexpected records found with condition: {where_clause}"
 
-    def wait_for_stable_state(self, table_name, expected_count, max_wait_time=20.0):
+    def wait_for_stable_state(self, table_name, expected_count=None, max_wait_time=20.0):
         """Wait for table to reach and maintain a stable record count"""
         def condition():
             try:
                 ch_count = self.get_clickhouse_count(table_name)
+                if expected_count is None:
+                    # Just wait for table to exist and have some records
+                    return ch_count >= 0  # Table exists
                 return ch_count == expected_count
-            except Exception:
+            except Exception as e:
+                print(f"DEBUG: wait_for_stable_state error: {e}")
                 return False
         
         # Use wait_for_condition method from BaseReplicationTest

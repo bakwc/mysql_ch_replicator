@@ -44,7 +44,7 @@ class TestHighVolumeReplication(BaseReplicationTest, SchemaTestMixin, DataTestMi
         
         # Wait for replication to complete
         replication_start = time.time()
-        self.wait_for_table_sync(table_name, expected_count=len(test_data), max_wait_time=300)
+        self.wait_for_table_sync(table_name, expected_count=len(test_data), max_wait_time=60)
         replication_time = time.time() - replication_start
         
         # Calculate performance metrics
@@ -96,7 +96,7 @@ class TestHighVolumeReplication(BaseReplicationTest, SchemaTestMixin, DataTestMi
                 print(f"Progress: {total_records}/{len(large_dataset)} records in {elapsed:.1f}s")
         
         # Wait for replication completion
-        self.wait_for_table_sync(table_name, expected_count=len(large_dataset), max_wait_time=600)
+        self.wait_for_table_sync(table_name, expected_count=len(large_dataset), max_wait_time=120)
         total_time = time.time() - start_time
         
         # Verify final results
