@@ -67,18 +67,21 @@ services:
       MYSQL_DATABASE: admin
       MYSQL_ROOT_HOST: "%"
       MYSQL_ROOT_PASSWORD: admin
+      MYSQL_ALLOW_EMPTY_PASSWORD: "no"
     ports:
       - "9308:3306"
     volumes:
       - ./tests/configs/docker/test_percona.cnf:/etc/mysql/conf.d/custom.cnf:ro
+      - percona_data:/var/lib/mysql
     networks:
       - default
+    command: --skip-mysqlx --socket=/tmp/mysql_percona.sock --pid-file=/tmp/mysql_percona.pid
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-padmin"]
-      interval: 10s      # Reduced from 10s
-      timeout: 5s       # Reduced from 5s  
-      retries: 10        # Reduced from 10
-      start_period: 90s # Reduced from 90s
+      test: ["CMD-SHELL", "mysqladmin ping --socket=/tmp/mysql_percona.sock -u root -padmin"]
+      interval: 30s
+      timeout: 10s  
+      retries: 3
+      start_period: 180s
 
   replicator:
     build:

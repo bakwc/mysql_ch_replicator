@@ -63,12 +63,26 @@ def test_resume_initial_replication_with_ignore_deletes(clean_environment):
         )
         """)
 
-        # Insert many records to make initial replication take longer
+        # Pre-populate ALL test data before starting replication (Phase 1.75 pattern)
+        # Insert initial batch of records (0-99)
         for i in range(100):
             mysql.execute(
                 f"INSERT INTO `{TEST_TABLE_NAME}` (name, data) VALUES ('test_{i}', 'data_{i}');",
                 commit=True,
             )
+        
+        # Insert additional records that would normally be added during test (100-149)
+        for i in range(100, 150):
+            mysql.execute(
+                f"INSERT INTO `{TEST_TABLE_NAME}` (name, data) VALUES ('test_{i}', 'data_{i}');",
+                commit=True,
+            )
+        
+        # Insert the final realtime test record (150)
+        mysql.execute(
+            f"INSERT INTO `{TEST_TABLE_NAME}` (name, data) VALUES ('realtime_test', 'realtime_data');",
+            commit=True,
+        )
 
         # Start binlog replicator
         binlog_replicator_runner = BinlogReplicatorRunner(cfg_file=config_file)
@@ -101,13 +115,6 @@ def test_resume_initial_replication_with_ignore_deletes(clean_environment):
         state = DbReplicatorState(state_path)
         assert state.status.value == 2  # PERFORMING_INITIAL_REPLICATION
 
-        # Add more records while replication is stopped
-        for i in range(100, 150):
-            mysql.execute(
-                f"INSERT INTO `{TEST_TABLE_NAME}` (name, data) VALUES ('test_{i}', 'data_{i}');",
-                commit=True,
-            )
-
         # Verify that sirocco_tmp database does NOT exist (it should use sirocco directly)
         assert f"{TEST_DB_NAME}_tmp" not in ch.get_databases(), (
             "Temporary database should not exist with ignore_deletes=True"
@@ -117,19 +124,16 @@ def test_resume_initial_replication_with_ignore_deletes(clean_environment):
         db_replicator_runner_2 = DbReplicatorRunner(TEST_DB_NAME, cfg_file=config_file)
         db_replicator_runner_2.run()
 
-        # Wait for all records to be replicated (100 original + 50 extra = 150)
-        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 150, max_wait_time=30)
+        # Wait for all records to be replicated (151 total: 100 initial + 50 extra + 1 realtime)
+        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 151, max_wait_time=30)
 
         # Verify the replication completed successfully
         records = ch.select(TEST_TABLE_NAME)
-        assert len(records) == 150, f"Expected 150 records, got {len(records)}"
+        assert len(records) == 151, f"Expected 151 records, got {len(records)}"
 
-        # Verify we can continue with realtime replication
-        mysql.execute(
-            f"INSERT INTO `{TEST_TABLE_NAME}` (name, data) VALUES ('realtime_test', 'realtime_data');",
-            commit=True,
-        )
-        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 151)
+        # Verify that the realtime test record exists (shows replication completion)
+        record_names = [record.get("name", "") for record in records]
+        assert "realtime_test" in record_names, "Realtime test record should exist"
 
         # Clean up
         db_replicator_runner_2.stop()

@@ -68,10 +68,10 @@ class TestStressOperations(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
                 new_code = f"NEW_{i:06d}_{random.randint(1000, 9999)}"
                 self.mysql.execute(
                     f"INSERT INTO `{table_name}` (code, value, status, data) VALUES (%s, %s, %s, %s)",
-                    (new_code, Decimal(f"{random.uniform(1, 1000):.4f}"), 
+                    commit=True,
+                    args=(new_code, Decimal(f"{random.uniform(1, 1000):.4f}"), 
                      random.choice(["active", "inactive", "pending"]),
-                     f"Stress test data {i}"),
-                    commit=True
+                     f"Stress test data {i}")
                 )
                 
             elif operation == "update":
@@ -79,10 +79,10 @@ class TestStressOperations(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
                 update_id = random.randint(1, min(len(initial_data), 1000))
                 self.mysql.execute(
                     f"UPDATE `{table_name}` SET value = %s, status = %s WHERE id = %s",
-                    (Decimal(f"{random.uniform(1, 1000):.4f}"),
+                    commit=True,
+                    args=(Decimal(f"{random.uniform(1, 1000):.4f}"),
                      random.choice(["active", "inactive", "pending", "updated"]),
-                     update_id),
-                    commit=True
+                     update_id)
                 )
                 
             elif operation == "delete":
@@ -90,8 +90,8 @@ class TestStressOperations(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
                 delete_id = random.randint(1, min(len(initial_data), 1000))
                 self.mysql.execute(
                     f"DELETE FROM `{table_name}` WHERE id = %s",
-                    (delete_id,),
-                    commit=True
+                    commit=True,
+                    args=(delete_id,)
                 )
             
             # Progress indicator
@@ -162,7 +162,7 @@ class TestStressOperations(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
                 time.sleep(pause_time)
         
         # Wait for final replication
-        self.wait_for_table_sync(table_name, expected_count=total_operations, max_wait_time=300)
+        self.wait_for_table_sync(table_name, expected_count=total_operations, max_wait_time=60)
         
         # Verify final state
         ch_count = len(self.ch.select(table_name))

@@ -23,7 +23,14 @@ from tests.conftest import (
 def test_string_primary_key(clean_environment):
     """Test replication with string primary keys"""
     cfg, mysql, ch = clean_environment
-    cfg.load("tests/configs/replicator/tests_config_string_primary_key.yaml")
+    
+    # ✅ CRITICAL FIX: Use isolated config instead of hardcoded path
+    from tests.conftest import load_isolated_config
+    cfg = load_isolated_config("tests/configs/replicator/tests_config_string_primary_key.yaml")
+    
+    # Update clean_environment to use isolated config
+    mysql.cfg = cfg
+    ch.database = None  # Will be set by replication process
 
     mysql.execute("SET sql_mode = 'ALLOW_INVALID_DATES';")
 
@@ -44,55 +51,66 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
         commit=True,
     )
 
-    binlog_replicator_runner = BinlogReplicatorRunner(
-        cfg_file="tests/configs/replicator/tests_config_string_primary_key.yaml"
+    # ✅ CRITICAL FIX: Create isolated config file for runners
+    from tests.utils.dynamic_config import create_dynamic_config
+    import tempfile
+    
+    # Create isolated config file with proper binlog directory isolation
+    isolated_config_file = create_dynamic_config(
+        base_config_path="tests/configs/replicator/tests_config_string_primary_key.yaml"
     )
-    binlog_replicator_runner.run()
-    db_replicator_runner = DbReplicatorRunner(
-        TEST_DB_NAME,
-        cfg_file="tests/configs/replicator/tests_config_string_primary_key.yaml",
-    )
-    db_replicator_runner.run()
+    
+    try:
+        binlog_replicator_runner = BinlogReplicatorRunner(cfg_file=isolated_config_file)
+        binlog_replicator_runner.run()
+        
+        db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file=isolated_config_file)
+        db_replicator_runner.run()
 
-    assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
+        assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
+        ch.execute_command(f"USE `{TEST_DB_NAME}`")
 
-    ch.execute_command(f"USE `{TEST_DB_NAME}`")
+        assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
+        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 2)
 
-    assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
-    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 2)
+        mysql.execute(
+            f"INSERT INTO `{TEST_TABLE_NAME}` (id, name) VALUES " + """('03', 'Filipp');""",
+            commit=True,
+        )
+        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
 
-    mysql.execute(
-        f"INSERT INTO `{TEST_TABLE_NAME}` (id, name) VALUES " + """('03', 'Filipp');""",
-        commit=True,
-    )
-    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
-
-    db_replicator_runner.stop()
-    binlog_replicator_runner.stop()
+        db_replicator_runner.stop()
+        binlog_replicator_runner.stop()
+    
+    finally:
+        # ✅ CLEANUP: Remove isolated config file
+        import os
+        if os.path.exists(isolated_config_file):
+            os.unlink(isolated_config_file)
 
 
 @pytest.mark.integration
 def test_ignore_deletes(clean_environment):
     """Test ignore_deletes configuration option"""
-    # Create a temporary config file with ignore_deletes=True
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".yaml", delete=False
-    ) as temp_config_file:
-        config_file = temp_config_file.name
-
-        # Read the original config
-        with open(CONFIG_FILE, "r") as original_config:
-            config_data = yaml.safe_load(original_config)
-
-        # Add ignore_deletes=True
-        config_data["ignore_deletes"] = True
-
-        # Write to the temp file
-        yaml.dump(config_data, temp_config_file)
+    # ✅ CRITICAL FIX: Use isolated config instead of manual temp file creation
+    from tests.utils.dynamic_config import create_dynamic_config
+    
+    # Create isolated config file with ignore_deletes=True and proper binlog isolation
+    config_file = create_dynamic_config(
+        base_config_path=CONFIG_FILE,
+        custom_settings={"ignore_deletes": True}
+    )
 
     try:
         cfg, mysql, ch = clean_environment
-        cfg.load(config_file)
+        
+        # ✅ CRITICAL FIX: Use isolated config loading
+        from tests.conftest import load_isolated_config
+        cfg = load_isolated_config(config_file)
+        
+        # Update clean_environment to use isolated config
+        mysql.cfg = cfg
+        ch.database = None  # Will be set by replication process
 
         # Verify the ignore_deletes option was set
         assert cfg.ignore_deletes is True
@@ -178,37 +196,47 @@ def test_timezone_conversion(clean_environment):
     Test that MySQL timestamp fields are converted to ClickHouse DateTime64 with custom timezone.
     This test reproduces the issue from GitHub issue #170.
     """
-    # Create a temporary config file with custom timezone
-    config_content = """
-mysql:
-  host: 'localhost'
-  port: 9306
-  user: 'root'
-  password: 'admin'
-
-clickhouse:
-  host: 'localhost'
-  port: 9123
-  user: 'default'
-  password: 'admin'
-
-binlog_replicator:
-  data_dir: '/app/binlog/'
-  records_per_file: 100000
-
-databases: '*test*'
-log_level: 'debug'
-mysql_timezone: 'America/New_York'
-"""
-
-    # Create temporary config file
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
-        f.write(config_content)
-        temp_config_file = f.name
+    # ✅ CRITICAL FIX: Use isolated config instead of hardcoded content
+    from tests.utils.dynamic_config import create_dynamic_config
+    
+    # Create isolated config with timezone setting and proper binlog isolation
+    custom_settings = {
+        "mysql_timezone": "America/New_York",
+        "log_level": "debug",
+        "databases": "*test*",
+        "mysql": {
+            "host": "localhost",
+            "port": 9306,
+            "user": "root",
+            "password": "admin"
+        },
+        "clickhouse": {
+            "host": "localhost", 
+            "port": 9123,
+            "user": "default",
+            "password": "admin"
+        },
+        "binlog_replicator": {
+            "records_per_file": 100000
+            # data_dir will be set automatically to isolated path
+        }
+    }
+    
+    temp_config_file = create_dynamic_config(
+        base_config_path=CONFIG_FILE,
+        custom_settings=custom_settings
+    )
 
     try:
         cfg, mysql, ch = clean_environment
-        cfg.load(temp_config_file)
+        
+        # ✅ CRITICAL FIX: Use isolated config loading
+        from tests.conftest import load_isolated_config
+        cfg = load_isolated_config(temp_config_file)
+        
+        # Update clean_environment to use isolated config
+        mysql.cfg = cfg
+        ch.database = None  # Will be set by replication process
 
         # Verify timezone is loaded correctly
         assert cfg.mysql_timezone == "America/New_York"

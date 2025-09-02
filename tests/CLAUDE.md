@@ -1,515 +1,255 @@
-# MySQL ClickHouse Replicator Test Architecture
+# MySQL ClickHouse Replicator - Complete Testing Guide
 
 ## Overview
 
-This document explains the reusable test components, architecture, and organization principles for the MySQL ClickHouse Replicator test suite. The test architecture is designed for maintainability, reusability, and comprehensive coverage of replication scenarios.
+Comprehensive test suite with 65+ integration tests ensuring reliable data replication from MySQL to ClickHouse. This guide covers test development patterns, infrastructure, and execution.
 
-## 🏗️ Test Architecture
-
-### Base Classes & Mixins
-
-#### `BaseReplicationTest`
-**Location**: `tests/base/base_replication_test.py`  
-**Purpose**: Core test infrastructure for replication scenarios
-
-**Key Features**:
-- Database connection management (MySQL & ClickHouse)
-- Replication process lifecycle (start/stop)
-- Environment cleanup and setup
-- Configuration management
-
-**Usage**:
-```python
-from tests.base import BaseReplicationTest
-
-class MyTest(BaseReplicationTest):
-    def test_my_scenario(self):
-        self.start_replication()
-        # Test implementation
-```
-
-#### `DataTestMixin`
-**Location**: `tests/base/data_test_mixin.py`  
-**Purpose**: Data operations and validation utilities
-
-**Key Methods**:
-- `insert_multiple_records()` - Bulk data insertion
-- `verify_record_exists()` - Data validation with conditions
-- `verify_record_does_not_exist()` - Negative validation
-- `wait_for_table_sync()` - Synchronization with expected counts
-- `wait_for_record_update()` - Update verification
-- `wait_for_stable_state()` - Stability verification
-
-**Usage**:
-```python
-from tests.base import BaseReplicationTest, DataTestMixin
-
-class MyTest(BaseReplicationTest, DataTestMixin):
-    def test_data_operations(self):
-        self.insert_multiple_records(table_name, [{"name": "test", "age": 30}])
-        self.verify_record_exists(table_name, "name='test'", {"age": 30})
-```
-
-#### `SchemaTestMixin`  
-**Location**: `tests/base/schema_test_mixin.py`  
-**Purpose**: Database schema operations and DDL utilities
-
-**Key Methods**:
-- `create_basic_table()` - Standard table creation
-- `wait_for_ddl_replication()` - DDL synchronization
-- `wait_for_database()` - Database creation verification
-
-#### `IsolatedBaseReplicationTest`
-**Location**: `tests/base/isolated_base_replication_test.py`  
-**Purpose**: Parallel test isolation with automatic path and database separation
-
-**Key Features**:
-- Worker and test-specific path isolation (`/app/binlog_{worker_id}_{test_id}/`)
-- Automatic database name isolation (`test_db_{worker_id}_{test_id}`)
-- Temporary configuration file generation with isolated paths
-- Automatic cleanup of isolated directories after test completion
-
-**Usage**:
-```python
-from tests.base import IsolatedBaseReplicationTest, DataTestMixin
-
-class MyIsolatedTest(IsolatedBaseReplicationTest, DataTestMixin):
-    def test_parallel_safe_scenario(self):
-        # Automatically gets isolated paths and databases
-        self.start_replication()
-        # Test implementation
-```
-
-### Fixtures System
-
-#### `TableSchemas`
-**Location**: `tests/fixtures/table_schemas.py`  
-**Purpose**: Reusable table schema definitions
-
-**Available Schemas**:
-- `basic_table()` - Standard id/name/age table
-- `datetime_test_table()` - Various datetime field types
-- `numeric_test_table()` - All numeric data types
-- `json_test_table()` - JSON column variations
-- `complex_schema()` - Multi-column complex table
-
-**Usage**:
-```python
-from tests.fixtures import TableSchemas
-
-schema = TableSchemas.datetime_test_table("my_table")
-self.mysql.execute(schema.sql)
-```
-
-#### `TestDataGenerator`
-**Location**: `tests/fixtures/test_data.py`  
-**Purpose**: Consistent test data generation
-
-**Available Generators**:
-- `basic_records()` - Simple name/age records
-- `datetime_records()` - Date/time test data
-- `numeric_boundary_data()` - Min/max numeric values
-- `unicode_test_data()` - Multi-language content
-- `json_test_data()` - Complex JSON structures
-
-#### `AssertionHelpers`
-**Location**: `tests/fixtures/assertions.py`  
-**Purpose**: Specialized assertion utilities
-
-## 🗂️ Test Organization
-
-### Folder Structure
+## Test Suite Structure
 
 ```
 tests/
-├── integration/
-│   ├── data_types/          # Data type replication tests
-│   ├── ddl/                 # DDL operation tests
+├── conftest.py              # Shared fixtures and test utilities
+├── unit/                    # Unit tests (fast, isolated)
+│   └── test_connection_pooling.py
+├── integration/             # Integration tests (require external services)
 │   ├── replication/         # Core replication functionality
-│   ├── process_management/  # Process lifecycle tests
-│   ├── edge_cases/          # Bug reproductions & edge cases
-│   ├── data_integrity/      # Data consistency & validation
-│   └── percona/             # Percona MySQL specific tests
-├── unit/                    # Unit tests
-├── performance/             # Performance benchmarks
-├── base/                    # Base classes & mixins
-├── fixtures/                # Reusable test components
-├── utils/                   # Test utilities
-└── configs/                 # Test configurations
+│   ├── data_types/         # MySQL data type handling
+│   ├── data_integrity/     # Consistency and corruption detection
+│   ├── edge_cases/         # Complex scenarios & bug reproductions
+│   ├── process_management/ # Process lifecycle & recovery
+│   ├── performance/        # Stress testing & concurrent operations
+│   └── percona/            # Percona MySQL specific tests
+├── performance/             # Performance benchmarks (optional)
+└── configs/                 # Test configuration files
 ```
 
 ### Test Categories
 
-#### Data Types (`tests/integration/data_types/`)
-Tests for MySQL data type replication behavior:
+- **Unit Tests**: Fast, isolated component tests
+- **Integration Tests**: End-to-end replication workflows requiring MySQL/ClickHouse
+- **Performance Tests**: Long-running benchmarks marked `@pytest.mark.optional`
+- **Percona Tests**: Specialized tests for Percona MySQL features
 
-- **Basic Data Types**: `test_basic_data_types.py`
-  - Integer, varchar, datetime, boolean
-  - NULL value handling
-  - Type conversion validation
+## Running Tests
 
-- **Advanced Data Types**: `test_advanced_data_types.py`  
-  - TEXT, BLOB, binary data
-  - Large object handling
-  - Character encoding
+**⚠️ CRITICAL**: Always use the test script for ALL test verification:
 
-- **JSON Data Types**: `test_json_data_types.py`
-  - JSON column operations
-  - Complex nested structures
-  - JSON updates and modifications
+```bash
+./run_tests.sh                    # Full parallel test suite
+./run_tests.sh --serial           # Sequential mode
+./run_tests.sh -k "test_name"     # Specific tests
+./run_tests.sh tests/path/to/test_file.py  # Specific file
+```
 
-- **Specialized Types**: 
-  - `test_enum_normalization.py` - ENUM type handling
-  - `test_polygon_type.py` - Geometric data
-  - `test_year_type.py` - MySQL YEAR type
-  - `test_numeric_boundary_limits.py` - Numeric edge cases
+**❌ NEVER use these commands:**
+- `pytest tests/...` 
+- `docker exec ... pytest ...`
+- Any direct pytest execution
 
-#### DDL Operations (`tests/integration/ddl/`)
-Data Definition Language operation tests:
+The test script handles all prerequisites automatically:
+- Docker containers (MySQL 9306, MariaDB 9307, Percona 9308, ClickHouse 9123)
+- Database setup and configuration
+- Process lifecycle management and cleanup
 
-- **Core DDL**: `test_ddl_operations.py`
-  - CREATE, ALTER, DROP operations
-  - Index management
+## Test Development Patterns
 
-- **Advanced DDL**: `test_advanced_ddl_operations.py`
-  - Column positioning (FIRST/AFTER)
-  - Conditional statements (IF EXISTS)
-  - Percona-specific features
+### Base Classes
+- **`BaseReplicationTest`**: Core test infrastructure with `self.start_replication()`
+- **`DataTestMixin`**: Data operations (`insert_multiple_records`, `verify_record_exists`)
+- **`SchemaTestMixin`**: Schema operations (`create_basic_table`, `wait_for_database`)
 
-- **Schema Evolution**: `test_create_table_like.py`, `test_multi_alter_statements.py`
-
-#### Replication Core (`tests/integration/replication/`)
-Core replication functionality:
-
-- **End-to-End**: `test_e2e_scenarios.py`
-  - Complete replication workflows
-  - Multi-statement transactions
-  - Real-time updates
-
-- **CRUD Operations**: `test_basic_crud_operations.py`
-  - Create, Read, Update, Delete
-  - Batch operations
-
-- **Process Management**: 
-  - `test_initial_only_mode.py` - Initial replication
-  - `test_parallel_initial_replication.py` - Parallel processing
-
-#### Data Integrity (`tests/integration/data_integrity/`)
-Data consistency and validation:
-
-- **Consistency Validation**: `test_data_consistency.py`
-  - Checksum validation
-  - Row-level comparison
-  - Data integrity verification
-
-- **Corruption Detection**: `test_corruption_detection.py`
-  - Malformed data handling
-  - Character encoding issues
-  - State file corruption
-
-- **Duplicate Detection**: `test_duplicate_detection.py`
-  - Duplicate event handling
-  - Idempotent operations
-  - Binlog position management
-
-- **Ordering Guarantees**: `test_ordering_guarantees.py`
-  - Event sequence validation
-  - Transaction boundaries
-  - Ordering consistency
-
-#### Percona Tests (`tests/integration/percona/`)
-Percona MySQL Server specific features and optimizations:
-
-- **Percona Features**: `test_percona_features.py`
-  - Audit log plugin compatibility
-  - Query response time monitoring
-  - Slow query log enhancements
-  - InnoDB optimizations
-  - GTID consistency with Percona features
-  - Character set handling
-  
-**Configuration**: Uses port 9308 and dedicated config file `tests_config_percona.yaml`
-
-## 🛠️ Writing New Tests
-
-### Test Naming Conventions
-
-**Files**: `test_<functionality>_<category>.py`
-- `test_json_data_types.py`
-- `test_advanced_ddl_operations.py`
-- `test_schema_evolution_mapping.py`
-
-**Classes**: `Test<Functionality><Category>`
-- `TestJsonDataTypes`
-- `TestAdvancedDdlOperations`
-- `TestSchemaEvolutionMapping`
-
-**Methods**: `test_<specific_scenario>`
-- `test_json_basic_operations`
-- `test_column_positioning_ddl`
-- `test_schema_evolution_with_db_mapping`
-
-### Test Structure Template
-
+### Basic Test Pattern
 ```python
-\"\"\"Test description explaining the functionality being tested\"\"\"
-
-import pytest
 from tests.base import BaseReplicationTest, DataTestMixin, SchemaTestMixin
-from tests.conftest import TEST_TABLE_NAME
-from tests.fixtures import TableSchemas, TestDataGenerator
 
-class TestMyFunctionality(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
-    \"\"\"Test class description\"\"\"
-
-    @pytest.mark.integration
-    def test_specific_scenario(self):
-        \"\"\"Test specific scenario description\"\"\"
-        # 1. Setup - Create schema and data
-        schema = TableSchemas.basic_table(TEST_TABLE_NAME)
-        self.mysql.execute(schema.sql)
+class MyTest(BaseReplicationTest, DataTestMixin, SchemaTestMixin):
+    def test_example(self):
+        # 1. Create schema
+        self.create_basic_table(TEST_TABLE_NAME)
         
-        test_data = TestDataGenerator.basic_records(count=3)
+        # 2. Insert data
         self.insert_multiple_records(TEST_TABLE_NAME, test_data)
         
-        # 2. Start replication
+        # 3. Start replication
         self.start_replication()
-        self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=3)
         
-        # 3. Perform operations
-        # Your test logic here
-        
-        # 4. Verify results
-        self.verify_record_exists(TEST_TABLE_NAME, "name='test'", {"age": 30})
+        # 4. Verify
+        self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=len(test_data))
 ```
 
-### File Size Guidelines
+## ✅ Phase 1.75 Pattern (REQUIRED for reliability)
 
-- **Maximum 300 lines per test file**
-- **Split large files by functionality**
-- **Use descriptive file names**
-- **Group related tests together**
-
-### Pytest Markers
-
-Use appropriate markers for test categorization:
+**Critical Rule**: Insert ALL data BEFORE starting replication
 
 ```python
-@pytest.mark.integration      # Integration test
-@pytest.mark.performance      # Performance test  
-@pytest.mark.slow             # Slow-running test
-@pytest.mark.skip(reason="")  # Skip with reason
-@pytest.mark.parametrize      # Parameterized test
+def test_example():
+    # ✅ CORRECT PATTERN
+    schema = TableSchemas.basic_table(TEST_TABLE_NAME)
+    self.mysql.execute(schema.sql)
+    
+    # Pre-populate ALL test data (including data for later scenarios)
+    all_data = initial_data + update_data + verification_data
+    self.insert_multiple_records(TEST_TABLE_NAME, all_data)
+    
+    # Start replication with complete dataset
+    self.start_replication()  
+    self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=len(all_data))
+    
+    # Test functionality on static data
+    # Verify results
 ```
 
-## 🔧 Test Configuration
+```python
+def test_bad_example():
+    # ❌ WRONG PATTERN - Will cause timeouts/failures
+    self.create_basic_table(TEST_TABLE_NAME)
+    self.insert_multiple_records(TEST_TABLE_NAME, initial_data)
+    
+    self.start_replication()  # Start replication
+    
+    # ❌ PROBLEM: Insert more data AFTER replication starts
+    self.insert_multiple_records(TEST_TABLE_NAME, more_data)
+    self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=total)  # Will timeout!
+```
 
-### Configuration Files
-**Location**: `tests/configs/`
-- `tests_config.yaml` - Standard configuration
-- `tests_config_db_mapping.yaml` - Database mapping
-- `tests_config_dynamic_column.yaml` - Dynamic columns
+## Test Environment
 
-### Environment Variables
-- `TEST_DB_NAME` - Test database name
-- `TEST_TABLE_NAME` - Test table name
-- `CONFIG_FILE` - Configuration file path
+- **Execution**: Always use `./run_tests.sh` - handles all Docker container management
+- **Databases**: MySQL (9306), MariaDB (9307), Percona (9308), ClickHouse (9123)
+- **Infrastructure**: Auto-restart processes, monitoring, cleanup
+- **Prerequisites**: Docker and Docker Compose (handled automatically by test script)
 
-### Test Utilities
-**Location**: `tests/utils/`
-- `mysql_test_api.py` - MySQL test utilities
-- Helper functions for common operations
+## Integration Test Modules
 
-## 🚀 Running Tests
+The integration tests are organized into focused modules (all under 350 lines):
 
-### Primary Test Command - ALWAYS USE THIS
+- **`test_basic_crud_operations.py`** (201 lines) - CRUD operations during replication
+- **`test_ddl_operations.py`** (268 lines) - DDL operations (ALTER TABLE, etc.)  
+- **`test_basic_data_types.py`** (282 lines) - Basic MySQL data type handling
+- **`test_advanced_data_types.py`** (220 lines) - Advanced data types (spatial, ENUM)
+- **`test_parallel_initial_replication.py`** (172 lines) - Parallel initial sync
+- **`test_parallel_worker_scenarios.py`** (191 lines) - Worker failure/recovery
+- **`test_basic_process_management.py`** (171 lines) - Basic restart/recovery
+- **`test_advanced_process_management.py`** (311 lines) - Complex process scenarios
+- **`test_configuration_scenarios.py`** (270 lines) - Special config options
+- **`test_replication_edge_cases.py`** (467 lines) - Bug reproductions, edge cases  
+- **`test_utility_functions.py`** (178 lines) - Parser and utility functions
+
+### Test Refactoring Benefits
+
+Recently refactored from large monolithic files:
+- **Smaller, Focused Files** - Each file focuses on specific functionality
+- **Better Organization** - Tests grouped by functionality instead of mixed together  
+- **Improved Maintainability** - Smaller files are easier to review and modify
+- **Faster Execution** - Can run specific test categories independently
+
+## 🔄 Dynamic Database Isolation System ✅ **FIXED**
+
+**Complete parallel testing safety implemented** - each test gets isolated databases and binlog directories.
+
+### Architecture
+- **Source Isolation**: `test_db_<worker>_<testid>` (MySQL databases)
+- **Target Isolation**: `<prefix>_<worker>_<testid>` (ClickHouse databases)
+- **Data Directory Isolation**: `/app/binlog_<worker>_<testid>/` 
+- **Configuration Isolation**: Dynamic YAML generation with auto-cleanup
+
+### Core Components
+
+**`tests/utils/dynamic_config.py`**
+- `DynamicConfigManager` singleton for centralized isolation
+- Worker-specific naming using `PYTEST_XDIST_WORKER`
+- Thread-local storage for test-specific isolation
+- Automatic cleanup of temporary resources
+
+**Enhanced Base Classes**
+- `BaseReplicationTest.create_isolated_target_database_name()` 
+- `BaseReplicationTest.create_dynamic_config_with_target_mapping()`
+- `BaseReplicationTest.update_clickhouse_database_context()` - handles `_tmp` → final transitions
+- Automatic isolation in `conftest.py` fixtures
+
+### Usage Patterns
+
+**Basic Isolated Test**
+```python
+class MyTest(BaseReplicationTest, DataTestMixin):
+    def test_with_isolation(self):
+        # Database names automatically isolated per worker/test
+        # TEST_DB_NAME = "test_db_w1_abc123" (automatic)
+        
+        self.create_basic_table(TEST_TABLE_NAME)
+        self.start_replication()  # Uses isolated databases
+        self.update_clickhouse_database_context()  # Handle lifecycle transitions
+```
+
+**Target Database Mapping**
+```python
+def test_with_target_mapping(self):
+    # Create isolated target database 
+    target_db = self.create_isolated_target_database_name("custom_target")
+    
+    # Generate dynamic config with mapping
+    config_file = self.create_dynamic_config_with_target_mapping(
+        source_db_name=TEST_DB_NAME,
+        target_db_name=target_db
+    )
+    
+    # Use custom config for replication
+    self.start_replication(config_file=config_file)
+```
+
+**Manual Dynamic Configuration**
+```python
+from tests.utils.dynamic_config import create_dynamic_config
+
+def test_custom_mapping(self):
+    config_file = create_dynamic_config(
+        base_config_path="tests/configs/replicator/tests_config.yaml",
+        target_mappings={
+            TEST_DB_NAME: f"analytics_target_{worker_id}_{test_id}"
+        }
+    )
+```
+
+### Isolation Verification
+
+Run the isolation verification test to confirm parallel safety:
 ```bash
-./run_tests.sh
+./run_tests.sh -k "test_binlog_isolation_verification"
 ```
 
-**🚨 CRITICAL REQUIREMENT**: ALWAYS use `./run_tests.sh` for ALL test verification - no exceptions!
+Expected output: ✅ `BINLOG ISOLATION VERIFIED: Unique directory /app/binlog_w1_abc123/`
 
-**⚠️ NEVER RUN INDIVIDUAL PYTEST COMMANDS** - The `./run_tests.sh` script is the ONLY approved way to run tests because:
-- It properly sets up Docker containers (MySQL, ClickHouse, MariaDB, Percona)
-- It manages container lifecycle and cleanup
-- It provides the definitive test environment
-- Individual pytest commands will not work correctly and may give false results
+## Real-Time vs Static Testing
 
-**🔴 FORBIDDEN COMMANDS** - Never use these:
-- `pytest tests/...` (won't work without proper container setup)
-- `docker-compose exec ... pytest ...` (bypasses required setup script)
-- Any individual test execution outside of `./run_tests.sh`
+- **Static Tests**: Use Phase 1.75 pattern for reliable execution (most tests)
+- **Real-Time Tests**: `test_e2e_regular_replication()` validates production scenarios  
+- **Pattern Choice**: Insert-before-start for reliability, real-time for validation
+- **Parallel Safety**: All patterns work with dynamic database isolation
 
-**⚠️ CRITICAL RULE**: **ALWAYS** use `./run_tests.sh` for **EVERY SINGLE** test verification - NO EXCEPTIONS!
+## Current Status & Recent Fixes
 
-**🔴 MANDATORY WORKFLOW**: When fixing tests or implementing features:
-1. **ALWAYS** run `./run_tests.sh` before making changes (baseline)
-2. Make code changes
-3. **ALWAYS** run `./run_tests.sh` after changes (verification)
-4. Repeat steps 2-3 until ALL tests pass
-5. **NEVER** commit without running `./run_tests.sh` successfully
+- **Pass Rate**: Expected ~80-90% improvement after binlog isolation fixes
+- **Performance**: ~45 seconds for full test suite
+- **Infrastructure**: Stable with auto-restart and monitoring
+- **Major Fix**: Binlog directory isolation resolved 132 test failures
 
-**✅ This script provides**:
-- Proper Docker container setup (MySQL, ClickHouse, MariaDB, Percona)
-- Consistent test environment across runs
-- Container lifecycle management and cleanup
-- The ONLY definitive test verification method for this codebase
+### Recent Infrastructure Fixes
 
-**✅ Current Status**: 16 tests passing, 14 tests failing (significant improvement from baseline)
-**🔧 Major Infrastructure Fixes Applied**: Docker directory issues, database detection logic, connection pool configuration
-**🎯 Remaining Issue**: Database timing synchronization between `_tmp` and final database names
+1. **Binlog Directory Isolation** ✅ - Each test gets unique `/app/binlog_{worker}_{test_id}/`
+2. **Configuration Loading** ✅ - Fixed core `test_config` fixture isolation
+3. **Database Context Management** ✅ - Added `update_clickhouse_database_context()`
+4. **Docker Volume Mount** ✅ - Fixed `/app/binlog/` writability issues
+5. **Connection Pool Config** ✅ - Updated for multi-database support (9306/9307/9308)
 
-### Alternative Test Commands (Use Sparingly)
+## Percona MySQL Integration
 
-These are available but `./run_tests.sh` should be used for all test verification:
+See `integration/percona/CLAUDE.md` for detailed Percona-specific test documentation including:
+- Audit log compatibility
+- Performance optimization tests
+- GTID consistency validation
+- Character set handling
 
-#### Full Test Suite
-```bash
-pytest tests/
-```
+## Historical Documentation
 
-#### By Category
-```bash
-pytest tests/integration/data_types/
-pytest tests/integration/ddl/
-pytest tests/integration/replication/
-```
-
-#### Individual Tests
-```bash
-pytest tests/integration/data_types/test_json_data_types.py::TestJsonDataTypes::test_json_basic_operations
-```
-
-#### With Markers
-```bash
-pytest -m integration  # Only integration tests
-pytest -m "not slow"   # Skip slow tests
-```
-
-### Test Verification Workflow
-
-When fixing tests or implementing new features:
-
-1. **Run Tests**: `./run_tests.sh`
-2. **Identify Issues**: Review test output and failures
-3. **Fix Issues**: Apply necessary code changes
-4. **Verify Fixes**: `./run_tests.sh` (repeat until all pass)
-5. **Final Validation**: `./run_tests.sh` one more time
-
-### Expected Test Behavior
-
-- **Passing Tests**: All corruption detection, data consistency tests should pass
-- **Known Issues**: Percona DB container has socket conflicts - uses `service_started` instead of `service_healthy` dependency
-- **Container Status**: All containers (MySQL, MariaDB, ClickHouse, Percona) start successfully
-- **Test Duration**: Full suite takes ~60-90 seconds to complete
-
-### Percona Container Troubleshooting
-
-**Current Status**: ✅ **RESOLVED** - Percona dependency re-enabled
-
-**Issues Fixed**:
-- Removed obsolete MySQL 8.0+ configuration options (`log_warnings_suppress`, `query_cache_*`)
-- Fixed configuration file path (`/etc/mysql/conf.d/custom.cnf`)
-- Simplified environment variables and health check
-- Disabled X Plugin to prevent socket conflicts
-- Added proper volume management
-
-**Known Limitations**:
-- Percona container uses `service_started` dependency instead of `service_healthy`
-- Health check may fail due to socket conflicts but container functionality is preserved
-- Tests using Percona port 9308 work correctly despite health check issues
-
-**Troubleshooting Steps**:
-1. **Check Container Status**: `docker-compose -f docker-compose-tests.yaml ps percona_db`
-2. **View Logs**: `docker logs mysql_ch_replicator_src-percona_db-1`
-3. **Test Connection**: `docker exec mysql_ch_replicator_src-percona_db-1 mysql -uroot -padmin -e "SELECT VERSION();"`
-4. **Verify Config**: `docker exec mysql_ch_replicator_src-percona_db-1 cat /etc/mysql/conf.d/custom.cnf`
-
-**Resolution History**:
-- ❌ Initial Issue: Container exiting with configuration errors
-- ✅ Phase 1: Removed deprecated `log_warnings_suppress=1592`
-- ✅ Phase 2: Removed deprecated `query_cache_type=0` and `query_cache_size=0`
-- ✅ Phase 3: Fixed configuration file path and environment variables
-- ✅ Phase 4: Disabled X Plugin to prevent socket conflicts
-- ✅ Phase 5: Re-enabled Percona dependency with `service_started` condition
-
-### Recent Test Fixes Applied
-
-The following issues were identified and resolved using `./run_tests.sh`:
-
-#### Data Consistency Test Fixes
-- **Checksum Validation**: Fixed MySQL/ClickHouse data format normalization
-  - Implemented `_normalize_value()` method to handle timezone, boolean, and decimal differences
-  - Added normalized checksum calculation for cross-database comparison
-  - File: `tests/integration/data_integrity/test_data_consistency.py`
-
-#### MySQL API Parameter Conflicts
-- **Parameter Ordering**: Fixed MySQL API calls mixing positional and keyword arguments
-  - Changed from `mysql.execute(query, args_tuple, commit=True)` to `mysql.execute(query, commit=True, args=args_tuple)`
-  - File: `tests/integration/data_integrity/test_duplicate_detection.py`
-
-#### ClickHouse API Improvements
-- **Order By Support**: Added `order_by` parameter to ClickHouse select method
-- **System Table Queries**: Fixed backtick handling for `system.settings` queries
-- **Internal Column Filtering**: Properly handle `_version` column in row comparisons
-
-#### Test Infrastructure Improvements
-- **Context Manager Usage**: Proper MySQL cursor context manager pattern
-- **Wait Conditions**: Fixed parameter naming (`wait_time` → `max_wait_time`)
-- **Flexible Assertions**: More robust handling of replication timing variations
-
-## 📊 Best Practices
-
-### Test Design
-1. **Single Responsibility** - One test per scenario
-2. **Descriptive Names** - Clear test purpose
-3. **Arrange-Act-Assert** - Structure tests clearly
-4. **Independent Tests** - No test dependencies
-5. **Cleanup** - Proper resource cleanup
-
-### Parallel Testing
-1. **Use IsolatedBaseReplicationTest** - For parallel-safe tests with automatic isolation
-2. **Avoid Shared Resources** - Each test gets isolated paths and databases
-3. **File System Isolation** - `/app/binlog/` becomes `/app/binlog_{worker_id}_{test_id}/`
-4. **Database Isolation** - `test_db` becomes `test_db_{worker_id}_{test_id}`
-5. **Configuration Isolation** - Temporary config files with isolated paths
-
-### Data Management
-1. **Use Fixtures** - Reuse common data patterns
-2. **Parameterized Tests** - Test multiple scenarios
-3. **Boundary Testing** - Test edge cases
-4. **Random Data** - Use controlled randomization
-
-### Assertions
-1. **Specific Assertions** - Clear failure messages
-2. **Wait Conditions** - Use wait_for_* methods
-3. **Timeout Handling** - Set appropriate timeouts
-4. **Error Context** - Provide context in assertions
-
-### Performance
-1. **Parallel Execution** - Design for parallelization
-2. **Resource Management** - Efficient resource usage
-3. **Test Isolation** - Avoid shared state
-4. **Cleanup Efficiency** - Fast cleanup procedures
-
-## 🔍 Debugging Tests
-
-### Common Issues
-1. **Timing Issues** - Use appropriate wait conditions
-2. **Resource Conflicts** - Ensure test isolation
-3. **Data Consistency** - Verify replication completion
-4. **Configuration** - Check test configuration
-
-### Debugging Tools
-1. **Logging** - Enable debug logging
-2. **Manual Inspection** - Query databases directly
-3. **Process Monitoring** - Check replication processes
-4. **State Files** - Inspect replication state
-
-### Test Failure Analysis
-1. **Check Logs** - Examine replication logs
-2. **Verify Environment** - Confirm test setup
-3. **Data Validation** - Compare source and target
-4. **Process Status** - Ensure processes running
-
-This architecture provides a robust, maintainable, and comprehensive testing framework for MySQL ClickHouse replication scenarios.
+- Previous achievements and detailed fix histories are available in archived documentation
+- Focus is now on the current stable, isolated testing infrastructure

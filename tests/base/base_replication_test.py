@@ -165,21 +165,36 @@ class BaseReplicationTest:
             self.binlog_runner = None
 
     def wait_for_table_sync(self, table_name, expected_count=None, database=None, max_wait_time=20.0):
-        """Wait for table to be synced to ClickHouse"""
-        def table_exists():
-            # Check tables in the specified database or current context
-            target_db = database or self.ch.database or TEST_DB_NAME
-            tables = self.ch.get_tables(target_db)
-            if table_name not in tables:
-                # Debug: print available tables and current database context
-                databases = self.ch.get_databases()
-                print(f"DEBUG: Table '{table_name}' not found. Available tables: {tables}")
-                print(f"DEBUG: Available databases: {databases}")
-                print(f"DEBUG: ClickHouse database context: {target_db}")
+        """Wait for table to be synced to ClickHouse with database transition handling"""
+        def table_exists_with_context_switching():
+            # Check if replication processes are still alive
+            self._check_replication_process_health()
+            
+            # Update database context to handle transitions
+            target_db = database or TEST_DB_NAME
+            actual_db = self.update_clickhouse_database_context(target_db)
+            
+            if actual_db is None:
+                # No database available yet
                 return False
-            return True
+                
+            try:
+                tables = self.ch.get_tables(actual_db)
+                if table_name in tables:
+                    return True
+                    
+                # Debug info for troubleshooting
+                databases = self.ch.get_databases()
+                print(f"DEBUG: Table '{table_name}' not found in '{actual_db}'")
+                print(f"DEBUG: Available tables in '{actual_db}': {tables}")
+                print(f"DEBUG: All databases: {databases}")
+                return False
+                
+            except Exception as e:
+                print(f"DEBUG: Error checking tables in '{actual_db}': {e}")
+                return False
         
-        assert_wait(table_exists, max_wait_time=max_wait_time)
+        assert_wait(table_exists_with_context_switching, max_wait_time=max_wait_time)
         if expected_count is not None:
             assert_wait(lambda: len(self.ch.select(table_name)) == expected_count, max_wait_time=max_wait_time)
 
@@ -203,3 +218,72 @@ class BaseReplicationTest:
     def wait_for_condition(self, condition, max_wait_time=20.0):
         """Wait for a condition to be true with timeout"""
         assert_wait(condition, max_wait_time=max_wait_time)
+        
+    def ensure_database_exists(self, db_name=None):
+        """Ensure MySQL database exists before operations - critical for dynamic isolation"""
+        if db_name is None:
+            from tests.conftest import TEST_DB_NAME
+            db_name = TEST_DB_NAME
+            
+        try:
+            # Try to use the database
+            self.mysql.set_database(db_name)
+            print(f"DEBUG: Database '{db_name}' exists and set as current")
+        except Exception as e:
+            print(f"DEBUG: Database '{db_name}' does not exist: {e}")
+            # Database doesn't exist, create it
+            try:
+                # Import the helper functions
+                from tests.conftest import mysql_create_database, mysql_drop_database
+                
+                # Clean slate - drop if it exists in some form, then create fresh
+                mysql_drop_database(self.mysql, db_name)
+                mysql_create_database(self.mysql, db_name)
+                self.mysql.set_database(db_name)
+                print(f"DEBUG: Created and set database '{db_name}'")
+            except Exception as create_error:
+                print(f"ERROR: Failed to create database '{db_name}': {create_error}")
+                raise
+                
+    def _check_replication_process_health(self):
+        """Check if replication processes are still healthy"""
+        if self.binlog_runner:
+            if self.binlog_runner.process is None:
+                print("WARNING: Binlog runner process is None")
+            elif self.binlog_runner.process.poll() is not None:
+                print(f"WARNING: Binlog runner has exited with code {self.binlog_runner.process.poll()}")
+                
+        if self.db_runner:
+            if self.db_runner.process is None:
+                print("WARNING: DB runner process is None")
+            elif self.db_runner.process.poll() is not None:
+                print(f"WARNING: DB runner has exited with code {self.db_runner.process.poll()}")
+            
+    def update_clickhouse_database_context(self, db_name=None):
+        """Update ClickHouse client to use correct database context"""
+        if db_name is None:
+            from tests.conftest import TEST_DB_NAME
+            db_name = TEST_DB_NAME
+            
+        # Get available databases
+        try:
+            databases = self.ch.get_databases()
+            print(f"DEBUG: Available ClickHouse databases: {databases}")
+            
+            # Try final database first, then temporary
+            if db_name in databases:
+                self.ch.database = db_name
+                print(f"DEBUG: Set ClickHouse context to final database: {db_name}")
+                return db_name
+            elif f"{db_name}_tmp" in databases:
+                self.ch.database = f"{db_name}_tmp"  
+                print(f"DEBUG: Set ClickHouse context to temporary database: {db_name}_tmp")
+                return f"{db_name}_tmp"
+            else:
+                # Neither exists - this may happen during transitions
+                print(f"WARNING: Neither {db_name} nor {db_name}_tmp found in ClickHouse")
+                print(f"DEBUG: Available databases were: {databases}")
+                return None
+        except Exception as e:
+            print(f"ERROR: Failed to update ClickHouse database context: {e}")
+            return None

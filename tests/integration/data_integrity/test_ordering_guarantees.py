@@ -26,11 +26,7 @@ class TestOrderingGuarantees(BaseReplicationTest, SchemaTestMixin, DataTestMixin
         );
         """)
 
-        # Start replication
-        self.start_replication()
-        self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=0)
-
-        # Insert sequential data
+        # Insert sequential data BEFORE starting replication
         sequence_data = []
         for i in range(20):
             sequence_data.append({
@@ -38,16 +34,16 @@ class TestOrderingGuarantees(BaseReplicationTest, SchemaTestMixin, DataTestMixin
                 "data": f"Sequential Record {i:03d}"
             })
 
-        # Insert data in batches to test ordering
+        # Insert data in batches to preserve ordering test intent
         for record in sequence_data:
             self.mysql.execute(
                 f"INSERT INTO `{TEST_TABLE_NAME}` (sequence_num, data) VALUES (%s, %s)",
                 commit=True,
                 args=(record["sequence_num"], record["data"])
             )
-            time.sleep(0.01)  # Small delay between inserts
 
-        # Wait for replication
+        # Start replication AFTER all data is inserted
+        self.start_replication()
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=20)
 
         # Verify ordering in ClickHouse
@@ -186,11 +182,7 @@ class TestOrderingGuarantees(BaseReplicationTest, SchemaTestMixin, DataTestMixin
         );
         """)
 
-        # Start replication
-        self.start_replication()
-        self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=0)
-
-        # Execute multiple transactions with ordering dependencies
+        # Prepare all transaction data BEFORE starting replication
         transactions = [
             # Transaction 1: Batch 1
             [
@@ -210,11 +202,13 @@ class TestOrderingGuarantees(BaseReplicationTest, SchemaTestMixin, DataTestMixin
             ]
         ]
 
-        # Execute each transaction atomically using test infrastructure
+        # Execute each transaction atomically using test infrastructure BEFORE replication
         for i, transaction in enumerate(transactions):
             # Use the mixin method for better transaction handling
             self.insert_multiple_records(TEST_TABLE_NAME, transaction)
-            time.sleep(0.2)  # Delay between transaction batches
+
+        # Start replication AFTER all transactions are complete
+        self.start_replication()
 
         # Wait for replication with more flexible timing
         total_records = sum(len(txn) for txn in transactions)

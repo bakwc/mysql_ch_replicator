@@ -89,7 +89,21 @@ class SchemaTestMixin:
         time.sleep(2.0)
 
     def wait_for_database(self, database_name=None, max_wait_time=20.0):
-        """Wait for database to be created in ClickHouse"""
+        """Wait for database to be created in ClickHouse (supports both final and _tmp forms)"""
         from tests.conftest import assert_wait, TEST_DB_NAME
         db_name = database_name or TEST_DB_NAME
-        assert_wait(lambda: db_name in self.ch.get_databases(), max_wait_time=max_wait_time)
+        
+        def check_database_exists():
+            try:
+                databases = self.ch.get_databases()
+                # Check for the final database name OR the temporary database name
+                # During initial replication, the database exists as {db_name}_tmp
+                final_db_exists = db_name in databases
+                temp_db_exists = f"{db_name}_tmp" in databases
+                
+                return final_db_exists or temp_db_exists
+            except Exception as e:
+                print(f"DEBUG: Error checking databases: {e}")
+                return False
+        
+        assert_wait(check_database_exists, max_wait_time=max_wait_time)

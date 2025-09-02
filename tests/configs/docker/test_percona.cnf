@@ -27,6 +27,14 @@ innodb_buffer_pool_size = 128M
 innodb_flush_log_at_trx_commit = 1
 max_connections = 200
 
-# Disable X Plugin to avoid socket conflicts
-mysqlx = OFF
+# Disable X Plugin completely to avoid socket conflicts
 skip-mysqlx
+
+# Use unique socket paths to avoid conflicts
+socket = /tmp/mysql_percona.sock
+pid-file = /tmp/mysql_percona.pid
+
+# Explicitly disable X Plugin components
+loose-mysqlx = 0
+loose-mysqlx_port = 0
+loose-mysqlx_socket = DISABLED

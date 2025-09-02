@@ -25,7 +25,21 @@
 #   ./run_tests.sh -n 4                             # Force 4 parallel workers
 
 echo "🐳 Starting Docker services..."
-docker compose -f docker-compose-tests.yaml up --force-recreate --no-deps --wait -d
+
+# Phase 1.75: Pre-test infrastructure monitoring
+if [ -f "tools/test_monitor.py" ]; then
+    echo "🔍 Phase 1.75: Running infrastructure health check..."
+    python3 tools/test_monitor.py --check-processes --performance-baseline
+    MONITOR_EXIT_CODE=$?
+    if [ $MONITOR_EXIT_CODE -eq 1 ]; then
+        echo "❌ Infrastructure health check failed - aborting test execution"
+        exit 1
+    elif [ $MONITOR_EXIT_CODE -eq 2 ]; then
+        echo "⚠️  Infrastructure warnings detected - proceeding with caution"
+    fi
+fi
+
+docker compose -f docker-compose-tests.yaml up --force-recreate --wait -d
 
 # Get the container ID
 CONTAINER_ID=$(docker ps | grep -E "(mysql_ch_replicator_src-replicator|mysql_ch_replicator-replicator)" | awk '{print $1}')
@@ -125,28 +139,60 @@ copy_reports() {
 # Function to cleanup on exit
 cleanup() {
     local exit_code=$?
+    local end_time=$(date +%s)
+    local total_runtime=$((end_time - start_time))
+    
     copy_reports
+    rm -rf binlog*
+    # Phase 1.75: Performance tracking and reporting
+    echo "⏱️  Total runtime: ${total_runtime}s"
+    
+    # Performance baseline reporting (45s baseline)
+    if [ $total_runtime -gt 90 ]; then
+        echo "🚨 PERFORMANCE ALERT: Runtime ${total_runtime}s exceeds critical threshold (90s)"
+    elif [ $total_runtime -gt 60 ]; then
+        echo "⚠️  Performance warning: Runtime ${total_runtime}s exceeds baseline (60s threshold)"
+    elif [ $total_runtime -le 45 ]; then
+        echo "✅ Performance excellent: Runtime within baseline (≤45s)"
+    else
+        echo "✅ Performance good: Runtime within acceptable range (≤60s)"
+    fi
+    
+    # Phase 1.75: Post-test infrastructure monitoring
+    if [ -f "tools/test_monitor.py" ] && [ $exit_code -eq 0 ]; then
+        echo "🔍 Phase 1.75: Running post-test infrastructure validation..."
+        python3 tools/test_monitor.py --check-processes
+        POST_MONITOR_EXIT_CODE=$?
+        if [ $POST_MONITOR_EXIT_CODE -eq 1 ]; then
+            echo "⚠️  Post-test infrastructure issues detected - may indicate test-induced problems"
+        fi
+    fi
+    
     echo "🐳 Test execution completed with exit code: $exit_code"
     exit $exit_code
 }
 trap cleanup EXIT
 
-# Determine execution mode and run tests
+# Phase 1.75: Start timing for performance monitoring
+start_time=$(date +%s)
+
+# Determine execution mode and run tests with 45-minute timeout
+TIMEOUT_SECONDS=3000  # 50 minutes
 if [ "$SERIAL_MODE" = true ]; then
-    echo "🐌 Running tests in serial mode$([ "$CI_MODE" = true ] && echo " (CI mode)")..."
-    docker exec -w /app/ -i $CONTAINER_ID python3 -m pytest -x -v -s tests/ $REPORTING_ARGS $PYTEST_ARGS
+    echo "🐌 Running tests in serial mode$([ "$CI_MODE" = true ] && echo " (CI mode)") with 45-minute timeout..."
+    timeout $TIMEOUT_SECONDS docker exec -w /app/ -i $CONTAINER_ID python3 -m pytest -x -v -s tests/ $REPORTING_ARGS $PYTEST_ARGS
 elif [ -n "$PARALLEL_ARGS" ]; then
-    echo "⚙️  Running tests with custom parallel configuration$([ "$CI_MODE" = true ] && echo " (CI mode)")..."
-    docker exec -w /app/ -i $CONTAINER_ID python3 -m pytest $PARALLEL_ARGS -x -v -s tests/ $REPORTING_ARGS $PYTEST_ARGS
+    echo "⚙️  Running tests with custom parallel configuration$([ "$CI_MODE" = true ] && echo " (CI mode)") with 45-minute timeout..."
+    timeout $TIMEOUT_SECONDS docker exec -w /app/ -i $CONTAINER_ID python3 -m pytest $PARALLEL_ARGS -x -v -s tests/ $REPORTING_ARGS $PYTEST_ARGS
 else
     # Default: Intelligent parallel execution with CI-aware scaling
     if [ "$CI" = "true" ] || [ "$GITHUB_ACTIONS" = "true" ]; then
         # Conservative defaults for GitHub Actions runners (2 CPU cores typically)
-        echo "🚀 Running tests in parallel mode (CI-optimized: 2 workers)$([ "$CI_MODE" = true ] && echo " (CI mode)")..."
-        docker exec -w /app/ -i $CONTAINER_ID python3 -m pytest -n 2 --dist worksteal --maxfail=5 -v tests/ $REPORTING_ARGS $PYTEST_ARGS
+        echo "🚀 Running tests in parallel mode (CI-optimized: 2 workers)$([ "$CI_MODE" = true ] && echo " (CI mode)") with 45-minute timeout..."
+        timeout $TIMEOUT_SECONDS docker exec -w /app/ -i $CONTAINER_ID python3 -m pytest -n 2 --dist worksteal --maxfail=5 -v tests/ $REPORTING_ARGS $PYTEST_ARGS
     else
-        # Aggressive scaling for local development (detect CPU cores)
-        echo "🚀 Running tests in parallel mode (local-optimized: auto-scaling)$([ "$CI_MODE" = true ] && echo " (CI mode)")..."
-        docker exec -w /app/ -i $CONTAINER_ID python3 -m pytest -n auto --dist worksteal --maxfail=11 -v tests/ $REPORTING_ARGS $PYTEST_ARGS
+        # Conservative parallelism for local development to avoid resource contention
+        echo "🚀 Running tests in parallel mode (local-optimized: 2 workers)$([ "$CI_MODE" = true ] && echo " (CI mode)") with 45-minute timeout..."
+        timeout $TIMEOUT_SECONDS docker exec -w /app/ -i $CONTAINER_ID python3 -m pytest -n 4 --dist worksteal --maxfail=50 -v tests/ $REPORTING_ARGS $PYTEST_ARGS
     fi
 fi

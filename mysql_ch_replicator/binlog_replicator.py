@@ -101,7 +101,12 @@ class FileReader:
 def get_existing_file_nums(data_dir, db_name):
     db_path = os.path.join(data_dir, db_name)
     if not os.path.exists(db_path):
-        os.makedirs(db_path, exist_ok=True)
+        try:
+            os.makedirs(db_path, exist_ok=True)
+        except FileNotFoundError:
+            # Parent directory doesn't exist - create it first
+            os.makedirs(data_dir, exist_ok=True)
+            os.makedirs(db_path, exist_ok=True)
     existing_files = os.listdir(db_path)
     existing_files = [f for f in existing_files if f.endswith(".bin")]
     existing_file_nums = sorted([int(f.split(".")[0]) for f in existing_files])
@@ -252,7 +257,14 @@ class DataWriter:
     def __init__(self, replicator_settings: BinlogReplicatorSettings):
         self.data_dir = replicator_settings.data_dir
         if not os.path.exists(self.data_dir):
-            os.makedirs(self.data_dir, exist_ok=True)
+            try:
+                os.makedirs(self.data_dir, exist_ok=True)
+            except FileNotFoundError:
+                # Handle deep nested paths by creating parent directories
+                parent_dir = os.path.dirname(self.data_dir)
+                if parent_dir and not os.path.exists(parent_dir):
+                    os.makedirs(parent_dir, exist_ok=True)
+                os.makedirs(self.data_dir, exist_ok=True)
         self.records_per_file = replicator_settings.records_per_file
         self.db_file_writers: dict = {}  # db_name => FileWriter
 
