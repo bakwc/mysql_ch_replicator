@@ -27,13 +27,9 @@ class TestLogRotationManagement(BaseReplicationTest, SchemaTestMixin, DataTestMi
 
         self.insert_basic_record(TEST_TABLE_NAME, "LogTestUser", 30)
 
-        # Start replication
-        runner = RunAllRunner()
-        runner.run()
-
-        # Wait for replication to start and set ClickHouse context
-        self.wait_for_condition(lambda: TEST_DB_NAME in self.ch.get_databases())
-        self.ch.execute_command(f"USE `{TEST_DB_NAME}`")
+        # Start replication using the standard BaseReplicationTest method
+        # This ensures proper configuration isolation is used
+        self.start_replication()
 
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=1)
 
@@ -55,4 +51,5 @@ class TestLogRotationManagement(BaseReplicationTest, SchemaTestMixin, DataTestMi
             TEST_TABLE_NAME, expected_count=11
         )  # 1 initial + 10 new
 
-        runner.stop()
+        # Stop replication using the standard BaseReplicationTest method
+        self.stop_replication()

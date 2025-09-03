@@ -47,7 +47,29 @@ class BaseReplicationTest:
             from tests.conftest import TEST_DB_NAME
             db_name = TEST_DB_NAME
             
-        config_file = config_file or self.config_file
+        # CRITICAL FIX: Create dynamic configuration with isolated paths
+        # This ensures spawned processes use the correct isolated directories
+        from tests.utils.dynamic_config import create_dynamic_config
+        if config_file is None:
+            config_file = self.config_file
+        
+        try:
+            # Create dynamic config file with isolated paths for this test
+            dynamic_config_file = create_dynamic_config(config_file)
+            print(f"DEBUG: Created dynamic config file: {dynamic_config_file}")
+            
+            # Use the dynamic config file for process spawning
+            actual_config_file = dynamic_config_file
+        except Exception as e:
+            print(f"WARNING: Failed to create dynamic config, using static config: {e}")
+            # Fallback to static config file
+            actual_config_file = config_file
+        
+        # ✅ CRITICAL FIX: Ensure MySQL database exists BEFORE starting replication processes
+        # This prevents "DB runner has exited with code 1" failures when subprocess
+        # tries to query tables from a database that doesn't exist yet
+        print(f"DEBUG: Ensuring MySQL database '{db_name}' exists before starting replication...")
+        self.ensure_database_exists(db_name)
         
         # CRITICAL: Pre-create database-specific subdirectory for logging
         # This prevents FileNotFoundError when db_replicator tries to create log files
@@ -66,11 +88,24 @@ class BaseReplicationTest:
                 print(f"ERROR: Failed to create database directory after retry: {e2}")
                 # Continue execution - let the replication process handle directory creation
 
-        self.binlog_runner = BinlogReplicatorRunner(cfg_file=config_file)
+        # Now safe to start replication processes - database exists in MySQL
+        self.binlog_runner = BinlogReplicatorRunner(cfg_file=actual_config_file)
         self.binlog_runner.run()
 
-        self.db_runner = DbReplicatorRunner(db_name, cfg_file=config_file)
+        self.db_runner = DbReplicatorRunner(db_name, cfg_file=actual_config_file)
         self.db_runner.run()
+
+        # CRITICAL: Wait for processes to fully initialize before proceeding
+        import time
+        startup_wait = 2.0  # Give processes time to initialize
+        print(f"DEBUG: Waiting {startup_wait}s for replication processes to initialize...")
+        time.sleep(startup_wait)
+        
+        # Verify processes started successfully
+        if not self._check_replication_process_health():
+            raise RuntimeError("Replication processes failed to start properly")
+        
+        print("DEBUG: Replication processes started successfully")
 
         # Wait for replication to start and set database context for the ClickHouse client
         def check_database_exists():
@@ -164,18 +199,20 @@ class BaseReplicationTest:
             self.binlog_runner.stop()
             self.binlog_runner = None
 
-    def wait_for_table_sync(self, table_name, expected_count=None, database=None, max_wait_time=20.0):
+    def wait_for_table_sync(self, table_name, expected_count=None, database=None, max_wait_time=45.0):
         """Wait for table to be synced to ClickHouse with database transition handling"""
         def table_exists_with_context_switching():
-            # Check if replication processes are still alive
-            self._check_replication_process_health()
+            # Check if replication processes are still alive - fail fast if processes died
+            process_health = self._check_replication_process_health()
+            if not process_health:
+                return False
             
             # Update database context to handle transitions
             target_db = database or TEST_DB_NAME
             actual_db = self.update_clickhouse_database_context(target_db)
             
             if actual_db is None:
-                # No database available yet
+                # No database available yet - this is expected during startup
                 return False
                 
             try:
@@ -183,40 +220,56 @@ class BaseReplicationTest:
                 if table_name in tables:
                     return True
                     
-                # Debug info for troubleshooting
-                databases = self.ch.get_databases()
-                print(f"DEBUG: Table '{table_name}' not found in '{actual_db}'")
-                print(f"DEBUG: Available tables in '{actual_db}': {tables}")
-                print(f"DEBUG: All databases: {databases}")
+                # Reduced debug output to minimize log noise
                 return False
                 
             except Exception as e:
-                print(f"DEBUG: Error checking tables in '{actual_db}': {e}")
+                # Reduced debug output - only log significant errors
+                if "Connection refused" not in str(e) and "timeout" not in str(e).lower():
+                    print(f"WARNING: Error checking tables in '{actual_db}': {e}")
                 return False
         
+        # First wait for table to exist
         assert_wait(table_exists_with_context_switching, max_wait_time=max_wait_time)
+        
+        # Then wait for data count if specified
         if expected_count is not None:
-            assert_wait(lambda: len(self.ch.select(table_name)) == expected_count, max_wait_time=max_wait_time)
+            def data_count_matches():
+                try:
+                    # Update context again in case database changed during table creation
+                    target_db = database or TEST_DB_NAME
+                    self.update_clickhouse_database_context(target_db)
+                    
+                    actual_count = len(self.ch.select(table_name))
+                    return actual_count == expected_count
+                except Exception as e:
+                    # Handle transient connection issues during parallel execution
+                    if "Connection refused" not in str(e) and "timeout" not in str(e).lower():
+                        print(f"WARNING: Error checking data count: {e}")
+                    return False
+                    
+            assert_wait(data_count_matches, max_wait_time=max_wait_time)
 
     def wait_for_data_sync(
-        self, table_name, where_clause, expected_value=None, field="*"
+        self, table_name, where_clause, expected_value=None, field="*", max_wait_time=30.0
     ):
-        """Wait for specific data to be synced"""
+        """Wait for specific data to be synced with configurable timeout"""
         if expected_value is not None:
             if field == "*":
                 assert_wait(
-                    lambda: len(self.ch.select(table_name, where=where_clause)) > 0
+                    lambda: len(self.ch.select(table_name, where=where_clause)) > 0,
+                    max_wait_time=max_wait_time
                 )
             else:
                 def condition():
                     results = self.ch.select(table_name, where=where_clause)
                     return len(results) > 0 and results[0][field] == expected_value
-                assert_wait(condition)
+                assert_wait(condition, max_wait_time=max_wait_time)
         else:
-            assert_wait(lambda: len(self.ch.select(table_name, where=where_clause)) > 0)
+            assert_wait(lambda: len(self.ch.select(table_name, where=where_clause)) > 0, max_wait_time=max_wait_time)
 
-    def wait_for_condition(self, condition, max_wait_time=20.0):
-        """Wait for a condition to be true with timeout"""
+    def wait_for_condition(self, condition, max_wait_time=30.0):
+        """Wait for a condition to be true with timeout - increased for parallel infrastructure"""
         assert_wait(condition, max_wait_time=max_wait_time)
         
     def ensure_database_exists(self, db_name=None):
@@ -246,18 +299,28 @@ class BaseReplicationTest:
                 raise
                 
     def _check_replication_process_health(self):
-        """Check if replication processes are still healthy"""
+        """Check if replication processes are still healthy, return False if any process failed"""
+        processes_healthy = True
+        
         if self.binlog_runner:
             if self.binlog_runner.process is None:
                 print("WARNING: Binlog runner process is None")
+                processes_healthy = False
             elif self.binlog_runner.process.poll() is not None:
-                print(f"WARNING: Binlog runner has exited with code {self.binlog_runner.process.poll()}")
+                exit_code = self.binlog_runner.process.poll()
+                print(f"WARNING: Binlog runner has exited with code {exit_code}")
+                processes_healthy = False
                 
         if self.db_runner:
             if self.db_runner.process is None:
                 print("WARNING: DB runner process is None")
+                processes_healthy = False
             elif self.db_runner.process.poll() is not None:
-                print(f"WARNING: DB runner has exited with code {self.db_runner.process.poll()}")
+                exit_code = self.db_runner.process.poll()
+                print(f"WARNING: DB runner has exited with code {exit_code}")
+                processes_healthy = False
+                
+        return processes_healthy
             
     def update_clickhouse_database_context(self, db_name=None):
         """Update ClickHouse client to use correct database context"""

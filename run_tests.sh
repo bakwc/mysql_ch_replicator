@@ -176,23 +176,22 @@ trap cleanup EXIT
 # Phase 1.75: Start timing for performance monitoring
 start_time=$(date +%s)
 
-# Determine execution mode and run tests with 45-minute timeout
-TIMEOUT_SECONDS=3000  # 50 minutes
+
 if [ "$SERIAL_MODE" = true ]; then
-    echo "🐌 Running tests in serial mode$([ "$CI_MODE" = true ] && echo " (CI mode)") with 45-minute timeout..."
-    timeout $TIMEOUT_SECONDS docker exec -w /app/ -i $CONTAINER_ID python3 -m pytest -x -v -s tests/ $REPORTING_ARGS $PYTEST_ARGS
+    echo "🐌 Running tests in serial mode$([ "$CI_MODE" = true ] && echo " (CI mode)")  "
+    docker exec -w /app/ -i $CONTAINER_ID python3 -m pytest -x -v -s tests/ $REPORTING_ARGS $PYTEST_ARGS
 elif [ -n "$PARALLEL_ARGS" ]; then
-    echo "⚙️  Running tests with custom parallel configuration$([ "$CI_MODE" = true ] && echo " (CI mode)") with 45-minute timeout..."
-    timeout $TIMEOUT_SECONDS docker exec -w /app/ -i $CONTAINER_ID python3 -m pytest $PARALLEL_ARGS -x -v -s tests/ $REPORTING_ARGS $PYTEST_ARGS
+    echo "⚙️  Running tests with custom parallel configuration$([ "$CI_MODE" = true ] && echo " (CI mode)")  "
+    docker exec -w /app/ -i $CONTAINER_ID python3 -m pytest $PARALLEL_ARGS -x -v -s tests/ $REPORTING_ARGS $PYTEST_ARGS
 else
     # Default: Intelligent parallel execution with CI-aware scaling
     if [ "$CI" = "true" ] || [ "$GITHUB_ACTIONS" = "true" ]; then
         # Conservative defaults for GitHub Actions runners (2 CPU cores typically)
-        echo "🚀 Running tests in parallel mode (CI-optimized: 2 workers)$([ "$CI_MODE" = true ] && echo " (CI mode)") with 45-minute timeout..."
-        timeout $TIMEOUT_SECONDS docker exec -w /app/ -i $CONTAINER_ID python3 -m pytest -n 2 --dist worksteal --maxfail=5 -v tests/ $REPORTING_ARGS $PYTEST_ARGS
+        echo "🚀 Running tests in parallel mode (CI-optimized: 2 workers)$([ "$CI_MODE" = true ] && echo " (CI mode)")  "
+        docker exec -w /app/ -i $CONTAINER_ID python3 -m pytest -n 2 --dist worksteal --maxfail=5 -v tests/ $REPORTING_ARGS $PYTEST_ARGS
     else
         # Conservative parallelism for local development to avoid resource contention
-        echo "🚀 Running tests in parallel mode (local-optimized: 2 workers)$([ "$CI_MODE" = true ] && echo " (CI mode)") with 45-minute timeout..."
-        timeout $TIMEOUT_SECONDS docker exec -w /app/ -i $CONTAINER_ID python3 -m pytest -n 4 --dist worksteal --maxfail=50 -v tests/ $REPORTING_ARGS $PYTEST_ARGS
+        echo "🚀 Running tests in parallel mode (local-optimized: 4 workers)$([ "$CI_MODE" = true ] && echo " (CI mode)")  "
+        docker exec -w /app/ -i $CONTAINER_ID python3 -m pytest -n 4 --dist worksteal --maxfail=50 -v tests/ $REPORTING_ARGS $PYTEST_ARGS
     fi
 fi

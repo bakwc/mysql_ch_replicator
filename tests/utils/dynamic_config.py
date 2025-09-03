@@ -131,14 +131,27 @@ class DynamicConfigManager:
         with open(base_config_path, 'r') as f:
             config_dict = yaml.safe_load(f)
         
-        # Apply isolated data directory
-        config_dict['binlog_replicator']['data_dir'] = self.get_isolated_data_dir()
+        # Apply isolated data directory and ensure parent directory exists
+        isolated_data_dir = self.get_isolated_data_dir()
+        config_dict['binlog_replicator']['data_dir'] = isolated_data_dir
         
-        # Apply dynamic target database mappings
+        # CRITICAL FIX: Ensure parent directory exists to prevent process startup failures
+        parent_dir = os.path.dirname(isolated_data_dir)  # e.g. /app/binlog
+        try:
+            os.makedirs(parent_dir, exist_ok=True)
+            print(f"DEBUG: Ensured parent directory exists: {parent_dir}")
+        except Exception as e:
+            print(f"WARNING: Could not create parent directory {parent_dir}: {e}")
+        
+        # Apply custom settings FIRST so they can override target database mapping logic
+        if custom_settings:
+            self._deep_update(config_dict, custom_settings)
+        
+        # Apply dynamic target database mappings (but respect custom_settings overrides)
         if target_mappings:
             config_dict['target_databases'] = target_mappings
         elif 'target_databases' in config_dict and config_dict['target_databases']:
-            # Convert existing static mappings to dynamic
+            # Convert existing static mappings to dynamic (only if not cleared by custom_settings)
             existing_mappings = config_dict['target_databases']
             dynamic_mappings = {}
             
@@ -158,10 +171,6 @@ class DynamicConfigManager:
             # Ensure empty target_databases for consistency
             config_dict['target_databases'] = {}
         
-        # Apply custom settings if provided
-        if custom_settings:
-            self._deep_update(config_dict, custom_settings)
-        
         # Create temporary file
         temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False)
         try:
@@ -175,7 +184,9 @@ class DynamicConfigManager:
     def _deep_update(self, base_dict: dict, update_dict: dict):
         """Deep update dictionary (modifies base_dict in place)"""
         for key, value in update_dict.items():
-            if key in base_dict and isinstance(base_dict[key], dict) and isinstance(value, dict):
+            if key in base_dict and isinstance(base_dict[key], dict) and isinstance(value, dict) and value:
+                # Only merge dicts if the update value is non-empty
+                # Empty dicts ({}) should replace the entire key, not merge
                 self._deep_update(base_dict[key], value)
             else:
                 base_dict[key] = value
