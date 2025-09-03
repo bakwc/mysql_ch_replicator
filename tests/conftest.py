@@ -239,7 +239,25 @@ def prepare_env(
 
 def read_logs(db_name):
     """Read logs from db replicator for debugging"""
-    return open(os.path.join("binlog", db_name, "db_replicator.log")).read()
+    # The logs are currently written to /tmp/binlog/ (legacy path) 
+    # organized by database name: /tmp/binlog/{db_name}/db_replicator.log
+    # TODO: This should eventually use the isolated data directory when config isolation is fully working
+    log_path = os.path.join("/tmp/binlog", db_name, "db_replicator.log")
+    
+    # Wait for log file to be created (up to 10 seconds)
+    for _ in range(100):  # 100 * 0.1s = 10s max wait
+        if os.path.exists(log_path):
+            try:
+                with open(log_path, 'r') as f:
+                    return f.read()
+            except (IOError, OSError):
+                # File might be being written to, wait a bit
+                time.sleep(0.1)
+                continue
+        time.sleep(0.1)
+    
+    # If we get here, the log file doesn't exist or can't be read
+    raise FileNotFoundError(f"Log file not found at {log_path} after waiting 10 seconds")
 
 
 def get_binlog_replicator_pid(cfg: config.Settings):
