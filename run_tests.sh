@@ -25,8 +25,9 @@
 #   ./run_tests.sh -n 4                             # Force 4 parallel workers
 
 echo "🐳 Starting Docker services..."
+docker compose -f docker-compose-tests.yaml up --force-recreate --wait -d
 
-# Phase 1.75: Pre-test infrastructure monitoring
+# Phase 1.75: Post-startup infrastructure monitoring
 if [ -f "tools/test_monitor.py" ]; then
     echo "🔍 Phase 1.75: Running infrastructure health check..."
     python3 tools/test_monitor.py --check-processes --performance-baseline
@@ -38,8 +39,6 @@ if [ -f "tools/test_monitor.py" ]; then
         echo "⚠️  Infrastructure warnings detected - proceeding with caution"
     fi
 fi
-
-docker compose -f docker-compose-tests.yaml up --force-recreate --wait -d
 
 # Get the container ID
 CONTAINER_ID=$(docker ps | grep -E "(mysql_ch_replicator_src-replicator|mysql_ch_replicator-replicator)" | awk '{print $1}')
