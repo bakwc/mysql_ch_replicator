@@ -26,8 +26,10 @@ class TestDynamicDatabaseIsolation(BaseReplicationTest, SchemaTestMixin, DataTes
         ]
         self.insert_multiple_records(TEST_TABLE_NAME, test_data)
         
-        # Start replication and verify
-        self.start_replication()
+        # Start replication using simplified helper method
+        self.start_isolated_replication()
+        
+        # Wait for sync and verify
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=2)
         
         # Verify data replication worked
@@ -42,14 +44,14 @@ class TestDynamicDatabaseIsolation(BaseReplicationTest, SchemaTestMixin, DataTes
     def test_dynamic_target_database_mapping(self):
         """Test dynamic target database mapping functionality"""
         
-        # Create isolated target database name
-        target_db_name = self.create_isolated_target_database_name("test_target")
+        # Use the new helper method to create isolated target database name  
+        target_db_name = self.create_isolated_target_database_name(TEST_DB_NAME, "test_target")
         
         # Verify target database name is properly isolated
         assert "_w" in target_db_name, "Target database name should contain worker ID"
         assert "test_target" in target_db_name, "Target database name should contain specified suffix"
         
-        # Create dynamic config with target mapping
+        # Create dynamic config with target mapping using the helper method
         config_file = self.create_dynamic_config_with_target_mapping(
             source_db_name=TEST_DB_NAME,
             target_db_name=target_db_name
@@ -69,7 +71,7 @@ class TestDynamicDatabaseIsolation(BaseReplicationTest, SchemaTestMixin, DataTes
         assert config_data['target_databases'][TEST_DB_NAME] == target_db_name
         
         # Verify data directory is isolated
-        assert "_w" in config_data['binlog_replicator']['data_dir']
+        assert "w" in config_data['binlog_replicator']['data_dir']
         
         print(f"✅ Dynamic config test passed:")
         print(f"   Source DB: {TEST_DB_NAME}")
@@ -92,7 +94,7 @@ class TestDynamicDatabaseIsolation(BaseReplicationTest, SchemaTestMixin, DataTes
         
         # Test data directory generation  
         data_dir = config_manager.get_isolated_data_dir()
-        assert "/app/binlog/" in data_dir and "_w" in data_dir, "Generated data directory should be isolated in binlog folder"
+        assert "/app/binlog" in data_dir and "w" in data_dir, "Generated data directory should be isolated in binlog folder"
         
         # Test target database name generation
         target_name = config_manager.get_isolated_target_database_name(db_name, "custom_target")

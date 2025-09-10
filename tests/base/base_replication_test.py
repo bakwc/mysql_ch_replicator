@@ -487,3 +487,66 @@ class BaseReplicationTest:
         except Exception as e:
             print(f"ERROR: Failed to update ClickHouse database context: {e}")
             return None
+
+    def start_isolated_replication(self, config_file=None, db_name=None, target_mappings=None):
+        """
+        Standardized method to start replication with isolated configuration.
+        
+        This eliminates the need to manually call create_dynamic_config everywhere.
+        
+        Args:
+            config_file: Base config file path (defaults to self.config_file)
+            db_name: Database name for replication (defaults to TEST_DB_NAME)
+            target_mappings: Optional dict of source -> target database mappings
+        """
+        from tests.utils.dynamic_config import create_dynamic_config
+        
+        # Use default config if not specified
+        if config_file is None:
+            config_file = self.config_file
+        
+        # Create isolated configuration
+        isolated_config = create_dynamic_config(
+            base_config_path=config_file,
+            target_mappings=target_mappings
+        )
+        
+        # Start replication with isolated config
+        self.start_replication(config_file=isolated_config, db_name=db_name)
+        
+        # Handle ClickHouse database lifecycle transitions
+        self.update_clickhouse_database_context(db_name)
+        
+        return isolated_config
+
+    def create_isolated_target_database_name(self, source_db_name, target_suffix="target"):
+        """
+        Helper method to create isolated target database names for mapping tests.
+        
+        Args:
+            source_db_name: Source database name (used for reference)  
+            target_suffix: Suffix for target database name
+            
+        Returns:
+            Isolated target database name
+        """
+        from tests.utils.dynamic_config import get_config_manager
+        config_manager = get_config_manager()
+        return config_manager.get_isolated_target_database_name(source_db_name, target_suffix)
+
+    def create_dynamic_config_with_target_mapping(self, source_db_name, target_db_name):
+        """
+        Helper method to create dynamic config with target database mapping.
+        
+        Args:
+            source_db_name: Source database name
+            target_db_name: Target database name
+            
+        Returns:
+            Path to created dynamic config file
+        """
+        from tests.utils.dynamic_config import create_dynamic_config
+        return create_dynamic_config(
+            base_config_path=self.config_file,
+            target_mappings={source_db_name: target_db_name}
+        )

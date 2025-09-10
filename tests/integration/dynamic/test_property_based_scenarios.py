@@ -62,9 +62,11 @@ class TestPropertyBasedScenarios(BaseReplicationTest, SchemaTestMixin, DataTestM
                 if value is not None:
                     original_non_null_counts[key] = original_non_null_counts.get(key, 0) + 1
         
-        # Execute replication
+        # Execute replication with isolated config
         self.insert_multiple_records(TEST_TABLE_NAME, test_data)
-        self.start_replication()
+        from tests.utils.dynamic_config import create_dynamic_config
+        isolated_config = create_dynamic_config(self.config_file)
+        self.start_replication(config_file=isolated_config)
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=original_count)
         
         # Verify invariants
@@ -138,7 +140,9 @@ class TestPropertyBasedScenarios(BaseReplicationTest, SchemaTestMixin, DataTestM
         
         if test_data:
             self.insert_multiple_records(TEST_TABLE_NAME, test_data)
-            self.start_replication()
+            from tests.utils.dynamic_config import create_dynamic_config
+            isolated_config = create_dynamic_config(self.config_file)
+            self.start_replication(config_file=isolated_config)
             self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=len(test_data))
             
             # Verify constraint handling
@@ -180,7 +184,9 @@ class TestPropertyBasedScenarios(BaseReplicationTest, SchemaTestMixin, DataTestM
         if test_data:
             # Pre-populate ALL data before starting replication (Phase 1.75)
             self.insert_multiple_records(TEST_TABLE_NAME, test_data)
-            self.start_replication()
+            from tests.utils.dynamic_config import create_dynamic_config
+            isolated_config = create_dynamic_config(self.config_file)
+            self.start_replication(config_file=isolated_config)
             self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=len(test_data))
             
             # Verify data type interaction handling
@@ -224,7 +230,9 @@ class TestPropertyBasedScenarios(BaseReplicationTest, SchemaTestMixin, DataTestM
         initial_data = self.dynamic_gen.generate_dynamic_data(schema_sql, record_count=50)
         self.insert_multiple_records(TEST_TABLE_NAME, initial_data)
         
-        self.start_replication()
+        from tests.utils.dynamic_config import create_dynamic_config
+        isolated_config = create_dynamic_config(self.config_file)
+        self.start_replication(config_file=isolated_config)
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=len(initial_data))
         
         # Perform random operations

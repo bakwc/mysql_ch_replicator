@@ -111,8 +111,10 @@ class TestBasicCrudOperations(BaseReplicationTest, SchemaTestMixin, DataTestMixi
         
         self.insert_multiple_records(TEST_TABLE_NAME, all_data)
 
-        # Start replication AFTER all data is inserted
-        self.start_replication()
+        # Start replication AFTER all data is inserted with isolated config
+        from tests.utils.dynamic_config import create_dynamic_config
+        isolated_config = create_dynamic_config(self.config_file)  # Use self.config_file for non-parameterized tests
+        self.start_replication(config_file=isolated_config)
         
         # Update ClickHouse context to handle database lifecycle transitions
         self.update_clickhouse_database_context()
@@ -138,8 +140,10 @@ class TestBasicCrudOperations(BaseReplicationTest, SchemaTestMixin, DataTestMixi
             TEST_TABLE_NAME, "name='John'", {"age": 26, "name": "John_Updated"}
         )
 
-        # Start replication AFTER all operations are complete
-        self.start_replication()
+        # Start replication AFTER all operations are complete with isolated config
+        from tests.utils.dynamic_config import create_dynamic_config
+        isolated_config = create_dynamic_config(self.config_file)  # Use self.config_file for non-parameterized tests
+        self.start_replication(config_file=isolated_config)
         
         # Update ClickHouse context to handle database lifecycle transitions
         self.update_clickhouse_database_context()
@@ -163,8 +167,10 @@ class TestBasicCrudOperations(BaseReplicationTest, SchemaTestMixin, DataTestMixi
         # Perform delete operation BEFORE starting replication (Phase 1.75 pattern)
         self.delete_records(TEST_TABLE_NAME, "name='Peter'")
 
-        # Start replication AFTER all operations are complete
-        self.start_replication()
+        # Start replication AFTER all operations are complete with isolated config
+        from tests.utils.dynamic_config import create_dynamic_config
+        isolated_config = create_dynamic_config(self.config_file)  # Use self.config_file for non-parameterized tests
+        self.start_replication(config_file=isolated_config)
         
         # Update ClickHouse context to handle database lifecycle transitions
         self.update_clickhouse_database_context()
@@ -196,8 +202,10 @@ class TestBasicCrudOperations(BaseReplicationTest, SchemaTestMixin, DataTestMixi
         self.update_record(TEST_TABLE_NAME, "name='Ivan'", {"age": 43})  # Update
         self.delete_records(TEST_TABLE_NAME, "name='Peter'")  # Delete
 
-        # Start replication AFTER all operations are complete
-        self.start_replication()
+        # Start replication AFTER all operations are complete with isolated config
+        from tests.utils.dynamic_config import create_dynamic_config
+        isolated_config = create_dynamic_config(self.config_file)  # Use self.config_file for non-parameterized tests
+        self.start_replication(config_file=isolated_config)
         
         # Update ClickHouse context to handle database lifecycle transitions
         self.update_clickhouse_database_context()
@@ -241,8 +249,10 @@ class TestBasicCrudOperations(BaseReplicationTest, SchemaTestMixin, DataTestMixi
         self.delete_records(TEST_TABLE_NAME, "departments=30")
         self.delete_records(TEST_TABLE_NAME, "departments=50")
 
-        # Start replication AFTER all operations are complete
-        self.start_replication()
+        # Start replication AFTER all operations are complete with isolated config
+        from tests.utils.dynamic_config import create_dynamic_config
+        isolated_config = create_dynamic_config(self.config_file)  # Use self.config_file for non-parameterized tests
+        self.start_replication(config_file=isolated_config)
         
         # Update ClickHouse context to handle database lifecycle transitions
         self.update_clickhouse_database_context()
