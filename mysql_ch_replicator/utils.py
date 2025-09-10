@@ -40,6 +40,17 @@ class ProcessRunner:
         self.log_file = None
 
     def run(self):
+        """
+        Start the subprocess with proper environment isolation.
+
+        IMPORTANT: This method includes test isolation logic that ONLY runs during
+        pytest execution. In production, no test-related environment variables
+        are set or required. If you see "emergency test ID" warnings in production,
+        do NOT remove the is_testing conditional - the issue is elsewhere.
+
+        The test isolation prevents database conflicts during parallel test execution
+        but should never interfere with production operations.
+        """
         # Use shlex for proper command parsing instead of simple split
         try:
             cmd = shlex.split(self.cmd) if isinstance(self.cmd, str) else self.cmd
@@ -56,7 +67,21 @@ class ProcessRunner:
             # Prepare environment for subprocess
             subprocess_env = os.environ.copy()
 
-            # ONLY handle test ID logic during testing (when pytest is running)
+            # CRITICAL: Test ID logic should ONLY run during testing, NOT in production
+            #
+            # BACKGROUND: The test isolation system was designed to prevent database conflicts
+            # during parallel pytest execution. However, the original implementation had a bug
+            # where it ALWAYS tried to generate test IDs, even in production environments.
+            #
+            # PRODUCTION PROBLEM: In production, no PYTEST_TEST_ID exists, so the code would
+            # always generate "emergency test IDs" and log confusing warnings like:
+            # "ProcessRunner: Generated emergency test ID 3e345c30 for subprocess"
+            #
+            # SOLUTION: Only run test ID logic when actually running under pytest.
+            # This prevents production noise while preserving test isolation functionality.
+            #
+            # DO NOT REVERT: If you see test ID warnings in production, the fix is NOT
+            # to make this logic always run - it's to ensure this conditional stays in place.
             is_testing = (
                 any(
                     key in subprocess_env
