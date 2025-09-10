@@ -118,7 +118,11 @@ def update_test_constants():
 # Test runners
 class BinlogReplicatorRunner(ProcessRunner):
     def __init__(self, cfg_file=CONFIG_FILE):
-        super().__init__(f"python ./main.py --config {cfg_file} binlog_replicator")
+        # Use python3 and absolute path for better compatibility in container
+        import sys
+        python_exec = sys.executable or "python3"
+        main_path = os.path.abspath("./main.py")
+        super().__init__(f"{python_exec} {main_path} --config {cfg_file} binlog_replicator")
 
 
 class DbReplicatorRunner(ProcessRunner):
@@ -126,14 +130,22 @@ class DbReplicatorRunner(ProcessRunner):
         additional_arguments = additional_arguments or ""
         if not additional_arguments.startswith(" "):
             additional_arguments = " " + additional_arguments
+        # Use python3 and absolute path for better compatibility in container
+        import sys
+        python_exec = sys.executable or "python3"
+        main_path = os.path.abspath("./main.py")
         super().__init__(
-            f"python ./main.py --config {cfg_file} --db {db_name} db_replicator{additional_arguments}"
+            f"{python_exec} {main_path} --config {cfg_file} --db {db_name} db_replicator{additional_arguments}"
         )
 
 
 class RunAllRunner(ProcessRunner):
     def __init__(self, cfg_file=CONFIG_FILE):
-        super().__init__(f"python ./main.py --config {cfg_file} run_all")
+        # Use python3 and absolute path for better compatibility in container
+        import sys
+        python_exec = sys.executable or "python3"
+        main_path = os.path.abspath("./main.py")
+        super().__init__(f"{python_exec} {main_path} --config {cfg_file} run_all")
 
 
 # Database operation helpers

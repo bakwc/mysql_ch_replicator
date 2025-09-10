@@ -16,7 +16,7 @@
         "id": 2,
         "title": "Clean and improve source code documentation",
         "description": "Update all docstrings, comments, and inline documentation throughout the codebase",
-        "status": "in-progress",
+        "status": "done",
         "priority": "medium",
         "dependencies": [],
         "details": "Systematically review and improve documentation in mysql_ch_replicator/ directory. Focus on: method docstrings, class documentation, inline comments for complex logic, error message clarity, and API documentation. Ensure all public methods have clear docstrings explaining purpose, parameters, and return values.",
@@ -27,7 +27,7 @@
         "id": 3,
         "title": "Fix critical process startup RuntimeError issues",
         "description": "Resolve 'Replication processes failed to start properly' affecting 40+ tests",
-        "status": "pending",
+        "status": "done",
         "priority": "high",
         "dependencies": [
           "1"
@@ -69,7 +69,7 @@
         "id": 6,
         "title": "Fix individual failing tests - Group 1 (Startup/Process)",
         "description": "Systematically fix tests failing due to process startup issues",
-        "status": "pending",
+        "status": "in-progress",
         "priority": "high",
         "dependencies": [
           "3"
@@ -174,7 +174,7 @@
       },
       "currentTag": "master",
       "description": "Tasks for master context",
-      "updated": "2025-09-10T15:09:50.837Z"
+      "updated": "2025-09-10T16:00:30.061Z"
     }
   }
 }
