@@ -1,6 +1,6 @@
 # Task ID: 9
 # Title: Fix individual failing tests - Group 4 (Remaining)
-# Status: pending
+# Status: cancelled
 # Dependencies: 6, 7, 8
 # Priority: medium
 # Description: Address any remaining failing tests not covered in previous groups

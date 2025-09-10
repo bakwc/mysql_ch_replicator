@@ -1,12 +1,11 @@
-# MySQL ClickHouse Replicator - Comprehensive Testing Guide
+# MySQL ClickHouse Replicator - Testing Guide
 
 ## Overview
 
-This guide provides everything you need to know about testing the MySQL ClickHouse Replicator, from running tests to writing new ones, including the recent **binlog isolation fixes** that resolved 132 test failures.
+This guide covers testing the MySQL ClickHouse Replicator, including running tests and writing new ones.
 
-**Current Status**: ✅ **Test Suite Stabilized** - Major binlog isolation issues resolved  
-**Test Results**: 32 passed, 132 failed → Expected ~80-90% improvement after binlog fixes  
-**Key Achievement**: Eliminated parallel test conflicts through true binlog directory isolation
+**Current Status**: 126 passed, 47 failed, 11 skipped (68.5% pass rate)  
+**Infrastructure**: ✅ Parallel test isolation and dynamic database management working
 
 ---
 
@@ -24,8 +23,8 @@ This guide provides everything you need to know about testing the MySQL ClickHou
 # Run with detailed output for debugging
 ./run_tests.sh --tb=short
 
-# Validate binlog isolation (run this first to verify fixes)
-./run_tests.sh -k "test_binlog_isolation_verification"
+# Run specific test categories  
+./run_tests.sh -k "data_types"
 ```
 
 ### Test Environment

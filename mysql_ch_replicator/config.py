@@ -332,28 +332,47 @@ class Settings:
         
         # Special handling for Docker volume mount issues where directory exists but can't be written to
         try:
+            # CRITICAL: Ensure parent directories exist first
+            # This fixes the issue where isolated test paths like /app/binlog/w3_75f29622 
+            # don't have their parent directories created yet
+            parent_dir = os.path.dirname(self.binlog_replicator.data_dir)
+            if parent_dir and not os.path.exists(parent_dir):
+                os.makedirs(parent_dir, exist_ok=True)
+                print(f"DEBUG: Created parent directory: {parent_dir}")
+            
+            # Now ensure the target directory exists
+            if not os.path.exists(self.binlog_replicator.data_dir):
+                os.makedirs(self.binlog_replicator.data_dir, exist_ok=True)
+                print(f"DEBUG: Created binlog directory: {self.binlog_replicator.data_dir}")
+            
             # Test if we can actually create files in the directory
-            if os.path.exists(self.binlog_replicator.data_dir):
-                test_file = os.path.join(self.binlog_replicator.data_dir, ".test_write")
+            test_file = os.path.join(self.binlog_replicator.data_dir, ".test_write")
+            try:
+                with open(test_file, "w") as f:
+                    f.write("test")
+                os.remove(test_file)
+                # Directory works, we're good
+                print(f"DEBUG: Binlog directory writability confirmed: {self.binlog_replicator.data_dir}")
+            except (OSError, IOError) as e:
+                print(f"DEBUG: Directory exists but not writable, recreating: {e}")
+                # Directory exists but is not writable, recreate it
+                shutil.rmtree(self.binlog_replicator.data_dir, ignore_errors=True)
+                os.makedirs(self.binlog_replicator.data_dir, exist_ok=True)
+                # Test write again after recreation
                 try:
                     with open(test_file, "w") as f:
                         f.write("test")
                     os.remove(test_file)
-                    # Directory works, we're good
-                except (OSError, IOError) as e:
-                    print(f"DEBUG: Directory exists but not writable, recreating: {e}")
-                    # Directory exists but is not writable, recreate it
-                    shutil.rmtree(self.binlog_replicator.data_dir, ignore_errors=True)
-                    os.makedirs(self.binlog_replicator.data_dir, exist_ok=True)
-            else:
-                # Directory doesn't exist, create it normally
-                os.makedirs(self.binlog_replicator.data_dir, exist_ok=True)
+                    print(f"DEBUG: Binlog directory successfully recreated and writable: {self.binlog_replicator.data_dir}")
+                except (OSError, IOError) as e2:
+                    print(f"WARNING: Binlog directory still not writable after recreation: {e2}")
                 
         except Exception as e:
             print(f"WARNING: Could not ensure binlog directory is writable: {e}")
             # Fallback - try creating anyway
             try:
                 os.makedirs(self.binlog_replicator.data_dir, exist_ok=True)
+                print(f"DEBUG: Fallback directory creation successful: {self.binlog_replicator.data_dir}")
             except Exception as e2:
                 print(f"CRITICAL: Final binlog directory creation failed: {e2}")
         
