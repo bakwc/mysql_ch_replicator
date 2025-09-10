@@ -63,6 +63,29 @@ class State:
 
     def save(self):
         file_name = self.file_name
+        
+        # Ensure parent directory exists before saving
+        parent_dir = os.path.dirname(file_name)
+        try:
+            logger.debug(f"Ensuring directory exists for state file: {parent_dir}")
+            os.makedirs(parent_dir, exist_ok=True)
+        except OSError as e:
+            logger.warning(f"Failed to create state directory {parent_dir}: {e}")
+            # Try creating directories step by step for better error handling
+            path_parts = []
+            current_path = parent_dir
+            while current_path and not os.path.exists(current_path):
+                path_parts.insert(0, current_path)
+                current_path = os.path.dirname(current_path)
+            
+            for path in path_parts:
+                try:
+                    os.mkdir(path)
+                    logger.debug(f"Created directory: {path}")
+                except OSError as create_error:
+                    logger.error(f"Failed to create directory {path}: {create_error}")
+                    raise
+        
         data = pickle.dumps({
             'last_processed_transaction': self.last_processed_transaction,
             'status': self.status.value,

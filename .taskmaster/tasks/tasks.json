@@ -69,7 +69,7 @@
         "id": 6,
         "title": "Fix individual failing tests - Group 1 (Startup/Process)",
         "description": "Systematically fix tests failing due to process startup issues",
-        "status": "in-progress",
+        "status": "review",
         "priority": "high",
         "dependencies": [
           "3"
@@ -174,7 +174,7 @@
       },
       "currentTag": "master",
       "description": "Tasks for master context",
-      "updated": "2025-09-10T16:00:30.061Z"
+      "updated": "2025-09-10T17:57:59.208Z"
     }
   }
 }
