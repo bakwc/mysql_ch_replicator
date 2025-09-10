@@ -90,10 +90,22 @@ class BaseReplicationTest:
 
         # Now safe to start replication processes - database exists in MySQL
         self.binlog_runner = BinlogReplicatorRunner(cfg_file=actual_config_file)
-        self.binlog_runner.run()
+        print(f"DEBUG: Starting binlog runner with command: {self.binlog_runner.cmd}")
+        try:
+            self.binlog_runner.run()
+            print(f"DEBUG: Binlog runner process started successfully: {self.binlog_runner.process}")
+        except Exception as e:
+            print(f"ERROR: Failed to start binlog runner: {e}")
+            raise
 
         self.db_runner = DbReplicatorRunner(db_name, cfg_file=actual_config_file)
-        self.db_runner.run()
+        print(f"DEBUG: Starting db runner with command: {self.db_runner.cmd}")
+        try:
+            self.db_runner.run()
+            print(f"DEBUG: DB runner process started successfully: {self.db_runner.process}")
+        except Exception as e:
+            print(f"ERROR: Failed to start db runner: {e}")
+            raise
 
         # CRITICAL: Wait for processes to fully initialize with retry logic
         import time
