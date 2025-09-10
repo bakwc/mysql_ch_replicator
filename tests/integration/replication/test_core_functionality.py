@@ -59,8 +59,10 @@ class TestCoreFunctionality(BaseReplicationTest, SchemaTestMixin, DataTestMixin)
 
         self.insert_multiple_records(TEST_TABLE_NAME, initial_data)
 
-        # Start replication
-        self.start_replication()
+        # Start replication with isolated config
+        from tests.utils.dynamic_config import create_dynamic_config
+        isolated_config = create_dynamic_config(self.config_file)
+        self.start_replication(config_file=isolated_config)
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=3)
 
         # Test multi-column NULL updates (erase operations)
@@ -152,8 +154,10 @@ class TestCoreFunctionality(BaseReplicationTest, SchemaTestMixin, DataTestMixin)
         # Insert datetime test data BEFORE starting replication
         self.insert_multiple_records(TEST_TABLE_NAME, datetime_test_cases)
 
-        # Start replication AFTER all data is inserted
-        self.start_replication()
+        # Start replication AFTER all data is inserted with isolated config
+        from tests.utils.dynamic_config import create_dynamic_config
+        isolated_config = create_dynamic_config(self.config_file)
+        self.start_replication(config_file=isolated_config)
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=4)
 
         # Verify specific datetime handling

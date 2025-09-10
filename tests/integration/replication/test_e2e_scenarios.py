@@ -34,8 +34,10 @@ class TestE2EScenarios(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
             commit=True,
         )
 
-        # Start replication
-        self.start_replication()
+        # Start replication with isolated config
+        from tests.utils.dynamic_config import create_dynamic_config
+        isolated_config = create_dynamic_config(self.config_file)
+        self.start_replication(config_file=isolated_config)
         
         # Wait for initial data replication (start_replication handles database context)
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=2)
@@ -90,8 +92,10 @@ class TestE2EScenarios(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
             cursor.execute("COMMIT")
             connection.commit()
 
-        # Start replication AFTER all data operations are complete
-        self.start_replication()
+        # Start replication AFTER all data operations are complete with isolated config
+        from tests.utils.dynamic_config import create_dynamic_config
+        isolated_config = create_dynamic_config(self.config_file)
+        self.start_replication(config_file=isolated_config)
         
         # Verify all changes replicated correctly
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=2)
@@ -127,8 +131,10 @@ class TestE2EScenarios(BaseReplicationTest, SchemaTestMixin, DataTestMixin):
                 table, [{"name": f"User_{table}", "age": 25 + len(table)}]
             )
 
-        # Start replication with runner
-        self.start_replication()
+        # Start replication with runner and isolated config
+        from tests.utils.dynamic_config import create_dynamic_config
+        isolated_config = create_dynamic_config(self.config_file)
+        self.start_replication(config_file=isolated_config)
 
         # Verify all tables replicated
         for table in tables:
