@@ -1,0 +1,25 @@
+# Task ID: 14
+# Title: Fix Process Startup Failures
+# Status: pending
+# Dependencies: 13
+# Priority: high
+# Description: Systematically fix all tests failing with 'Replication processes failed to start properly' runtime errors
+# Details:
+
+
+# Test Strategy:
+
+
+# Subtasks:
+## 1. Investigate process startup timeout issues [pending]
+### Dependencies: None
+### Description: Examine why replication processes exit with code 1 and enhance startup reliability
+### Details:
+
+
+## 2. Fix subprocess error handling and logging [pending]
+### Dependencies: None
+### Description: Improve error diagnostics and retry logic for failed process startups
+### Details:
+
+

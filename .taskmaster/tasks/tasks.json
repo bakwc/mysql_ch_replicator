@@ -40,7 +40,7 @@
         "id": 4,
         "title": "Fix database connection and detection issues",
         "description": "Resolve timeout issues in database detection and connection pooling",
-        "status": "pending",
+        "status": "cancelled",
         "priority": "high",
         "dependencies": [
           "1",
@@ -54,7 +54,7 @@
         "id": 5,
         "title": "Fix data synchronization and type comparison issues",
         "description": "Resolve type comparison problems (Decimal vs float) and sync timeouts",
-        "status": "pending",
+        "status": "cancelled",
         "priority": "medium",
         "dependencies": [
           "1",
@@ -69,7 +69,7 @@
         "id": 6,
         "title": "Fix individual failing tests - Group 1 (Startup/Process)",
         "description": "Systematically fix tests failing due to process startup issues",
-        "status": "review",
+        "status": "cancelled",
         "priority": "high",
         "dependencies": [
           "3"
@@ -82,7 +82,7 @@
         "id": 7,
         "title": "Fix individual failing tests - Group 2 (Connection/DB)",
         "description": "Systematically fix tests failing due to database connection issues",
-        "status": "pending",
+        "status": "cancelled",
         "priority": "high",
         "dependencies": [
           "4"
@@ -95,7 +95,7 @@
         "id": 8,
         "title": "Fix individual failing tests - Group 3 (Data Sync)",
         "description": "Systematically fix tests failing due to data synchronization issues",
-        "status": "pending",
+        "status": "cancelled",
         "priority": "medium",
         "dependencies": [
           "5"
@@ -108,7 +108,7 @@
         "id": 9,
         "title": "Fix individual failing tests - Group 4 (Remaining)",
         "description": "Address any remaining failing tests not covered in previous groups",
-        "status": "pending",
+        "status": "cancelled",
         "priority": "medium",
         "dependencies": [
           "6",
@@ -123,7 +123,7 @@
         "id": 10,
         "title": "Run comprehensive test validation",
         "description": "Execute full test suite to verify all fixes and achieve target pass rate",
-        "status": "pending",
+        "status": "cancelled",
         "priority": "high",
         "dependencies": [
           "6",
@@ -139,7 +139,7 @@
         "id": 11,
         "title": "Document all fixes and improvements",
         "description": "Create comprehensive documentation of all test fixes and improvements made",
-        "status": "pending",
+        "status": "cancelled",
         "priority": "low",
         "dependencies": [
           "10"
@@ -152,13 +152,211 @@
         "id": 12,
         "title": "Final validation and cleanup",
         "description": "Perform final validation of test suite stability and cleanup",
-        "status": "pending",
+        "status": "cancelled",
         "priority": "low",
         "dependencies": [
           "11"
         ],
         "details": "Run multiple test executions to verify stability. Clean up any temporary files or debugging code. Ensure test suite is ready for production use. Validate parallel execution works reliably.",
         "testStrategy": "Multiple test runs, stability testing, parallel execution validation",
+        "subtasks": []
+      },
+      {
+        "id": 13,
+        "title": "Establish Current Test Baseline",
+        "description": "Run ./run_tests.sh to document current test results and categorize all 47 failing tests by root cause",
+        "details": "",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Run full test suite and capture results",
+            "description": "Execute ./run_tests.sh and document current pass/fail status",
+            "details": "",
+            "status": "pending",
+            "dependencies": [],
+            "parentTaskId": 13
+          },
+          {
+            "id": 2,
+            "title": "Categorize failing tests by error pattern",
+            "description": "Group all 47 failing tests by error type (process startup, database context, data sync, etc.)",
+            "details": "",
+            "status": "pending",
+            "dependencies": [],
+            "parentTaskId": 13
+          }
+        ]
+      },
+      {
+        "id": 14,
+        "title": "Fix Process Startup Failures",
+        "description": "Systematically fix all tests failing with 'Replication processes failed to start properly' runtime errors",
+        "details": "",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [
+          13
+        ],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Investigate process startup timeout issues",
+            "description": "Examine why replication processes exit with code 1 and enhance startup reliability",
+            "details": "",
+            "status": "pending",
+            "dependencies": [],
+            "parentTaskId": 14
+          },
+          {
+            "id": 2,
+            "title": "Fix subprocess error handling and logging",
+            "description": "Improve error diagnostics and retry logic for failed process startups",
+            "details": "",
+            "status": "pending",
+            "dependencies": [],
+            "parentTaskId": 14
+          }
+        ]
+      },
+      {
+        "id": 15,
+        "title": "Fix Database Context and Synchronization Issues",
+        "description": "Resolve database detection timeouts and data synchronization failures affecting remaining test failures",
+        "details": "",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [
+          14
+        ],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 16,
+        "title": "Fix Configuration and Edge Case Test Failures",
+        "description": "Address configuration scenario tests and complex edge cases that are still failing",
+        "details": "",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [
+          15
+        ],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": 17,
+        "title": "Iterative Test Fixing - Round 1",
+        "description": "Run ./run_tests.sh after initial fixes and address any remaining failures with targeted solutions",
+        "details": "",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [
+          16
+        ],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 18,
+        "title": "Iterative Test Fixing - Round 2",
+        "description": "Run ./run_tests.sh again and fix any remaining failures until achieving 90%+ pass rate",
+        "details": "",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [
+          17
+        ],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 19,
+        "title": "Achieve 100% Test Success Rate",
+        "description": "Final push to fix remaining tests and achieve 100% pass rate with comprehensive validation",
+        "details": "",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [
+          18
+        ],
+        "priority": "high",
+        "subtasks": [
+          {
+            "id": 1,
+            "title": "Validate zero test failures",
+            "description": "Run ./run_tests.sh and confirm all tests pass with 0 failures, 0 errors",
+            "details": "",
+            "status": "pending",
+            "dependencies": [],
+            "parentTaskId": 19
+          },
+          {
+            "id": 2,
+            "title": "Document all remaining fixes applied",
+            "description": "Record what changes were needed to achieve 100% success rate",
+            "details": "",
+            "status": "pending",
+            "dependencies": [],
+            "parentTaskId": 19
+          }
+        ]
+      },
+      {
+        "id": 20,
+        "title": "VALIDATION: Multiple Test Run Verification",
+        "description": "Run ./run_tests.sh multiple times (3-5 runs) to ensure 100% success rate is stable and not due to timing/flakiness",
+        "details": "",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [
+          19
+        ],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 21,
+        "title": "VALIDATION: Serial vs Parallel Test Consistency",
+        "description": "Verify 100% success rate in both parallel (default) and serial (--serial) modes to ensure no race conditions",
+        "details": "",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [
+          20
+        ],
+        "priority": "high",
+        "subtasks": []
+      },
+      {
+        "id": 22,
+        "title": "VALIDATION: Subset Test Category Verification",
+        "description": "Run individual test categories (data_types, ddl, performance, etc.) separately to confirm 100% success across all categories",
+        "details": "",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [
+          21
+        ],
+        "priority": "medium",
+        "subtasks": []
+      },
+      {
+        "id": 23,
+        "title": "REDUNDANT: Emergency Fallback Test Fixes",
+        "description": "Keep this task as backup to handle any unexpected test failures that emerge during final validation rounds",
+        "details": "",
+        "testStrategy": "",
+        "status": "pending",
+        "dependencies": [
+          22
+        ],
+        "priority": "low",
         "subtasks": []
       }
     ],
@@ -174,7 +372,7 @@
       },
       "currentTag": "master",
       "description": "Tasks for master context",
-      "updated": "2025-09-10T17:57:59.208Z"
+      "updated": "2025-09-10T22:20:31.720Z"
     }
   }
 }

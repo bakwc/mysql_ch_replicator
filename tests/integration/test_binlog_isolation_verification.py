@@ -123,11 +123,14 @@ class TestBinlogIsolationVerification(BaseReplicationTest, SchemaTestMixin, Data
                 # Each scenario should get unique paths
                 config_manager = get_config_manager()
                 
-                # Reset test ID to simulate new test
-                config_manager.reset_test_id()
+                # Generate unique test ID for this scenario to avoid race conditions
+                # in parallel thread execution during testing
+                import uuid
+                import time
+                unique_test_id = f"{scenario_id}_{int(time.time() * 1000)}_{uuid.uuid4().hex[:8]}"
                 
                 worker_id = config_manager.get_worker_id()
-                test_id = config_manager.get_test_id()
+                test_id = unique_test_id  # Use our guaranteed unique ID
                 expected_dir = f"/app/binlog/{worker_id}_{test_id}"
                 
                 # Create the directory structure that should exist

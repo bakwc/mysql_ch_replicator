@@ -1,6 +1,6 @@
 # Task ID: 6
 # Title: Fix individual failing tests - Group 1 (Startup/Process)
-# Status: pending
+# Status: cancelled
 # Dependencies: 3
 # Priority: high
 # Description: Systematically fix tests failing due to process startup issues

@@ -1,6 +1,6 @@
 # Task ID: 7
 # Title: Fix individual failing tests - Group 2 (Connection/DB)
-# Status: pending
+# Status: cancelled
 # Dependencies: 4
 # Priority: high
 # Description: Systematically fix tests failing due to database connection issues
