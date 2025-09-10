@@ -125,9 +125,22 @@ class AdvancedDynamicGenerator:
             col_def = f"{col_name} {data_type}"
         
         # Add random constraints (avoid NOT NULL without DEFAULT to prevent data generation issues)
+        # Also avoid UNIQUE constraints on large string columns to prevent MySQL key length errors
         if include_constraints and random.random() < 0.3:
             if data_type in ["varchar", "char", "text"]:
-                col_def += random.choice([" DEFAULT ''", " UNIQUE"])
+                # Only add UNIQUE to small VARCHAR/CHAR columns to avoid key length limits
+                if data_type == "varchar" and "varchar(" in col_def:
+                    # Extract length to determine if UNIQUE is safe
+                    import re
+                    match = re.search(r'varchar\((\d+)\)', col_def)
+                    if match and int(match.group(1)) <= 255:
+                        col_def += random.choice([" DEFAULT ''", " UNIQUE"])
+                    else:
+                        col_def += " DEFAULT ''"
+                elif data_type == "char":
+                    col_def += random.choice([" DEFAULT ''", " UNIQUE"])
+                else:  # text
+                    col_def += " DEFAULT ''"
             elif data_type in ["int", "bigint", "decimal"]:
                 col_def += random.choice([" DEFAULT 0", " UNSIGNED"])
         

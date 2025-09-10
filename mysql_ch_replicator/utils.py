@@ -108,6 +108,23 @@ class ProcessRunner:
             logger.error(f"Failed to start process '{self.cmd}': {e}")
             raise
 
+    def _read_log_output(self):
+        """Read current log output for debugging"""
+        if not self.log_file or not hasattr(self.log_file, 'name'):
+            return "No log file available"
+            
+        try:
+            # Close and reopen to read current contents
+            log_path = self.log_file.name
+            if os.path.exists(log_path):
+                with open(log_path, 'r') as f:
+                    content = f.read().strip()
+                    return content if content else "No output captured"
+            else:
+                return "Log file does not exist"
+        except Exception as e:
+            return f"Error reading log: {e}"
+    
     def restart_dead_process_if_required(self):
         if self.process is None:
             logger.warning(f'Restarting stopped process: < {self.cmd} >')

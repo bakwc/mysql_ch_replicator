@@ -39,7 +39,7 @@ class TestDataGenerator:
         return [
             {
                 "name": "Ivan",
-                "modified_date": "2023-01-01 10:00:00",
+                "modified_date": None,  # NULL value for testing NULL datetime handling
                 "test_date": datetime.date(2015, 5, 28),
             },
             {

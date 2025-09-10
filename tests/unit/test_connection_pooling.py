@@ -26,11 +26,6 @@ DB_CONFIGS = [
         {"host": "localhost", "port": 9307, "name": "MariaDB"}, 
         id="mariadb"
     ),
-    pytest.param(
-        {"host": "localhost", "port": 9308, "name": "Percona"}, 
-        id="percona",
-        marks=pytest.mark.skip(reason="Percona container has connection issues")
-    ),
 ]
 
 

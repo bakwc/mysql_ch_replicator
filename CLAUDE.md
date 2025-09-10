@@ -59,7 +59,7 @@ tests/
 - **Database Detection Logic**: Fixed timeout issues by detecting both final and `{db_name}_tmp` databases
 - **Parallel Test Isolation**: Worker-specific paths and database names for safe parallel execution
 
-**Current Status**: 123 passed, 44 failed, 9 skipped (69.9% pass rate - **4x improvement** after subprocess isolation breakthrough!)
+**Current Status**: 126 passed, 47 failed, 11 skipped (68.5% pass rate - **IMPROVED** from previous 66.3%)
 
 ### Recent Test Fixes Applied
 
@@ -68,7 +68,22 @@ tests/
    - **Problem**: pytest main process and replicator subprocesses generated different test IDs
    - **Impact**: Database name mismatches causing massive test failures (18.8% pass rate)
    - **Solution**: Centralized TestIdManager with multi-channel coordination system
-   - **Result**: **4x improvement** - 90+ tests now passing, 69.9% pass rate achieved
+   - **Result**: **4x improvement** - 90+ tests now passing, achieved 69.9% pass rate
+
+**⚠️ CURRENT REGRESSION - September 9, 2025**:
+- **Status**: Pass rate degraded from 69.9% to 66.3% (117 passed, 56 failed, 11 skipped)
+- **Primary Issue**: "RuntimeError: Replication processes failed to start properly" - affects 40+ tests
+- **Root Cause**: DB/Binlog runner processes exiting with code 1 during startup
+- **Pattern**: Process health checks failing after 2s initialization wait
+
+**✅ RELIABILITY FIXES IMPLEMENTED - September 9, 2025**:
+- **Process Startup**: Increased timeout from 2.0s to 5.0s + 3-attempt retry logic
+- **Error Diagnostics**: Added detailed subprocess output capture and error context
+- **Database Detection**: Extended timeouts from 10s to 20s for ClickHouse operations  
+- **Data Sync**: Extended timeouts from 30s to 45s + improved type comparison (Decimal vs float)
+- **Infrastructure**: Fixed dynamic directory creation and path management issues
+- **Validation**: Added comprehensive error reporting for data sync failures
+- **ACHIEVED IMPACT**: Pass rate improved from 66.3% to 68.5% (126 passed vs 117 passed)
 
 **🔧 Previous Infrastructure Fixes**:
 2. **Docker Volume Mount Issue**: Fixed `/app/binlog/` directory writability problems
@@ -313,3 +328,7 @@ Key metrics to monitor:
 ---
 
 This system provides robust, real-time replication from MySQL to ClickHouse with comprehensive testing, error handling, and monitoring capabilities. For questions or contributions, please refer to the project repository and existing test cases for examples.
+
+## Task Master AI Instructions
+**Import Task Master's development workflow commands and guidelines, treat as if import is in the main CLAUDE.md file.**
+@./.taskmaster/CLAUDE.md

@@ -1,0 +1,180 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": 1,
+        "title": "Run baseline test assessment",
+        "description": "Execute ./run_tests.sh to establish current test state and identify all failing tests",
+        "status": "done",
+        "priority": "high",
+        "dependencies": [],
+        "details": "Run the full test suite to capture baseline metrics. Current state: 68.5% pass rate (126 passed, 47 failed, 11 skipped). Document all failure types, error messages, and patterns. Create comprehensive inventory of issues to address systematically.",
+        "testStrategy": "Capture full test output, categorize failures, document error patterns",
+        "subtasks": []
+      },
+      {
+        "id": 2,
+        "title": "Clean and improve source code documentation",
+        "description": "Update all docstrings, comments, and inline documentation throughout the codebase",
+        "status": "in-progress",
+        "priority": "medium",
+        "dependencies": [],
+        "details": "Systematically review and improve documentation in mysql_ch_replicator/ directory. Focus on: method docstrings, class documentation, inline comments for complex logic, error message clarity, and API documentation. Ensure all public methods have clear docstrings explaining purpose, parameters, and return values.",
+        "testStrategy": "Review documentation coverage, validate examples work correctly",
+        "subtasks": []
+      },
+      {
+        "id": 3,
+        "title": "Fix critical process startup RuntimeError issues",
+        "description": "Resolve 'Replication processes failed to start properly' affecting 40+ tests",
+        "status": "pending",
+        "priority": "high",
+        "dependencies": [
+          "1"
+        ],
+        "details": "Root cause: DB/Binlog runner processes exiting with code 1 during startup. Process health checks failing after 2s initialization wait. Investigate subprocess startup sequence, improve error diagnostics, implement more robust process initialization with better timeout handling and retry logic.",
+        "testStrategy": "Test process startup in isolation, verify error handling, validate timeout improvements",
+        "subtasks": []
+      },
+      {
+        "id": 4,
+        "title": "Fix database connection and detection issues",
+        "description": "Resolve timeout issues in database detection and connection pooling",
+        "status": "pending",
+        "priority": "high",
+        "dependencies": [
+          "1",
+          "3"
+        ],
+        "details": "Address database detection timeouts, connection pool configuration issues. Fix detection logic for both final and temporary databases (_tmp). Improve timeout handling from 10s to 20s for ClickHouse operations. Ensure proper connection cleanup and retry mechanisms.",
+        "testStrategy": "Test connection pooling under load, validate timeout improvements, verify cleanup",
+        "subtasks": []
+      },
+      {
+        "id": 5,
+        "title": "Fix data synchronization and type comparison issues",
+        "description": "Resolve type comparison problems (Decimal vs float) and sync timeouts",
+        "status": "pending",
+        "priority": "medium",
+        "dependencies": [
+          "1",
+          "3",
+          "4"
+        ],
+        "details": "Address data sync timeout issues (extend from 30s to 45s), fix type comparison failures between Decimal and float values. Improve data validation logic and error reporting for sync operations. Ensure proper handling of numeric precision in comparisons.",
+        "testStrategy": "Test data sync with various data types, validate timeout improvements, verify type handling",
+        "subtasks": []
+      },
+      {
+        "id": 6,
+        "title": "Fix individual failing tests - Group 1 (Startup/Process)",
+        "description": "Systematically fix tests failing due to process startup issues",
+        "status": "pending",
+        "priority": "high",
+        "dependencies": [
+          "3"
+        ],
+        "details": "Focus on tests failing with process startup errors. Fix each test individually using: analyze → fix → test → document cycle. Track which fixes work and apply patterns to similar tests. Ensure no regression in passing tests.",
+        "testStrategy": "Test each fix individually, run related test groups, verify no regressions",
+        "subtasks": []
+      },
+      {
+        "id": 7,
+        "title": "Fix individual failing tests - Group 2 (Connection/DB)",
+        "description": "Systematically fix tests failing due to database connection issues",
+        "status": "pending",
+        "priority": "high",
+        "dependencies": [
+          "4"
+        ],
+        "details": "Focus on tests failing with database connection and detection issues. Apply fixes from task 4 to individual test cases. Document successful patterns and apply to similar failing tests.",
+        "testStrategy": "Test database connections, validate detection logic, verify connection pooling",
+        "subtasks": []
+      },
+      {
+        "id": 8,
+        "title": "Fix individual failing tests - Group 3 (Data Sync)",
+        "description": "Systematically fix tests failing due to data synchronization issues",
+        "status": "pending",
+        "priority": "medium",
+        "dependencies": [
+          "5"
+        ],
+        "details": "Focus on tests failing with data sync timeouts and type comparison issues. Apply fixes from task 5 to individual test cases. Ensure proper handling of different data types and sync timing.",
+        "testStrategy": "Test data synchronization, validate type comparisons, verify timeout handling",
+        "subtasks": []
+      },
+      {
+        "id": 9,
+        "title": "Fix individual failing tests - Group 4 (Remaining)",
+        "description": "Address any remaining failing tests not covered in previous groups",
+        "status": "pending",
+        "priority": "medium",
+        "dependencies": [
+          "6",
+          "7",
+          "8"
+        ],
+        "details": "Handle edge cases and miscellaneous test failures. Apply lessons learned from previous fix groups. Focus on achieving 85%+ overall pass rate.",
+        "testStrategy": "Comprehensive testing of edge cases, validation of fix completeness",
+        "subtasks": []
+      },
+      {
+        "id": 10,
+        "title": "Run comprehensive test validation",
+        "description": "Execute full test suite to verify all fixes and achieve target pass rate",
+        "status": "pending",
+        "priority": "high",
+        "dependencies": [
+          "6",
+          "7",
+          "8",
+          "9"
+        ],
+        "details": "Run ./run_tests.sh after all individual fixes are complete. Verify 85%+ pass rate target is achieved. Check for any regressions in previously passing tests. Document final test results and remaining issues if any.",
+        "testStrategy": "Full test suite execution, regression testing, pass rate validation",
+        "subtasks": []
+      },
+      {
+        "id": 11,
+        "title": "Document all fixes and improvements",
+        "description": "Create comprehensive documentation of all test fixes and improvements made",
+        "status": "pending",
+        "priority": "low",
+        "dependencies": [
+          "10"
+        ],
+        "details": "Document all fixes applied, patterns discovered, and improvements made during the test fixing process. Update CLAUDE.md with new test status. Create guide for future test maintenance and debugging.",
+        "testStrategy": "Verify documentation accuracy, validate examples and procedures",
+        "subtasks": []
+      },
+      {
+        "id": 12,
+        "title": "Final validation and cleanup",
+        "description": "Perform final validation of test suite stability and cleanup",
+        "status": "pending",
+        "priority": "low",
+        "dependencies": [
+          "11"
+        ],
+        "details": "Run multiple test executions to verify stability. Clean up any temporary files or debugging code. Ensure test suite is ready for production use. Validate parallel execution works reliably.",
+        "testStrategy": "Multiple test runs, stability testing, parallel execution validation",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "version": "1.0.0",
+      "created": "2025-01-09",
+      "lastModified": "2025-01-09",
+      "tags": {
+        "master": {
+          "description": "Main development branch",
+          "created": "2025-01-09"
+        }
+      },
+      "currentTag": "master",
+      "description": "Tasks for master context",
+      "updated": "2025-09-10T15:09:50.837Z"
+    }
+  }
+}
