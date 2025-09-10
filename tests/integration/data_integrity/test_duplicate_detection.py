@@ -27,22 +27,10 @@ class TestDuplicateDetection(BaseReplicationTest, SchemaTestMixin, DataTestMixin
 
         # Pre-populate ALL test data including valid records and test for duplicate handling
         initial_data = [
-            {
-                "email": "user1@example.com",
-                "username": "user1",
-                "name": "First User"
-            },
-            {
-                "email": "user2@example.com", 
-                "username": "user2",
-                "name": "Second User"
-            },
+            {"email": "user1@example.com", "username": "user1", "name": "First User"},
+            {"email": "user2@example.com", "username": "user2", "name": "Second User"},
             # Include the "new valid" data that would be added after testing duplicates
-            {
-                "email": "user3@example.com",
-                "username": "user3", 
-                "name": "Third User"
-            }
+            {"email": "user3@example.com", "username": "user3", "name": "Third User"},
         ]
 
         self.insert_multiple_records(TEST_TABLE_NAME, initial_data)
@@ -54,7 +42,7 @@ class TestDuplicateDetection(BaseReplicationTest, SchemaTestMixin, DataTestMixin
             self.mysql.execute(
                 f"INSERT INTO `{TEST_TABLE_NAME}` (email, username, name) VALUES (%s, %s, %s)",
                 commit=True,
-                args=("user1@example.com", "user1_duplicate", "Duplicate User")
+                args=("user1@example.com", "user1_duplicate", "Duplicate User"),
             )
         except Exception as e:
             # Expected: MySQL should reject duplicate
@@ -65,14 +53,22 @@ class TestDuplicateDetection(BaseReplicationTest, SchemaTestMixin, DataTestMixin
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=len(initial_data))
 
         # Verify all data replicated correctly, demonstrating duplicate handling works
-        self.verify_record_exists(TEST_TABLE_NAME, "email='user1@example.com'", {"name": "First User"})
-        self.verify_record_exists(TEST_TABLE_NAME, "email='user2@example.com'", {"name": "Second User"})
-        self.verify_record_exists(TEST_TABLE_NAME, "email='user3@example.com'", {"name": "Third User"})
-        
+        self.verify_record_exists(
+            TEST_TABLE_NAME, "email='user1@example.com'", {"name": "First User"}
+        )
+        self.verify_record_exists(
+            TEST_TABLE_NAME, "email='user2@example.com'", {"name": "Second User"}
+        )
+        self.verify_record_exists(
+            TEST_TABLE_NAME, "email='user3@example.com'", {"name": "Third User"}
+        )
+
         # Ensure no duplicate entries were created
         ch_records = self.ch.select(TEST_TABLE_NAME, order_by="id")
         emails = [record["email"] for record in ch_records]
-        assert len(emails) == len(set(emails)), "Duplicate emails found in replicated data"
+        assert len(emails) == len(set(emails)), (
+            "Duplicate emails found in replicated data"
+        )
 
     @pytest.mark.integration
     def test_duplicate_update_event_handling(self):
@@ -91,7 +87,7 @@ class TestDuplicateDetection(BaseReplicationTest, SchemaTestMixin, DataTestMixin
         # Insert initial data
         initial_data = [
             {"code": "ITEM_001", "value": "Initial Value 1"},
-            {"code": "ITEM_002", "value": "Initial Value 2"}
+            {"code": "ITEM_002", "value": "Initial Value 2"},
         ]
 
         self.insert_multiple_records(TEST_TABLE_NAME, initial_data)
@@ -103,47 +99,51 @@ class TestDuplicateDetection(BaseReplicationTest, SchemaTestMixin, DataTestMixin
         # Perform multiple rapid updates (could create duplicate events in binlog)
         update_sequence = [
             ("ITEM_001", "Updated Value 1A"),
-            ("ITEM_001", "Updated Value 1B"), 
+            ("ITEM_001", "Updated Value 1B"),
             ("ITEM_001", "Updated Value 1C"),
             ("ITEM_002", "Updated Value 2A"),
-            ("ITEM_002", "Updated Value 2B")
+            ("ITEM_002", "Updated Value 2B"),
         ]
 
         for code, new_value in update_sequence:
             self.mysql.execute(
                 f"UPDATE `{TEST_TABLE_NAME}` SET value = %s WHERE code = %s",
                 commit=True,
-                args=(new_value, code)
+                args=(new_value, code),
             )
             time.sleep(0.1)  # Small delay to separate events
 
         # Wait for replication to process all updates (allow more flexibility)
         time.sleep(3.0)  # Give replication time to process
-        
+
         # Check current state for debugging
         ch_records = self.ch.select(TEST_TABLE_NAME, order_by="code")
         print(f"Final ClickHouse state: {ch_records}")
-        
+
         # Verify that we have 2 records (our initial items)
         assert len(ch_records) == 2, f"Expected 2 records, got {len(ch_records)}"
-        
+
         # Verify the records exist with their final updated values
         # We're testing that updates are processed, even if not all intermediary updates are captured
-        item1_record = next((r for r in ch_records if r['code'] == 'ITEM_001'), None)
-        item2_record = next((r for r in ch_records if r['code'] == 'ITEM_002'), None)
-        
+        item1_record = next((r for r in ch_records if r["code"] == "ITEM_001"), None)
+        item2_record = next((r for r in ch_records if r["code"] == "ITEM_002"), None)
+
         assert item1_record is not None, "ITEM_001 record not found"
         assert item2_record is not None, "ITEM_002 record not found"
-        
+
         # The final values should be one of the update values from our sequence
         # This accounts for potential timing issues in replication
-        item1_expected_values = ["Updated Value 1A", "Updated Value 1B", "Updated Value 1C"]
+        item1_expected_values = [
+            "Updated Value 1A",
+            "Updated Value 1B",
+            "Updated Value 1C",
+        ]
         item2_expected_values = ["Updated Value 2A", "Updated Value 2B"]
-        
-        assert item1_record['value'] in item1_expected_values, (
+
+        assert item1_record["value"] in item1_expected_values, (
             f"ITEM_001 value '{item1_record['value']}' not in expected values {item1_expected_values}"
         )
-        assert item2_record['value'] in item2_expected_values, (
+        assert item2_record["value"] in item2_expected_values, (
             f"ITEM_002 value '{item2_record['value']}' not in expected values {item2_expected_values}"
         )
 
@@ -170,7 +170,7 @@ class TestDuplicateDetection(BaseReplicationTest, SchemaTestMixin, DataTestMixin
             ("UPDATE", {"id": 1, "name": "Updated Record", "status": "active"}),
             ("UPDATE", {"id": 1, "name": "Updated Record", "status": "modified"}),
             ("DELETE", {"id": 1}),
-            ("INSERT", {"id": 1, "name": "Recreated Record", "status": "new"})
+            ("INSERT", {"id": 1, "name": "Recreated Record", "status": "new"}),
         ]
 
         for operation, data in operations:
@@ -178,31 +178,32 @@ class TestDuplicateDetection(BaseReplicationTest, SchemaTestMixin, DataTestMixin
                 self.mysql.execute(
                     f"INSERT INTO `{TEST_TABLE_NAME}` (id, name, status) VALUES (%s, %s, %s)",
                     commit=True,
-                    args=(data["id"], data["name"], data["status"])
+                    args=(data["id"], data["name"], data["status"]),
                 )
             elif operation == "UPDATE":
                 self.mysql.execute(
                     f"UPDATE `{TEST_TABLE_NAME}` SET name = %s, status = %s WHERE id = %s",
                     commit=True,
-                    args=(data["name"], data["status"], data["id"])
+                    args=(data["name"], data["status"], data["id"]),
                 )
             elif operation == "DELETE":
                 self.mysql.execute(
                     f"DELETE FROM `{TEST_TABLE_NAME}` WHERE id = %s",
                     commit=True,
-                    args=(data["id"],)
+                    args=(data["id"],),
                 )
-            
-            time.sleep(0.2)  # Allow replication to process
 
-        # Wait for final state
+            time.sleep(
+                0.5
+            )  # Increased wait time for replication to process each operation
+
+        # Wait longer for final state and allow for DELETE-INSERT sequence to complete
+        time.sleep(2.0)  # Additional wait for complex DELETE-INSERT operations
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=1)
 
         # Verify final state matches expected result
         self.verify_record_exists(
-            TEST_TABLE_NAME, 
-            "id=1", 
-            {"name": "Recreated Record", "status": "new"}
+            TEST_TABLE_NAME, "id=1", {"name": "Recreated Record", "status": "new"}
         )
 
     @pytest.mark.integration
@@ -226,10 +227,10 @@ class TestDuplicateDetection(BaseReplicationTest, SchemaTestMixin, DataTestMixin
         # Use the mixin method for better transaction handling
         batch_data = [
             {"data": "Batch Record 1"},
-            {"data": "Batch Record 2"}, 
+            {"data": "Batch Record 2"},
             {"data": "Batch Record 3"},
             {"data": "Batch Record 4"},
-            {"data": "Batch Record 5"}
+            {"data": "Batch Record 5"},
         ]
 
         # Insert all records at once - this tests batch processing better
@@ -237,11 +238,11 @@ class TestDuplicateDetection(BaseReplicationTest, SchemaTestMixin, DataTestMixin
 
         # Wait for replication - use more flexible approach for batch operations
         time.sleep(2.0)  # Allow time for batch processing
-        
+
         # Check actual count and provide debugging info
         ch_records = self.ch.select(TEST_TABLE_NAME, order_by="id")
         actual_count = len(ch_records)
-        
+
         if actual_count != 5:
             print(f"Expected 5 records, got {actual_count}")
             print(f"Actual records: {ch_records}")
@@ -250,8 +251,10 @@ class TestDuplicateDetection(BaseReplicationTest, SchemaTestMixin, DataTestMixin
             ch_records = self.ch.select(TEST_TABLE_NAME, order_by="id")
             actual_count = len(ch_records)
             print(f"After additional wait: {actual_count} records")
-        
-        assert actual_count == 5, f"Expected 5 records, got {actual_count}. Records: {ch_records}"
+
+        assert actual_count == 5, (
+            f"Expected 5 records, got {actual_count}. Records: {ch_records}"
+        )
 
         # Verify data integrity
         expected_values = [record["data"] for record in batch_data]
@@ -262,4 +265,6 @@ class TestDuplicateDetection(BaseReplicationTest, SchemaTestMixin, DataTestMixin
 
         # Verify no duplicate IDs exist
         id_values = [record["id"] for record in ch_records]
-        assert len(id_values) == len(set(id_values)), "Duplicate IDs found in replicated data"
+        assert len(id_values) == len(set(id_values)), (
+            "Duplicate IDs found in replicated data"
+        )

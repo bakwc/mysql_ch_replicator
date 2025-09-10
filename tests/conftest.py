@@ -221,7 +221,9 @@ def prepare_env(
     set_mysql_db: bool = True,
 ):
     """Prepare clean test environment"""
-    # Always ensure the base binlog directory exists (safe for parallel tests)
+    # Always ensure the full directory hierarchy exists (safe for parallel tests)
+    # The data_dir might be something like /app/binlog/master_abc123, so create parent dirs too
+    os.makedirs(os.path.dirname(cfg.binlog_replicator.data_dir), exist_ok=True)
     os.makedirs(cfg.binlog_replicator.data_dir, exist_ok=True)
     
     # Clean only database-specific subdirectory, never remove the base directory

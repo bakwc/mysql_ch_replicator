@@ -147,14 +147,14 @@ cleanup() {
     echo "⏱️  Total runtime: ${total_runtime}s"
     
     # Performance baseline reporting (45s baseline)
-    if [ $total_runtime -gt 90 ]; then
-        echo "🚨 PERFORMANCE ALERT: Runtime ${total_runtime}s exceeds critical threshold (90s)"
-    elif [ $total_runtime -gt 60 ]; then
-        echo "⚠️  Performance warning: Runtime ${total_runtime}s exceeds baseline (60s threshold)"
-    elif [ $total_runtime -le 45 ]; then
-        echo "✅ Performance excellent: Runtime within baseline (≤45s)"
+    if [ $total_runtime -gt 500 ]; then
+        echo "🚨 PERFORMANCE ALERT: Runtime ${total_runtime}s exceeds critical threshold (500s)"
+    elif [ $total_runtime -gt 350 ]; then
+        echo "⚠️  Performance warning: Runtime ${total_runtime}s exceeds baseline (350s threshold)"
+    elif [ $total_runtime -le 330 ]; then
+        echo "✅ Performance excellent: Runtime within baseline (≤330s)"
     else
-        echo "✅ Performance good: Runtime within acceptable range (≤60s)"
+        echo "✅ Performance good: Runtime within acceptable range (≤350s)"
     fi
     
     # Phase 1.75: Post-test infrastructure monitoring

@@ -80,7 +80,8 @@ class TestOrderingGuarantees(BaseReplicationTest, SchemaTestMixin, DataTestMixin
         );
         """)
 
-        # Insert initial data
+        # Insert initial data AND perform all operations BEFORE starting replication
+        # This follows the Phase 1.75 pattern for reliability
         initial_data = []
         for i in range(10):
             initial_data.append({
@@ -91,11 +92,7 @@ class TestOrderingGuarantees(BaseReplicationTest, SchemaTestMixin, DataTestMixin
 
         self.insert_multiple_records(TEST_TABLE_NAME, initial_data)
 
-        # Start replication
-        self.start_replication()
-        self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=10)
-
-        # Perform ordered sequence of operations
+        # Perform ordered sequence of operations BEFORE replication starts
         operations = [
             ("UPDATE", 1, {"value": 100, "status": "updated_1"}),
             ("UPDATE", 2, {"value": 200, "status": "updated_1"}),
@@ -107,7 +104,7 @@ class TestOrderingGuarantees(BaseReplicationTest, SchemaTestMixin, DataTestMixin
             ("DELETE", 7, {}),
         ]
 
-        # Execute operations with timing
+        # Execute ALL operations before starting replication (Phase 1.75 pattern)
         for operation, record_id, data in operations:
             if operation == "UPDATE":
                 self.mysql.execute(
@@ -121,21 +118,12 @@ class TestOrderingGuarantees(BaseReplicationTest, SchemaTestMixin, DataTestMixin
                     commit=True,
                     args=(record_id,)
                 )
-            time.sleep(0.05)  # Small delay between operations
 
-        # Wait for all operations to replicate
-        # Use more flexible wait - allow time for all operations to complete
-        time.sleep(3.0)  # Give operations time to process
+        # Start replication AFTER all operations are complete
+        self.start_replication()
         
-        # Get current count for debugging
-        current_count = self.get_clickhouse_count(TEST_TABLE_NAME)
-        if current_count != 7:
-            # Give a bit more time if needed
-            time.sleep(2.0)
-            current_count = self.get_clickhouse_count(TEST_TABLE_NAME)
-            
-        # The test should continue regardless - we'll verify actual state vs expected
-        assert current_count == 7, f"Expected 7 records after operations, got {current_count}"
+        # Wait for replication with expected final count (10 initial - 3 deletes = 7)
+        self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=7)
 
         # Verify final state reflects correct order of operations
         expected_final_state = {
@@ -210,22 +198,9 @@ class TestOrderingGuarantees(BaseReplicationTest, SchemaTestMixin, DataTestMixin
         # Start replication AFTER all transactions are complete
         self.start_replication()
 
-        # Wait for replication with more flexible timing
+        # Wait for replication using the reliable sync method
         total_records = sum(len(txn) for txn in transactions)
-        print(f"Expected {total_records} total records from {len(transactions)} transactions")
-        
-        # Allow more time for complex multi-transaction replication
-        time.sleep(5.0)
-        actual_count = len(self.ch.select(TEST_TABLE_NAME))
-        
-        if actual_count != total_records:
-            print(f"Initial check: got {actual_count}, expected {total_records}. Waiting longer...")
-            time.sleep(3.0)
-            actual_count = len(self.ch.select(TEST_TABLE_NAME))
-            
-        assert actual_count == total_records, (
-            f"Transaction boundary replication failed: expected {total_records} records, got {actual_count}"
-        )
+        self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=total_records)
 
         # Verify transaction ordering - all records from transaction N should come before transaction N+1
         ch_records = self.ch.select(TEST_TABLE_NAME, order_by="id")

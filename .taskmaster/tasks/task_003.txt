@@ -1,0 +1,11 @@
+# Task ID: 3
+# Title: Fix critical process startup RuntimeError issues
+# Status: pending
+# Dependencies: 1
+# Priority: high
+# Description: Resolve 'Replication processes failed to start properly' affecting 40+ tests
+# Details:
+Root cause: DB/Binlog runner processes exiting with code 1 during startup. Process health checks failing after 2s initialization wait. Investigate subprocess startup sequence, improve error diagnostics, implement more robust process initialization with better timeout handling and retry logic.
+
+# Test Strategy:
+Test process startup in isolation, verify error handling, validate timeout improvements

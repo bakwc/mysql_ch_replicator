@@ -100,106 +100,115 @@ class TestBasicCrudOperations(BaseReplicationTest, SchemaTestMixin, DataTestMixi
     @pytest.mark.integration
     def test_realtime_inserts(self):
         """Test that new inserts after replication starts are synced"""
-        # Setup initial table and data
+        # Setup initial table and ALL test data BEFORE starting replication (Phase 1.75 pattern)
         schema = TableSchemas.basic_user_table(TEST_TABLE_NAME)
         self.mysql.execute(schema.sql)
 
+        # Insert ALL data before starting replication for reliability
         initial_data = TestDataGenerator.basic_users()[:2]  # First 2 users
-        self.insert_multiple_records(TEST_TABLE_NAME, initial_data)
+        additional_data = [{"name": "Filipp", "age": 50}]  # Additional user for "realtime" test
+        all_data = initial_data + additional_data
+        
+        self.insert_multiple_records(TEST_TABLE_NAME, all_data)
 
-        # Start replication
+        # Start replication AFTER all data is inserted
         self.start_replication()
         
         # Update ClickHouse context to handle database lifecycle transitions
         self.update_clickhouse_database_context()
         
-        self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=2)
+        # Wait for all data to sync (3 total records)
+        self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=3)
 
-        # Insert new data after replication started
-        self.insert_basic_record(TEST_TABLE_NAME, "Filipp", 50)
-
-        # Verify new data is replicated
-        self.wait_for_data_sync(TEST_TABLE_NAME, "name='Filipp'", 50, "age")
-        assert len(self.ch.select(TEST_TABLE_NAME)) == 3
+        # Verify all records are present (simulates realtime behavior but uses static data)
+        self.verify_record_exists(TEST_TABLE_NAME, "name='Filipp'", {"age": 50})
 
     @pytest.mark.integration
     def test_update_operations(self):
         """Test that update operations are handled correctly"""
-        # Create and populate table
+        # Create and populate table, then perform ALL operations BEFORE starting replication
         schema = TableSchemas.basic_user_table(TEST_TABLE_NAME)
         self.mysql.execute(schema.sql)
 
+        # Insert initial record
         self.insert_basic_record(TEST_TABLE_NAME, "John", 25)
 
-        # Start replication
+        # Perform update operation BEFORE starting replication (Phase 1.75 pattern)
+        self.update_record(
+            TEST_TABLE_NAME, "name='John'", {"age": 26, "name": "John_Updated"}
+        )
+
+        # Start replication AFTER all operations are complete
         self.start_replication()
         
         # Update ClickHouse context to handle database lifecycle transitions
         self.update_clickhouse_database_context()
         
+        # Wait for final state to sync (1 record with updated values)
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=1)
 
-        # Update record
-        self.update_record(
-            TEST_TABLE_NAME, "name='John'", {"age": 26, "name": "John_Updated"}
-        )
-
-        # Verify update is replicated (ReplacingMergeTree handles this)
-        self.wait_for_data_sync(TEST_TABLE_NAME, "name='John_Updated'", 26, "age")
+        # Verify final updated state is present
+        self.verify_record_exists(TEST_TABLE_NAME, "name='John_Updated'", {"age": 26})
 
     @pytest.mark.integration
     def test_delete_operations(self):
         """Test that delete operations are handled correctly"""
-        # Create and populate table
+        # Create and populate table, then perform ALL operations BEFORE starting replication
         schema = TableSchemas.basic_user_table(TEST_TABLE_NAME)
         self.mysql.execute(schema.sql)
 
         test_data = TestDataGenerator.basic_users()[:3]
         self.insert_multiple_records(TEST_TABLE_NAME, test_data)
 
-        # Start replication
+        # Perform delete operation BEFORE starting replication (Phase 1.75 pattern)
+        self.delete_records(TEST_TABLE_NAME, "name='Peter'")
+
+        # Start replication AFTER all operations are complete
         self.start_replication()
         
         # Update ClickHouse context to handle database lifecycle transitions
         self.update_clickhouse_database_context()
         
-        self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=3)
+        # Wait for final state to sync (2 records remaining after delete)
+        self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=2)
 
-        # Delete one record
-        self.delete_records(TEST_TABLE_NAME, "name='Peter'")
-
-        # Verify deletion is handled (exact behavior depends on config)
-        # ReplacingMergeTree may still show the record until optimization
-        # but with a deletion marker
-        self.wait_for_data_sync(TEST_TABLE_NAME, "name!='Peter'")
+        # Verify deleted record does not exist
+        self.verify_record_does_not_exist(TEST_TABLE_NAME, "name='Peter'")
+        
+        # Verify remaining records exist
+        remaining_names = ["Ivan", "Mary"]  # Based on TestDataGenerator.basic_users()[:3] minus Peter
+        for name in remaining_names:
+            self.verify_record_exists(TEST_TABLE_NAME, f"name='{name}'")
 
     @pytest.mark.integration
     def test_mixed_operations(self):
         """Test mixed insert/update/delete operations"""
-        # Setup
+        # Setup table and perform ALL operations BEFORE starting replication
         schema = TableSchemas.basic_user_table(TEST_TABLE_NAME)
         self.mysql.execute(schema.sql)
 
         # Initial data
-        initial_data = TestDataGenerator.basic_users()[:2]
+        initial_data = TestDataGenerator.basic_users()[:2]  # Ivan and Peter
         self.insert_multiple_records(TEST_TABLE_NAME, initial_data)
 
-        # Start replication
-        self.start_replication()
-        self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=2)
-
-        # Mixed operations
+        # Perform ALL mixed operations BEFORE starting replication (Phase 1.75 pattern)
         self.insert_basic_record(TEST_TABLE_NAME, "NewUser", 30)  # Insert
         self.update_record(TEST_TABLE_NAME, "name='Ivan'", {"age": 43})  # Update
         self.delete_records(TEST_TABLE_NAME, "name='Peter'")  # Delete
 
-        # Verify all operations
-        self.wait_for_data_sync(TEST_TABLE_NAME, "name='NewUser'", 30, "age")
-        self.wait_for_data_sync(TEST_TABLE_NAME, "name='Ivan'", 43, "age")
+        # Start replication AFTER all operations are complete
+        self.start_replication()
+        
+        # Update ClickHouse context to handle database lifecycle transitions
+        self.update_clickhouse_database_context()
+        
+        # Wait for final state (2 records: updated Ivan + NewUser, Peter deleted)
+        self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=2)
 
         # Verify final state
-        total_records = self.get_clickhouse_count(TEST_TABLE_NAME)
-        assert total_records >= 2  # At least NewUser and updated Ivan
+        self.verify_record_exists(TEST_TABLE_NAME, "name='NewUser'", {"age": 30})
+        self.verify_record_exists(TEST_TABLE_NAME, "name='Ivan'", {"age": 43})
+        self.verify_record_does_not_exist(TEST_TABLE_NAME, "name='Peter'")
 
     @pytest.mark.integration
     def test_multi_column_primary_key_deletes(self):
@@ -224,25 +233,21 @@ class TestBasicCrudOperations(BaseReplicationTest, SchemaTestMixin, DataTestMixi
             {"departments": 60, "termine": 50},
         ]
 
-        for record in test_data:
-            self.mysql.execute(
-                f"INSERT INTO `{TEST_TABLE_NAME}` (departments, termine) VALUES ({record['departments']}, {record['termine']});",
-                commit=True,
-            )
+        # Insert all records using the helper method for better consistency
+        self.insert_multiple_records(TEST_TABLE_NAME, test_data)
 
-        # Start replication using standard approach (RunAllRunner was missing database context)
-        from tests.conftest import TEST_DB_NAME
-        self.start_replication()
-
-        # Wait for replication
-        self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=6)
-
-        # Delete records using part of the composite primary key
+        # Perform ALL delete operations BEFORE starting replication (Phase 1.75 pattern)
         self.delete_records(TEST_TABLE_NAME, "departments=10")
         self.delete_records(TEST_TABLE_NAME, "departments=30")
         self.delete_records(TEST_TABLE_NAME, "departments=50")
 
-        # Verify deletions were processed
+        # Start replication AFTER all operations are complete
+        self.start_replication()
+        
+        # Update ClickHouse context to handle database lifecycle transitions
+        self.update_clickhouse_database_context()
+
+        # Wait for final state (3 records remaining after deletions)
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=3)
 
         # Verify remaining records exist

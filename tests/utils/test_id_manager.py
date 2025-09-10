@@ -14,7 +14,7 @@ from pathlib import Path
 import atexit
 
 
-class TestIdManager:
+class TestIdCoordinator:  # Not a test class - utility for coordinating test IDs
     """Centralized test ID manager with multi-channel communication"""
     
     def __init__(self):
@@ -158,7 +158,7 @@ class TestIdManager:
 
 
 # Singleton instance for global coordination
-_test_id_manager = TestIdManager()
+_test_id_manager = TestIdCoordinator()
 
 
 def get_test_id_manager():

@@ -95,17 +95,27 @@ class BaseReplicationTest:
         self.db_runner = DbReplicatorRunner(db_name, cfg_file=actual_config_file)
         self.db_runner.run()
 
-        # CRITICAL: Wait for processes to fully initialize before proceeding
+        # CRITICAL: Wait for processes to fully initialize with retry logic
         import time
-        startup_wait = 2.0  # Give processes time to initialize
+        startup_wait = 5.0  # Increased from 2.0s - give more time for process initialization
+        retry_attempts = 3
         print(f"DEBUG: Waiting {startup_wait}s for replication processes to initialize...")
         time.sleep(startup_wait)
         
-        # Verify processes started successfully
-        if not self._check_replication_process_health():
-            raise RuntimeError("Replication processes failed to start properly")
-        
-        print("DEBUG: Replication processes started successfully")
+        # Verify processes started successfully with retry logic
+        for attempt in range(retry_attempts):
+            if self._check_replication_process_health():
+                print("DEBUG: Replication processes started successfully")
+                break
+            elif attempt < retry_attempts - 1:
+                print(f"WARNING: Process health check failed on attempt {attempt + 1}/{retry_attempts}, retrying...")
+                # Try to restart failed processes
+                self._restart_failed_processes()
+                time.sleep(2.0)  # Wait before retry
+            else:
+                # Final attempt failed - capture detailed error information
+                error_details = self._get_process_error_details()
+                raise RuntimeError(f"Replication processes failed to start properly after {retry_attempts} attempts. Details: {error_details}")
 
         # Wait for replication to start and set database context for the ClickHouse client
         def check_database_exists():
@@ -157,14 +167,21 @@ class BaseReplicationTest:
             return db_name in databases
         
         try:
-            # Give a short window for database migration to complete
-            assert_wait(wait_for_final_database, max_wait_time=10.0)  # Reduced from 15s
+            # Give more time for database migration to complete - increased timeout
+            assert_wait(wait_for_final_database, max_wait_time=20.0)  # Increased from 10s to 20s
             self.ch.database = db_name
             print(f"DEBUG: Successfully found final database '{db_name}' in ClickHouse")
-        except:
+        except Exception as e:
             # Migration didn't complete in time - use whatever database is available
-            self.ch.database = determine_database_context()
-            print(f"DEBUG: Set ClickHouse context to '{self.ch.database}' (migration timeout)")
+            print(f"WARNING: Database migration timeout after 20s: {e}")
+            fallback_db = determine_database_context()
+            if fallback_db:
+                self.ch.database = fallback_db
+                print(f"DEBUG: Set ClickHouse context to fallback database '{self.ch.database}'")
+            else:
+                print(f"ERROR: No ClickHouse database available for context '{db_name}'")
+                # Still set the expected database name - it might appear later
+                self.ch.database = db_name
 
     def setup_and_replicate_table(self, schema_func, test_data, table_name=None, expected_count=None):
         """Standard replication test pattern: create table → insert data → replicate → verify"""
@@ -199,7 +216,7 @@ class BaseReplicationTest:
             self.binlog_runner.stop()
             self.binlog_runner = None
 
-    def wait_for_table_sync(self, table_name, expected_count=None, database=None, max_wait_time=45.0):
+    def wait_for_table_sync(self, table_name, expected_count=None, database=None, max_wait_time=60.0):
         """Wait for table to be synced to ClickHouse with database transition handling"""
         def table_exists_with_context_switching():
             # Check if replication processes are still alive - fail fast if processes died
@@ -251,7 +268,7 @@ class BaseReplicationTest:
             assert_wait(data_count_matches, max_wait_time=max_wait_time)
 
     def wait_for_data_sync(
-        self, table_name, where_clause, expected_value=None, field="*", max_wait_time=30.0
+        self, table_name, where_clause, expected_value=None, field="*", max_wait_time=45.0
     ):
         """Wait for specific data to be synced with configurable timeout"""
         if expected_value is not None:
@@ -262,9 +279,40 @@ class BaseReplicationTest:
                 )
             else:
                 def condition():
-                    results = self.ch.select(table_name, where=where_clause)
-                    return len(results) > 0 and results[0][field] == expected_value
-                assert_wait(condition, max_wait_time=max_wait_time)
+                    try:
+                        results = self.ch.select(table_name, where=where_clause)
+                        if len(results) > 0:
+                            actual_value = results[0][field]
+                            # Handle type conversions for comparison (e.g., Decimal vs float)
+                            try:
+                                # Try numeric comparison first
+                                return float(actual_value) == float(expected_value)
+                            except (TypeError, ValueError):
+                                # Fall back to direct comparison for non-numeric values
+                                return actual_value == expected_value
+                        return False
+                    except Exception as e:
+                        # Log errors but continue trying - connection issues are common during sync
+                        if "Connection refused" not in str(e) and "timeout" not in str(e).lower():
+                            print(f"DEBUG: Data sync check error: {e}")
+                        return False
+                        
+                try:
+                    assert_wait(condition, max_wait_time=max_wait_time)
+                except AssertionError as e:
+                    # Provide helpful diagnostic information on failure
+                    try:
+                        results = self.ch.select(table_name, where=where_clause)
+                        if results:
+                            actual_value = results[0][field] if results else "<no data>"
+                            print(f"ERROR: Data sync failed - Expected {expected_value}, got {actual_value}")
+                            print(f"ERROR: Query: SELECT * FROM {table_name} WHERE {where_clause}")
+                            print(f"ERROR: Results: {results[:3]}..." if len(results) > 3 else f"ERROR: Results: {results}")
+                        else:
+                            print(f"ERROR: No data found for query: SELECT * FROM {table_name} WHERE {where_clause}")
+                    except Exception as debug_e:
+                        print(f"ERROR: Could not gather sync failure diagnostics: {debug_e}")
+                    raise
         else:
             assert_wait(lambda: len(self.ch.select(table_name, where=where_clause)) > 0, max_wait_time=max_wait_time)
 
@@ -309,6 +357,8 @@ class BaseReplicationTest:
             elif self.binlog_runner.process.poll() is not None:
                 exit_code = self.binlog_runner.process.poll()
                 print(f"WARNING: Binlog runner has exited with code {exit_code}")
+                # Capture subprocess output for debugging
+                self._log_subprocess_output("binlog_runner", self.binlog_runner)
                 processes_healthy = False
                 
         if self.db_runner:
@@ -318,9 +368,84 @@ class BaseReplicationTest:
             elif self.db_runner.process.poll() is not None:
                 exit_code = self.db_runner.process.poll()
                 print(f"WARNING: DB runner has exited with code {exit_code}")
+                # Capture subprocess output for debugging
+                self._log_subprocess_output("db_runner", self.db_runner)
                 processes_healthy = False
                 
         return processes_healthy
+    
+    def _restart_failed_processes(self):
+        """Attempt to restart any failed processes"""
+        if self.binlog_runner and (self.binlog_runner.process is None or self.binlog_runner.process.poll() is not None):
+            print("DEBUG: Attempting to restart failed binlog runner...")
+            try:
+                if self.binlog_runner.process:
+                    self.binlog_runner.stop()
+                self.binlog_runner.run()
+                print("DEBUG: Binlog runner restarted successfully")
+            except Exception as e:
+                print(f"ERROR: Failed to restart binlog runner: {e}")
+                
+        if self.db_runner and (self.db_runner.process is None or self.db_runner.process.poll() is not None):
+            print("DEBUG: Attempting to restart failed db runner...")
+            try:
+                if self.db_runner.process:
+                    self.db_runner.stop()
+                self.db_runner.run()
+                print("DEBUG: DB runner restarted successfully")
+            except Exception as e:
+                print(f"ERROR: Failed to restart db runner: {e}")
+    
+    def _log_subprocess_output(self, runner_name, runner):
+        """Log subprocess output for debugging failed processes"""
+        try:
+            if hasattr(runner, 'log_file') and runner.log_file and hasattr(runner.log_file, 'name'):
+                log_file_path = runner.log_file.name
+                if os.path.exists(log_file_path):
+                    with open(log_file_path, 'r') as f:
+                        output = f.read()
+                        if output.strip():
+                            print(f"ERROR: {runner_name} subprocess output:")
+                            # Show last 20 lines to avoid log spam
+                            lines = output.strip().split('\n')
+                            for line in lines[-20:]:
+                                print(f"  {runner_name}: {line}")
+                        else:
+                            print(f"WARNING: {runner_name} subprocess produced no output")
+                else:
+                    print(f"WARNING: {runner_name} log file does not exist: {log_file_path}")
+            else:
+                print(f"WARNING: {runner_name} has no accessible log file")
+        except Exception as e:
+            print(f"ERROR: Failed to read {runner_name} subprocess output: {e}")
+    
+    def _get_process_error_details(self):
+        """Gather detailed error information for failed process startup"""
+        error_details = []
+        
+        if self.binlog_runner:
+            if self.binlog_runner.process is None:
+                error_details.append("Binlog runner: process is None")
+            else:
+                exit_code = self.binlog_runner.process.poll()
+                error_details.append(f"Binlog runner: exit code {exit_code}")
+                
+        if self.db_runner:
+            if self.db_runner.process is None:
+                error_details.append("DB runner: process is None")
+            else:
+                exit_code = self.db_runner.process.poll()
+                error_details.append(f"DB runner: exit code {exit_code}")
+        
+        # Add environment info
+        from tests.conftest import TEST_DB_NAME
+        error_details.append(f"Database: {TEST_DB_NAME}")
+        
+        # Add config info
+        if hasattr(self, 'config_file'):
+            error_details.append(f"Config: {self.config_file}")
+            
+        return "; ".join(error_details)
             
     def update_clickhouse_database_context(self, db_name=None):
         """Update ClickHouse client to use correct database context"""

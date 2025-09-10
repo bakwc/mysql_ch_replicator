@@ -1,0 +1,11 @@
+# Task ID: 6
+# Title: Fix individual failing tests - Group 1 (Startup/Process)
+# Status: pending
+# Dependencies: 3
+# Priority: high
+# Description: Systematically fix tests failing due to process startup issues
+# Details:
+Focus on tests failing with process startup errors. Fix each test individually using: analyze → fix → test → document cycle. Track which fixes work and apply patterns to similar tests. Ensure no regression in passing tests.
+
+# Test Strategy:
+Test each fix individually, run related test groups, verify no regressions

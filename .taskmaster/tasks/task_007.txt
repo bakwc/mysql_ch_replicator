@@ -1,0 +1,11 @@
+# Task ID: 7
+# Title: Fix individual failing tests - Group 2 (Connection/DB)
+# Status: pending
+# Dependencies: 4
+# Priority: high
+# Description: Systematically fix tests failing due to database connection issues
+# Details:
+Focus on tests failing with database connection and detection issues. Apply fixes from task 4 to individual test cases. Document successful patterns and apply to similar failing tests.
+
+# Test Strategy:
+Test database connections, validate detection logic, verify connection pooling

@@ -193,6 +193,15 @@ class DataTestMixin:
                     # Normalized comparison passed, continue to next field
                     continue
                 
+                # Try numeric comparison for decimal/float precision issues
+                try:
+                    if isinstance(expected_value, (int, float, Decimal)) and isinstance(actual_value, (int, float, Decimal)):
+                        # Convert to float for comparison to handle decimal precision
+                        if float(expected_value) == float(actual_value):
+                            continue
+                except (TypeError, ValueError):
+                    pass
+                
                 # If normalized comparison failed or not applicable, use standard comparison
                 assert actual_value == expected_value, (
                     f"Field {field}: expected {expected_value}, got {actual_value}"

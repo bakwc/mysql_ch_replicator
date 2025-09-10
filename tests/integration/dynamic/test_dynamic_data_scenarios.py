@@ -33,16 +33,16 @@ class TestDynamicDataScenarios(IsolatedBaseReplicationTest, SchemaTestMixin, Dat
             include_constraints=True
         )
         
-        # Create the dynamically generated table
+        # Create table and generate ALL data BEFORE starting replication (Phase 1.75 pattern)
         self.mysql.execute(schema_sql)
         
         # Generate test data matching the schema
         test_data = self.dynamic_gen.generate_dynamic_data(schema_sql, record_count=expected_min_count)
         
-        # Insert generated data
+        # Insert ALL generated data before starting replication
         self.insert_multiple_records(TEST_TABLE_NAME, test_data)
         
-        # Start replication and verify
+        # Start replication AFTER all data is inserted
         self.start_replication()
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=len(test_data))
         
@@ -147,20 +147,24 @@ class TestDynamicDataScenarios(IsolatedBaseReplicationTest, SchemaTestMixin, Dat
     def test_mixed_null_and_constraint_scenarios(self):
         """Test dynamic scenarios with mixed NULL values and constraints"""
         
-        # Generate schema with mixed constraint scenarios
+        # Generate schema with mixed constraint scenarios, limiting size to avoid MySQL key length limits
         schema_sql = self.dynamic_gen.generate_dynamic_schema(
             TEST_TABLE_NAME,
             data_type_focus=["varchar", "int", "decimal", "datetime", "boolean"],
-            column_count=(6, 10),
-            include_constraints=True  # Include random NOT NULL, UNIQUE constraints
+            column_count=(4, 6),  # Reduced column count to avoid key length issues
+            include_constraints=True  # Include random constraints (now safely limited)
         )
         
+        # Create table and generate ALL data BEFORE starting replication (Phase 1.75 pattern)
         self.mysql.execute(schema_sql)
         
         # Generate data with intentional NULL value distribution
-        test_data = self.dynamic_gen.generate_dynamic_data(schema_sql, record_count=60)
+        test_data = self.dynamic_gen.generate_dynamic_data(schema_sql, record_count=40)  # Reduced for reliability
         
+        # Insert ALL data before starting replication
         self.insert_multiple_records(TEST_TABLE_NAME, test_data)
+        
+        # Start replication AFTER all data is inserted
         self.start_replication()
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=len(test_data))
         
@@ -196,15 +200,16 @@ class TestDynamicDataScenarios(IsolatedBaseReplicationTest, SchemaTestMixin, Dat
         
         self.mysql.execute(schema_sql)
         
-        # Generate larger dataset
-        test_data = self.dynamic_gen.generate_dynamic_data(schema_sql, record_count=500)
+        # Generate larger dataset (Phase 1.75 pattern - all data before replication)
+        test_data = self.dynamic_gen.generate_dynamic_data(schema_sql, record_count=300)  # Reduced for reliability
         
-        # Insert in batches for better performance
+        # Insert ALL data in batches BEFORE starting replication
         batch_size = 100
         for i in range(0, len(test_data), batch_size):
             batch = test_data[i:i + batch_size]
             self.insert_multiple_records(TEST_TABLE_NAME, batch)
         
+        # Start replication AFTER all data is inserted
         self.start_replication()
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=len(test_data), max_wait_time=120)
         

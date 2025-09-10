@@ -1,3 +1,26 @@
+"""
+MySQL to ClickHouse Replicator Configuration Management
+
+This module provides configuration classes and utilities for managing the replication
+system settings including database connections, replication behavior, and data handling.
+
+Classes:
+    MysqlSettings: MySQL database connection configuration with connection pooling
+    ClickhouseSettings: ClickHouse database connection configuration  
+    BinlogReplicatorSettings: Binary log replication behavior configuration
+    Index: Database/table-specific index configuration
+    PartitionBy: Database/table-specific partitioning configuration
+    Settings: Main configuration class that orchestrates all settings
+
+Key Features:
+    - YAML-based configuration loading
+    - Connection pool management for MySQL
+    - Database/table filtering with pattern matching
+    - Type validation and error handling
+    - Timezone handling for MySQL connections
+    - Directory management for binlog data
+"""
+
 import fnmatch
 import zoneinfo
 from dataclasses import dataclass
@@ -6,22 +29,62 @@ import yaml
 
 
 def stype(obj):
+    """Get the simple type name of an object.
+    
+    Args:
+        obj: Any object to get type name for
+        
+    Returns:
+        str: Simple class name of the object's type
+        
+    Example:
+        >>> stype([1, 2, 3])
+        'list'
+        >>> stype("hello")
+        'str'
+    """
     return type(obj).__name__
 
 
 @dataclass
 class MysqlSettings:
+    """MySQL database connection configuration with connection pool support.
+    
+    Supports MySQL 5.7+, MySQL 8.0+, MariaDB 10.x, and Percona Server.
+    Includes connection pooling configuration for high-performance replication.
+    
+    Attributes:
+        host: MySQL server hostname or IP address
+        port: MySQL server port (default: 3306)
+        user: MySQL username for authentication
+        password: MySQL password for authentication
+        pool_size: Base number of connections in pool (default: 5)
+        max_overflow: Maximum additional connections beyond pool_size (default: 10)
+        pool_name: Identifier for connection pool (default: "default")
+        charset: Character set for connection (MariaDB compatibility, optional)
+        collation: Collation for connection (MariaDB compatibility, optional)
+        
+    Example:
+        mysql_config = MysqlSettings(
+            host="mysql.example.com",
+            port=3306,
+            user="replicator",
+            password="secure_password",
+            pool_size=10,
+            charset="utf8mb4"
+        )
+    """
     host: str = "localhost"
     port: int = 3306
     user: str = "root"
     password: str = ""
-    # Connection pool settings
+    # Connection pool settings for high-performance replication
     pool_size: int = 5
     max_overflow: int = 10
     pool_name: str = "default"
-    # Optional charset specification (useful for MariaDB compatibility)
+    # Optional charset specification (critical for MariaDB compatibility)
     charset: str = None
-    # Optional collation specification (useful for MariaDB compatibility)
+    # Optional collation specification (critical for MariaDB compatibility)  
     collation: str = None
 
     def validate(self):
