@@ -90,8 +90,10 @@ services:
     network_mode: host
     volumes:
       - ./:/app/
+      # Create a named volume for binlog data with proper permissions
+      - binlog_data:/app/binlog/
     entrypoint: ["/bin/bash"]
-    command: ["-c", "touch /tmp/ready && tail -f /dev/null"]
+    command: ["-c", "mkdir -p /app/binlog && chmod 777 /app/binlog && touch /tmp/ready && tail -f /dev/null"]
     healthcheck:
       test: [ 'CMD-SHELL', 'test -f /tmp/ready' ]
       interval: 2s
@@ -109,3 +111,4 @@ services:
 
 volumes:
   percona_data:
+  binlog_data:

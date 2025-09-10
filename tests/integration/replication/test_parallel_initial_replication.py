@@ -22,12 +22,12 @@ class TestParallelInitialReplication(
     )
     def test_parallel_initial_replication(self, config_file):
         """Test parallel initial replication with multiple workers"""
-        # Setup complex table with multiple records
-        schema = TableSchemas.complex_employee_table(TEST_TABLE_NAME)
+        # Setup basic table that supports insert_basic_record (has name and age columns)
+        schema = TableSchemas.basic_user_table(TEST_TABLE_NAME)
         self.mysql.execute(schema.sql)
 
         # Insert test data that can be processed in parallel
-        test_data = TestDataGenerator.complex_employee_records()
+        test_data = TestDataGenerator.basic_users()
         self.insert_multiple_records(TEST_TABLE_NAME, test_data)
 
         # Add more records to make parallel processing worthwhile

@@ -44,7 +44,10 @@ class TestBasicProcessManagement(BaseReplicationTest, SchemaTestMixin, DataTestM
         self.insert_multiple_records(TEST_TABLE_NAME, all_test_data)
 
         # ✅ PATTERN: Start replication with all data already present
-        self.start_replication()
+        # Use isolated configuration for proper test isolation
+        from tests.utils.dynamic_config import create_dynamic_config
+        isolated_config = create_dynamic_config(self.config_file)
+        self.start_replication(config_file=isolated_config)
         
         # Wait for complete synchronization
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=len(all_test_data))
@@ -65,8 +68,9 @@ class TestBasicProcessManagement(BaseReplicationTest, SchemaTestMixin, DataTestM
         if hasattr(self, 'db_runner') and self.db_runner:
             self.db_runner.stop()
             
-        # Create new runners for restart test
-        runner = RunAllRunner()
+        # Create new runners for restart test with isolated config
+        isolated_config_restart = create_dynamic_config(self.config_file)
+        runner = RunAllRunner(cfg_file=isolated_config_restart)
         runner.run()
 
         # Wait for restart and verify data consistency
@@ -96,7 +100,10 @@ class TestBasicProcessManagement(BaseReplicationTest, SchemaTestMixin, DataTestM
             self.insert_basic_record(TEST_TABLE_NAME, record["name"], record["age"])
 
         # ✅ PATTERN: Start replication with all data already present
-        self.start_replication()
+        # Use isolated configuration for proper test isolation  
+        from tests.utils.dynamic_config import create_dynamic_config
+        isolated_config = create_dynamic_config(self.config_file)
+        self.start_replication(config_file=isolated_config)
         
         # Wait for complete synchronization
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=len(all_test_data))
@@ -106,8 +113,10 @@ class TestBasicProcessManagement(BaseReplicationTest, SchemaTestMixin, DataTestM
         kill_process(binlog_pid)
         time.sleep(2)
 
-        # Restart test - create new runner
-        runner = RunAllRunner()
+        # Restart test - create new runner with proper isolated config
+        from tests.utils.dynamic_config import create_dynamic_config
+        isolated_config = create_dynamic_config(self.config_file)
+        runner = RunAllRunner(cfg_file=isolated_config)
         runner.run()
 
         # Verify data consistency after binlog replicator restart
@@ -138,7 +147,10 @@ class TestBasicProcessManagement(BaseReplicationTest, SchemaTestMixin, DataTestM
             self.insert_basic_record(TEST_TABLE_NAME, record["name"], record["age"])
 
         # ✅ PATTERN: Start replication with all data already present  
-        self.start_replication()
+        # Use isolated configuration for proper test isolation
+        from tests.utils.dynamic_config import create_dynamic_config
+        isolated_config = create_dynamic_config(self.config_file)
+        self.start_replication(config_file=isolated_config)
         
         # Wait for complete synchronization
         self.wait_for_table_sync(TEST_TABLE_NAME, expected_count=len(all_test_data))
@@ -148,8 +160,10 @@ class TestBasicProcessManagement(BaseReplicationTest, SchemaTestMixin, DataTestM
         kill_process(db_pid)
         time.sleep(2)
 
-        # Wait for automatic restart or create a new runner if needed
-        runner = RunAllRunner()
+        # Wait for automatic restart or create a new runner if needed with proper isolated config
+        from tests.utils.dynamic_config import create_dynamic_config
+        isolated_config = create_dynamic_config(self.config_file)
+        runner = RunAllRunner(cfg_file=isolated_config)
         runner.run()
         time.sleep(5)
 
@@ -168,8 +182,10 @@ class TestBasicProcessManagement(BaseReplicationTest, SchemaTestMixin, DataTestM
         initial_data = TestDataGenerator.basic_users()[:2]
         self.insert_multiple_records(TEST_TABLE_NAME, initial_data)
 
-        # Start replication
-        runner = RunAllRunner()
+        # Start replication with proper isolated config
+        from tests.utils.dynamic_config import create_dynamic_config
+        isolated_config = create_dynamic_config(self.config_file)
+        runner = RunAllRunner(cfg_file=isolated_config)
         runner.run()
 
         # Wait for replication to start and set ClickHouse context
@@ -187,8 +203,10 @@ class TestBasicProcessManagement(BaseReplicationTest, SchemaTestMixin, DataTestM
         # Graceful stop
         runner.stop()
 
-        # Restart and verify the last-minute data was saved
-        runner = RunAllRunner()
+        # Restart and verify the last-minute data was saved with proper isolated config
+        from tests.utils.dynamic_config import create_dynamic_config
+        isolated_config = create_dynamic_config(self.config_file)
+        runner = RunAllRunner(cfg_file=isolated_config)
         runner.run()
 
         # Verify all data persisted through graceful shutdown/restart cycle  

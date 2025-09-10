@@ -100,13 +100,32 @@ class FileReader:
 
 def get_existing_file_nums(data_dir, db_name):
     db_path = os.path.join(data_dir, db_name)
-    if not os.path.exists(db_path):
-        try:
-            os.makedirs(db_path, exist_ok=True)
-        except FileNotFoundError:
-            # Parent directory doesn't exist - create it first
-            os.makedirs(data_dir, exist_ok=True)
-            os.makedirs(db_path, exist_ok=True)
+    
+    # CRITICAL FIX: Always try to create the full directory hierarchy first
+    # This handles the case where intermediate directories don't exist
+    try:
+        logger.debug(f"Ensuring full directory hierarchy exists: {db_path}")
+        os.makedirs(db_path, exist_ok=True)
+    except OSError as e:
+        # If makedirs fails, try creating step by step
+        logger.warning(f"Failed to create {db_path} in one step: {e}")
+        
+        # Find the deepest existing parent directory
+        current_path = db_path
+        missing_paths = []
+        
+        while current_path and current_path != '/' and not os.path.exists(current_path):
+            missing_paths.append(current_path)
+            current_path = os.path.dirname(current_path)
+        
+        # Create directories from deepest existing to the target
+        for path_to_create in reversed(missing_paths):
+            try:
+                os.makedirs(path_to_create, exist_ok=True)
+                logger.debug(f"Created directory: {path_to_create}")
+            except OSError as create_error:
+                logger.error(f"Failed to create directory {path_to_create}: {create_error}")
+                raise
     existing_files = os.listdir(db_path)
     existing_files = [f for f in existing_files if f.endswith(".bin")]
     existing_file_nums = sorted([int(f.split(".")[0]) for f in existing_files])
