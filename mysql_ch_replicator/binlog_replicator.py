@@ -105,7 +105,11 @@ def get_existing_file_nums(data_dir, db_name):
     # This handles the case where intermediate directories don't exist
     try:
         logger.debug(f"Ensuring full directory hierarchy exists: {db_path}")
+        # ENHANCED FIX: Ensure both data_dir and db_path exist with robust creation
+        os.makedirs(data_dir, exist_ok=True)
+        logger.debug(f"Ensured data_dir exists: {data_dir}")
         os.makedirs(db_path, exist_ok=True)
+        logger.debug(f"Ensured db_path exists: {db_path}")
     except OSError as e:
         # If makedirs fails, try creating step by step
         logger.warning(f"Failed to create {db_path} in one step: {e}")
@@ -306,6 +310,17 @@ class DataWriter:
 
     def create_file_writer(self, db_name: str) -> FileWriter:
         next_free_file = self.get_next_file_name(db_name)
+        
+        # Ensure parent directory exists before creating file
+        parent_dir = os.path.dirname(next_free_file)
+        if parent_dir:
+            try:
+                os.makedirs(parent_dir, exist_ok=True)
+                logger.debug(f"Ensured directory exists for binlog file: {parent_dir}")
+            except OSError as e:
+                logger.error(f"Critical: Failed to create binlog file directory {parent_dir}: {e}")
+                raise
+        
         return FileWriter(next_free_file)
 
     def get_next_file_name(self, db_name: str):
@@ -361,6 +376,19 @@ class State:
 
     def save(self):
         file_name = self.file_name
+        
+        # Ensure parent directory exists before saving - handles nested isolation paths
+        parent_dir = os.path.dirname(file_name)
+        if parent_dir:  # Only proceed if there's actually a parent directory
+            try:
+                # Use makedirs with exist_ok=True to create all directories recursively
+                # This handles nested isolation paths like /app/binlog/w2_7cf22b01
+                os.makedirs(parent_dir, exist_ok=True)
+                logger.debug(f"Ensured directory exists for binlog state file: {parent_dir}")
+            except OSError as e:
+                logger.error(f"Critical: Failed to create binlog state directory {parent_dir}: {e}")
+                raise
+        
         data = json.dumps(
             {
                 "last_seen_transaction": self.last_seen_transaction,

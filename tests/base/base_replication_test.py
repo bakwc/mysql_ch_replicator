@@ -54,12 +54,17 @@ class BaseReplicationTest:
             config_file = self.config_file
         
         try:
-            # Create dynamic config file with isolated paths for this test
-            dynamic_config_file = create_dynamic_config(config_file)
-            print(f"DEBUG: Created dynamic config file: {dynamic_config_file}")
-            
-            # Use the dynamic config file for process spawning
-            actual_config_file = dynamic_config_file
+            # Check if config file is already a dynamic config (temporary file)
+            if '/tmp/' in config_file:
+                print(f"DEBUG: Using existing dynamic config file: {config_file}")
+                actual_config_file = config_file
+            else:
+                # Create dynamic config file with isolated paths for this test
+                dynamic_config_file = create_dynamic_config(config_file)
+                print(f"DEBUG: Created dynamic config file: {dynamic_config_file}")
+                
+                # Use the dynamic config file for process spawning
+                actual_config_file = dynamic_config_file
         except Exception as e:
             print(f"WARNING: Failed to create dynamic config, using static config: {e}")
             # Fallback to static config file
@@ -71,14 +76,19 @@ class BaseReplicationTest:
         print(f"DEBUG: Ensuring MySQL database '{db_name}' exists before starting replication...")
         self.ensure_database_exists(db_name)
         
-        # CRITICAL: Pre-create database-specific subdirectory for logging
-        # This prevents FileNotFoundError when db_replicator tries to create log files
-        db_dir = os.path.join(self.cfg.binlog_replicator.data_dir, db_name)
+        # CRITICAL: Pre-create ALL necessary directories for binlog replication
+        # This prevents FileNotFoundError when processes try to create state/log files
         try:
+            # Ensure parent data directory exists (for state.json)
+            os.makedirs(self.cfg.binlog_replicator.data_dir, exist_ok=True)
+            print(f"DEBUG: Pre-created binlog data directory: {self.cfg.binlog_replicator.data_dir}")
+            
+            # Ensure database-specific subdirectory exists (for database files)
+            db_dir = os.path.join(self.cfg.binlog_replicator.data_dir, db_name)
             os.makedirs(db_dir, exist_ok=True)
             print(f"DEBUG: Pre-created database directory: {db_dir}")
         except Exception as e:
-            print(f"WARNING: Could not pre-create database directory {db_dir}: {e}")
+            print(f"WARNING: Could not pre-create binlog directories: {e}")
             # Try to create parent directories first
             try:
                 os.makedirs(self.cfg.binlog_replicator.data_dir, exist_ok=True)
@@ -112,7 +122,16 @@ class BaseReplicationTest:
         startup_wait = 5.0  # Increased from 2.0s - give more time for process initialization
         retry_attempts = 3
         print(f"DEBUG: Waiting {startup_wait}s for replication processes to initialize...")
-        time.sleep(startup_wait)
+        
+        # Check for immediate failures after 0.5s to catch startup errors early
+        time.sleep(0.5)
+        if not self._check_replication_process_health():
+            print("WARNING: Process failed immediately during startup - capturing early error details")
+            error_details = self._get_process_error_details()
+            print(f"DEBUG: Early failure details: {error_details}")
+        
+        # Continue with full startup wait
+        time.sleep(startup_wait - 0.5)
         
         # Verify processes started successfully with retry logic
         for attempt in range(retry_attempts):
@@ -441,6 +460,15 @@ class BaseReplicationTest:
             else:
                 exit_code = self.binlog_runner.process.poll()
                 error_details.append(f"Binlog runner: exit code {exit_code}")
+                # Capture subprocess logs if available
+                if hasattr(self.binlog_runner, 'log_file') and self.binlog_runner.log_file:
+                    try:
+                        self.binlog_runner.log_file.seek(0)
+                        log_content = self.binlog_runner.log_file.read()
+                        if log_content.strip():
+                            error_details.append(f"Binlog logs: {log_content[-200:]}")  # Last 200 chars
+                    except Exception as e:
+                        error_details.append(f"Binlog log read error: {e}")
                 
         if self.db_runner:
             if self.db_runner.process is None:
@@ -448,6 +476,15 @@ class BaseReplicationTest:
             else:
                 exit_code = self.db_runner.process.poll()
                 error_details.append(f"DB runner: exit code {exit_code}")
+                # Capture subprocess logs if available
+                if hasattr(self.db_runner, 'log_file') and self.db_runner.log_file:
+                    try:
+                        self.db_runner.log_file.seek(0)
+                        log_content = self.db_runner.log_file.read()
+                        if log_content.strip():
+                            error_details.append(f"DB logs: {log_content[-200:]}")  # Last 200 chars
+                    except Exception as e:
+                        error_details.append(f"DB log read error: {e}")
         
         # Add environment info
         from tests.conftest import TEST_DB_NAME

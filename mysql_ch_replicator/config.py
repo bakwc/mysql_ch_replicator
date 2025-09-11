@@ -332,18 +332,14 @@ class Settings:
         
         # Special handling for Docker volume mount issues where directory exists but can't be written to
         try:
-            # CRITICAL: Ensure parent directories exist first
-            # This fixes the issue where isolated test paths like /app/binlog/w3_75f29622 
-            # don't have their parent directories created yet
-            parent_dir = os.path.dirname(self.binlog_replicator.data_dir)
-            if parent_dir and not os.path.exists(parent_dir):
-                os.makedirs(parent_dir, exist_ok=True)
-                print(f"DEBUG: Created parent directory: {parent_dir}")
+            # CRITICAL: Create ALL parent directories recursively
+            # This fixes the issue where isolated test paths like /app/binlog/w2_4ad3d1be/test_db_w2_4ad3d1be
+            # have multiple levels of nested directories that need to be created
+            full_data_dir = self.binlog_replicator.data_dir
             
-            # Now ensure the target directory exists
-            if not os.path.exists(self.binlog_replicator.data_dir):
-                os.makedirs(self.binlog_replicator.data_dir, exist_ok=True)
-                print(f"DEBUG: Created binlog directory: {self.binlog_replicator.data_dir}")
+            # Ensure all parent directories exist recursively
+            os.makedirs(full_data_dir, exist_ok=True)
+            print(f"DEBUG: Created all directories for path: {full_data_dir}")
             
             # Test if we can actually create files in the directory
             test_file = os.path.join(self.binlog_replicator.data_dir, ".test_write")
