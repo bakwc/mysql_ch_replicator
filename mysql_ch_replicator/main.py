@@ -118,17 +118,11 @@ def run_db_replicator(args, config: Settings):
 
     # Create database-specific directory with robust error handling
     # CRITICAL: This prevents FileNotFoundError in isolated test scenarios
+    # Always create full directory hierarchy upfront to prevent race conditions
     try:
+        # Create all directories recursively - this handles nested test isolation paths
         os.makedirs(db_dir, exist_ok=True)
-    except FileNotFoundError as e:
-        # Ensure parent directories exist recursively - handle isolated test paths
-        try:
-            # Create full directory hierarchy recursively
-            os.makedirs(os.path.dirname(config.binlog_replicator.data_dir), exist_ok=True)
-            os.makedirs(config.binlog_replicator.data_dir, exist_ok=True)
-            os.makedirs(db_dir, exist_ok=True)
-        except Exception as e2:
-            logging.warning(f"Could not create database directory hierarchy {db_dir}: {e2}")
+        logging.debug(f"Created database directory: {db_dir}")
     except Exception as e:
         # Handle filesystem issues gracefully
         logging.warning(f"Could not create database directory {db_dir}: {e}")

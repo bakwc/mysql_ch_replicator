@@ -14,7 +14,7 @@ from tests.conftest import (
 
 
 @pytest.mark.integration
-@pytest.mark.skip(reason="Known bug - TRUNCATE operation not implemented")
+# @pytest.mark.skip(reason="Known bug - TRUNCATE operation not implemented")  # TRUNCATE is implemented - testing if it works
 def test_truncate_operation_bug_issue_155(clean_environment):
     """
     Test to reproduce the bug from issue #155.
@@ -63,8 +63,7 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
 
     # Verify data is replicated correctly
-    mysql.execute(f"SELECT COUNT(*) FROM `{TEST_TABLE_NAME}`")
-    mysql_count = mysql.cursor.fetchall()[0][0]
+    mysql_count = len(mysql.fetch_all(f"SELECT * FROM `{TEST_TABLE_NAME}`"))
     assert mysql_count == 3
 
     ch_count = len(ch.select(TEST_TABLE_NAME))
@@ -74,8 +73,7 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     mysql.execute(f"TRUNCATE TABLE `{TEST_TABLE_NAME}`;", commit=True)
 
     # Verify MySQL table is now empty
-    mysql.execute(f"SELECT COUNT(*) FROM `{TEST_TABLE_NAME}`")
-    mysql_count_after_truncate = mysql.cursor.fetchall()[0][0]
+    mysql_count_after_truncate = len(mysql.fetch_all(f"SELECT * FROM `{TEST_TABLE_NAME}`"))
     assert mysql_count_after_truncate == 0, "MySQL table should be empty after TRUNCATE"
 
     # Wait for replication to process the TRUNCATE operation
