@@ -1,0 +1,42 @@
+[client]
+default-character-set = utf8mb4
+
+[mysql]
+default-character-set = utf8mb4
+
+[mysqld]
+# The defaults from /etc/my.cnf
+datadir = /var/lib/mysql
+pid-file = /var/run/mysqld/mysqld.pid
+secure-file-priv = /var/lib/mysql-files
+socket = /var/lib/mysql/mysql.sock
+user = mysql
+bind-address = 0.0.0.0
+
+# Custom settings
+collation-server = utf8mb4_0900_ai_ci
+character-set-server = utf8mb4
+#default_authentication_plugin = mysql_native_password
+init-connect = 'SET NAMES utf8mb4'
+#skip-host-cache
+skip-name-resolve
+information_schema_stats_expiry = 0
+
+# Connection settings for high concurrent testing
+max_connections = 1000
+max_user_connections = 0
+connect_timeout = 60
+wait_timeout = 28800
+interactive_timeout = 28800
+
+# Performance settings for testing
+innodb_buffer_pool_size = 256M
+innodb_flush_log_at_trx_commit = 1
+
+# replication
+gtid_mode = on
+enforce_gtid_consistency = 1
+binlog_expire_logs_seconds = 864000
+max_binlog_size            = 500M
+binlog_format              = ROW #Very important if you want to receive write, update and delete row events
+log-bin                    = mysql-bin

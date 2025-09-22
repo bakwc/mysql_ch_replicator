@@ -1,4 +1,3 @@
-version: '2'
 services:
   clickhouse_db:
     image: bitnami/clickhouse:latest
@@ -16,7 +15,7 @@ services:
     ports:
       - 9123:9123
     volumes:
-      - ./tests_override.xml:/bitnami/clickhouse/etc/conf.d/override.xml:ro
+      - ./tests/configs/docker/tests_override.xml:/bitnami/clickhouse/etc/conf.d/override.xml:ro
     healthcheck:
       test: ["CMD", "true"]
       interval: 5s
@@ -33,7 +32,7 @@ services:
     ports:
       - "9306:3306"
     volumes:
-      - ./test_mysql.cnf:/etc/mysql/my.cnf:ro
+      - ./tests/configs/docker/test_mysql.cnf:/etc/mysql/my.cnf:ro
     networks:
       - default
     healthcheck:
@@ -54,13 +53,35 @@ services:
     ports:
       - 9307:3306
     volumes:
-      - ./test_mariadb.cnf:/etc/mysql/my.cnf:ro  # Adjust path to MariaDB config location if needed
+      - ./tests/configs/docker/test_mariadb.cnf:/etc/mysql/my.cnf:ro  # Adjust path to MariaDB config location if needed
     healthcheck:
       test: ["CMD", "true"]
       interval: 5s
       timeout: 1s
       retries: 1
       start_period: 15s
+
+  percona_db:
+    image: percona/percona-server:8.4
+    environment:
+      MYSQL_DATABASE: admin
+      MYSQL_ROOT_HOST: "%"
+      MYSQL_ROOT_PASSWORD: admin
+      MYSQL_ALLOW_EMPTY_PASSWORD: "no"
+    ports:
+      - "9308:3306"
+    volumes:
+      - ./tests/configs/docker/test_percona.cnf:/etc/mysql/conf.d/custom.cnf:ro
+      - percona_data:/var/lib/mysql
+    networks:
+      - default
+    command: --skip-mysqlx --socket=/tmp/mysql_percona.sock --pid-file=/tmp/mysql_percona.pid
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping --socket=/tmp/mysql_percona.sock -u root -padmin"]
+      interval: 30s
+      timeout: 10s  
+      retries: 3
+      start_period: 180s
 
   replicator:
     build:
@@ -69,8 +90,10 @@ services:
     network_mode: host
     volumes:
       - ./:/app/
+      # Create a named volume for binlog data with proper permissions
+      - binlog_data:/app/binlog/
     entrypoint: ["/bin/bash"]
-    command: ["-c", "touch /tmp/ready && tail -f /dev/null"]
+    command: ["-c", "mkdir -p /app/binlog && chmod 777 /app/binlog && touch /tmp/ready && tail -f /dev/null"]
     healthcheck:
       test: [ 'CMD-SHELL', 'test -f /tmp/ready' ]
       interval: 2s
@@ -83,3 +106,9 @@ services:
         condition: service_healthy
       mariadb_db:
         condition: service_healthy
+      percona_db:
+        condition: service_started  # Start dependency only (not health check)
+
+volumes:
+  percona_data:
+  binlog_data:

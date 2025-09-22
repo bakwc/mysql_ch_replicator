@@ -1,0 +1,60 @@
+# Example configuration showing isolated path substitution for parallel testing
+# This file demonstrates how the isolated_clean_environment fixture automatically
+# substitutes paths to ensure worker and test isolation in parallel test execution.
+
+mysql:
+  host: "localhost"
+  port: 9306
+  user: "root"
+  password: "admin"
+  pool_size: 3 # Reduced for tests to avoid connection exhaustion
+  max_overflow: 2
+
+clickhouse:
+  host: "localhost"
+  port: 9123
+  user: "default"
+  password: "admin"
+
+binlog_replicator:
+  # Original path: "/app/binlog/"
+  # Automatically isolated to: "/app/binlog_{worker_id}_{test_id}/" 
+  # Example result: "/app/binlog_w12_a1b2c3d4/"
+  data_dir: "/tmp/binlog_w12_a1b2c3d4/"
+  records_per_file: 100000
+  binlog_retention_period: 43200 # 12 hours in seconds
+
+# Database names are also automatically isolated:
+# Original database patterns like "*test*" become specific isolated databases
+# Example: test_db_w12_a1b2c3d4 (worker 12, test ID a1b2c3d4)
+databases: "*test*"
+log_level: "debug"
+optimize_interval: 3
+check_db_updated_interval: 3
+
+# Target database mappings also get isolated automatically:
+target_databases:
+  # Original: replication-test_db_2 -> replication-destination
+  # Isolated: test_db_w12_a1b2c3d4_2 -> replication_dest_w12_a1b2c3d4
+  test_db_w12_a1b2c3d4_2: replication_dest_w12_a1b2c3d4
+
+indexes:
+  - databases: "*"
+    tables: ["group"]
+    index: "INDEX name_idx name TYPE ngrambf_v1(5, 65536, 4, 0) GRANULARITY 1"
+
+http_host: "localhost"
+http_port: 9128
+
+types_mapping:
+  "char(36)": "UUID"
+
+# Usage Instructions:
+# 1. To use isolation, inherit from IsolatedBaseReplicationTest instead of BaseReplicationTest
+# 2. The isolated_clean_environment fixture will automatically:
+#    - Generate unique worker_id and test_id for each test
+#    - Substitute paths in configuration with isolated versions
+#    - Create temporary config file with isolated paths
+#    - Clean up isolated directories after tests complete
+# 3. Each test worker and test run gets completely isolated file system paths
+# 4. This prevents parallel test conflicts and enables safe concurrent testing

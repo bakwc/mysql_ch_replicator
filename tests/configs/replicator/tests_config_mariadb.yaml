@@ -1,0 +1,29 @@
+mysql:
+  host: "localhost"
+  port: 9307
+  user: "root"
+  password: "admin"
+  pool_size: 3 # Reduced for tests to avoid connection exhaustion
+  max_overflow: 2
+  charset: "utf8mb4" # Explicit charset for MariaDB compatibility
+  collation: "utf8mb4_unicode_ci" # Explicit collation for MariaDB compatibility
+
+clickhouse:
+  host: "localhost"
+  port: 9123
+  user: "default"
+  password: "admin"
+
+binlog_replicator:
+  data_dir: "/tmp/binlog/"
+  records_per_file: 100000
+
+databases: "*test*"
+log_level: "debug"
+optimize_interval: 3
+check_db_updated_interval: 3
+
+partition_bys:
+  - databases: "replication-test_db"
+    tables: ["test_table"]
+    partition_by: "intDiv(id, 1000000)"

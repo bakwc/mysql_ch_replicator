@@ -97,13 +97,21 @@ class ClickhouseApi:
         self.stats = GeneralStats()
         self.execute_command('SET final = 1;')
 
+    def update_database_context(self, database: str):
+        """Update the database context for subsequent queries"""
+        self.database = database
+
     def get_stats(self):
         stats = self.stats.to_dict()
         self.stats = GeneralStats()
         return stats
 
-    def get_tables(self):
-        result = self.client.query('SHOW TABLES')
+    def get_tables(self, database_name=None):
+        if database_name:
+            query = f'SHOW TABLES FROM `{database_name}`'
+        else:
+            query = 'SHOW TABLES'
+        result = self.client.query(query)
         tables = result.result_rows
         table_list = [row[0] for row in tables]
         return table_list
@@ -272,20 +280,56 @@ class ClickhouseApi:
     def create_database(self, db_name):
         self.execute_command(f'CREATE DATABASE `{db_name}`')
 
-    def select(self, table_name, where=None, final=None):
-        query = f'SELECT * FROM {table_name}'
-        if where:
-            query += f' WHERE {where}'
-        if final is not None:
-            query += f' SETTINGS final = {int(final)};'
-        result = self.client.query(query)
-        rows = result.result_rows
-        columns = result.column_names
+    def select(self, table_name, where=None, final=None, order_by=None):
+        """
+        Select records from table with optional conditions, ordering, and final setting
+        
+        Args:
+            table_name: Name of the table to query
+            where: Optional WHERE clause condition
+            final: Optional FINAL setting for ReplacingMergeTree tables
+            order_by: Optional ORDER BY clause for sorting results
+            
+        Returns:
+            List of dictionaries representing the query results
+            
+        Raises:
+            Exception: If the query fails or table doesn't exist
+        """
+        try:
+            # Handle system tables (which contain dots) differently from regular tables
+            if '.' in table_name and table_name.startswith('system.'):
+                query = f'SELECT * FROM {table_name}'
+            elif '.' in table_name:
+                # Table name already includes database
+                query = f'SELECT * FROM `{table_name}`'
+            else:
+                # Qualify table name with database if database is set
+                if self.database:
+                    query = f'SELECT * FROM `{self.database}`.`{table_name}`'
+                else:
+                    query = f'SELECT * FROM `{table_name}`'
+                
+            if where:
+                query += f' WHERE {where}'
+            if order_by:
+                query += f' ORDER BY {order_by}'
+            if final is not None:
+                query += f' SETTINGS final = {int(final)}'
+            
+            result = self.client.query(query)
+            rows = result.result_rows
+            columns = result.column_names
 
-        results = []
-        for row in rows:
-            results.append(dict(zip(columns, row)))
-        return results
+            results = []
+            for row in rows:
+                results.append(dict(zip(columns, row)))
+            return results
+            
+        except Exception as e:
+            logger.error(f"ClickHouse select failed for table '{table_name}' with query: {query}")
+            logger.error(f"Error: {e}")
+            raise
 
     def query(self, query: str):
         return self.client.query(query)

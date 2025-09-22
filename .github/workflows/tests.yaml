@@ -3,18 +3,38 @@ name: Tests
 on:
   pull_request:
   push:
-    branches:
-      - master
-    tags:
-      - '*'
+    branches: [master]
+    tags: ['*']
 
 jobs:
   run_tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: run_tests
-        run: >
-          ls -la &&
-          docker compose -f docker-compose-tests.yaml up --force-recreate --no-deps --wait -d &&
-          sudo docker exec -w /app/ -i `docker ps | grep mysql_ch_replicator-replicator | awk '{print $1;}'` python3 -m pytest -x -v -s test_mysql_ch_replicator.py
+      - uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          install: true
+      
+      - name: Run tests with reporting
+        run: |
+          chmod +x ./run_tests.sh
+          # Run tests in CI mode with parallel execution and automatic report generation
+          ./run_tests.sh --ci
+
+      - name: Publish test results
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        if: always()
+        with:
+          files: test-results.xml
+          comment_mode: always
+          
+      - name: Upload test report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-reports
+          path: |
+            test-results.xml
+            test-report.html

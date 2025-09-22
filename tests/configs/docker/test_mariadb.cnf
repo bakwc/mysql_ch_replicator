@@ -1,0 +1,34 @@
+[client]
+default-character-set = utf8mb4
+
+[mysql]
+default-character-set = utf8mb4
+
+[mysqld]
+# Basic settings
+datadir = /var/lib/mysql
+pid-file = /run/mysqld/mysqld.pid
+socket = /run/mysqld/mysqld.sock
+user = mysql
+bind-address = 0.0.0.0
+
+# Character set and collation
+collation-server = utf8mb4_unicode_ci
+character-set-server = utf8mb4
+init_connect = 'SET NAMES utf8mb4'
+skip-name-resolve
+
+# Replication settings for MariaDB
+log-bin = mysql-bin
+binlog_format = ROW
+max_binlog_size = 500M
+expire_logs_days = 10
+server-id = 1
+
+# GTID settings for MariaDB
+gtid_domain_id = 0
+gtid_strict_mode = 1
+
+# Performance and compatibility
+innodb_flush_log_at_trx_commit = 1
+sync_binlog = 1

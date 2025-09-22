@@ -63,6 +63,19 @@ class State:
 
     def save(self):
         file_name = self.file_name
+        
+        # Ensure parent directory exists before saving - simplified approach
+        parent_dir = os.path.dirname(file_name)
+        if parent_dir:  # Only proceed if there's actually a parent directory
+            try:
+                # Use makedirs with exist_ok=True to create all directories recursively
+                # This handles nested isolation paths like /app/binlog/w2_8658a787/test_db_w2_8658a787
+                os.makedirs(parent_dir, exist_ok=True)
+                logger.debug(f"Ensured directory exists for state file: {parent_dir}")
+            except OSError as e:
+                logger.error(f"Critical: Failed to create state directory {parent_dir}: {e}")
+                raise
+        
         data = pickle.dumps({
             'last_processed_transaction': self.last_processed_transaction,
             'status': self.status.value,

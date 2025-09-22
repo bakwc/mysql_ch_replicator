@@ -1,18 +1,21 @@
-
 mysql:
-  host: 'localhost'
+  host: "localhost"
   port: 8306
-  user: 'root'
-  password: 'root'
+  user: "root"
+  password: "root"
+  # Connection pooling settings (optional)
+  pool_size: 5 # Base number of connections in pool
+  max_overflow: 10 # Additional connections beyond pool_size
+  pool_name: "default" # Name for the connection pool
 
 clickhouse:
-  host: 'localhost'
+  host: "localhost"
   port: 8323
-  user: 'default'
-  password: 'default'
+  user: "default"
+  password: "default"
 
 binlog_replicator:
-  data_dir: '/home/user/binlog/'
+  data_dir: "/home/user/binlog/"
   records_per_file: 100000
 
-databases: 'database_name_pattern_*'
+databases: "database_name_pattern_*"

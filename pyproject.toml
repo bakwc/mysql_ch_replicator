@@ -19,6 +19,11 @@ fastapi = "^0.115.6"
 uvicorn = "^0.34.0"
 requests = "^2.32.3"
 
+[tool.poetry.group.dev.dependencies]
+pytest = "^7.3.2"
+pytest-html = "^4.1.1"
+pytest-json-report = "^1.5.0"
+pytest-xdist = "^3.8.0"
 
 [build-system]
 requires = ["poetry-core"]

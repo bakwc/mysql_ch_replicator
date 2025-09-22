@@ -15,9 +15,14 @@
 
 With a focus on high performance, it utilizes batching heavily and uses C++ extension for faster execution. This tool ensures seamless data integration with support for migrations, schema changes, and correct data management.
 
-## Table of Contents
+## 📋 Table of Contents
 - [Features](#features)
 - [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Configuration](#configuration)
+- [Testing](#testing)
+- [Development](#development)
+- [Documentation](#documentation)
   - [Requirements](#requirements)
   - [Installation](#installation-1)
   - [Docker Installation](#docker-installation)
@@ -311,20 +316,77 @@ cd mysql_ch_replicator
 pip install -r requirements.txt
 ```
 
-### Running Tests
+## 🧪 Testing
 
-1. Use docker-compose to install all requirements:
+The project includes a comprehensive test suite with 65+ integration tests ensuring reliable replication.
+
+**Quick Start**:
 ```bash
-sudo docker compose -f docker-compose-tests.yaml up
+# Run full test suite (recommended)
+./run_tests.sh
+
+# Run specific tests
+./run_tests.sh -k "test_basic_crud"
+
+# Validate binlog isolation (important for parallel testing)
+./run_tests.sh -k "test_binlog_isolation_verification"
 ```
-2. Run tests with:
+
+**Test Architecture**:
+- **Integration Tests**: End-to-end replication scenarios
+- **Data Type Tests**: MySQL→ClickHouse type mapping validation  
+- **Performance Tests**: Stress testing and concurrent operations
+- **Edge Case Tests**: Complex scenarios and bug reproductions
+
+**Recent Major Fix**: Implemented binlog directory isolation to prevent parallel test conflicts.
+
+📖 **Detailed Guide**: See [TESTING_GUIDE.md](TESTING_GUIDE.md) for comprehensive testing information.
+
+## 🛠️ Development
+
+### Contributing
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Run tests to ensure your changes work: `./run_tests.sh`
+4. Commit your changes (`git commit -m 'Add amazing feature'`)
+5. Push to the branch (`git push origin feature/amazing-feature`)
+6. Open a Pull Request
+
+### Development Setup
 ```bash
-sudo docker exec -w /app/ -it mysql_ch_replicator-replicator-1 python3 -m pytest -v -s test_mysql_ch_replicator.py
+# Clone the repository
+git clone <repository-url>
+cd mysql-ch-replicator
+
+# Build and start development environment
+docker-compose up -d
+
+# Run tests to verify setup
+./run_tests.sh
 ```
-3. To run a single test:
-```bash
-sudo docker exec -w /app/ -it mysql_ch_replicator-replicator-1 python3 -m pytest -v -s test_mysql_ch_replicator.py -k test_your_test_name
-```
+
+## 📚 Documentation
+
+### Core Documentation
+- **[TESTING_GUIDE.md](TESTING_GUIDE.md)** - Comprehensive testing guide with best practices
+- **[CLAUDE.md](CLAUDE.md)** - Development guide and architecture overview  
+- **[tests/TASKLIST.md](tests/TASKLIST.md)** - Current test fixing progress and critical issues
+
+### Architecture  
+- **Real-time Replication**: Uses MySQL binlog for change capture
+- **High Performance**: Batch processing with C++ extensions
+- **Schema Evolution**: Handles DDL operations and migrations
+- **Data Types**: Comprehensive MySQL→ClickHouse type mapping
+- **Fault Tolerance**: State management and resumption capability
+
+### Key Features
+- ✅ **Binlog-based real-time replication**
+- ✅ **Parallel initial replication** for large datasets  
+- ✅ **Schema change detection** and handling
+- ✅ **Multiple MySQL variants** (MySQL, MariaDB, Percona)
+- ✅ **Comprehensive test coverage** (65+ integration tests)
+- ✅ **Docker support** for easy deployment
+- ✅ **Recent: True test isolation** preventing parallel conflicts
 
 ## Contribution
 

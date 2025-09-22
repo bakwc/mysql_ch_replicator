@@ -1,0 +1,40 @@
+[client]
+default-character-set = utf8mb4
+
+[mysql]
+default-character-set = utf8mb4
+
+[mysqld]
+# Basic settings
+bind-address = 0.0.0.0
+skip-name-resolve
+
+# Character set configuration
+collation-server = utf8mb4_0900_ai_ci
+character-set-server = utf8mb4
+init-connect = 'SET NAMES utf8mb4'
+
+# Replication settings
+gtid_mode = ON
+enforce_gtid_consistency = ON
+binlog_format = ROW
+log-bin = mysql-bin
+binlog_expire_logs_seconds = 864000
+max_binlog_size = 500M
+
+# Performance settings
+innodb_buffer_pool_size = 128M
+innodb_flush_log_at_trx_commit = 1
+max_connections = 200
+
+# Disable X Plugin completely to avoid socket conflicts
+skip-mysqlx
+
+# Use unique socket paths to avoid conflicts
+socket = /tmp/mysql_percona.sock
+pid-file = /tmp/mysql_percona.pid
+
+# Explicitly disable X Plugin components
+loose-mysqlx = 0
+loose-mysqlx_port = 0
+loose-mysqlx_socket = DISABLED

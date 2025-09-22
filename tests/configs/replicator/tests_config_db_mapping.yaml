@@ -1,0 +1,27 @@
+mysql:
+  host: 'localhost'
+  port: 9306
+  user: 'root'
+  password: 'admin'
+
+clickhouse:
+  host: 'localhost'
+  port: 9123
+  user: 'default'
+  password: 'admin'
+
+binlog_replicator:
+  data_dir: '/tmp/binlog/'
+  records_per_file: 100000
+  binlog_retention_period: 43200  # 12 hours in seconds
+
+databases: '*test*'
+log_level: 'debug'
+optimize_interval: 3
+check_db_updated_interval: 3
+
+# This mapping will be set dynamically by the test
+target_databases: {}
+
+http_host: 'localhost'
+http_port: 9128 
