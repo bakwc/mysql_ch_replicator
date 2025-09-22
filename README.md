@@ -49,7 +49,7 @@ With a focus on high performance, it utilizes batching heavily and uses C++ exte
 ## Installation
 ### Requirements
  - Linux / MacOS
- - python3.9 or higher
+ - python3.10 or higher
 
 ### Installation
 
