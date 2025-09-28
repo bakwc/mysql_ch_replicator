@@ -1734,13 +1734,14 @@ def test_polygon_type():
 
     prepare_env(cfg, mysql, ch)
 
-    # Create a table with polygon type
+    # Create a table with polygon and multipolygon types
     mysql.execute(f'''
     CREATE TABLE `{TEST_TABLE_NAME}` (
         id INT NOT NULL AUTO_INCREMENT,
         name VARCHAR(50) NOT NULL,
         area POLYGON NOT NULL,
         nullable_area POLYGON,
+        multi_area MULTIPOLYGON,
         PRIMARY KEY (id)
     )
     ''')
@@ -1748,10 +1749,10 @@ def test_polygon_type():
     # Insert test data with polygons
     # Using ST_GeomFromText to create polygons from WKT (Well-Known Text) format
     mysql.execute(f'''
-    INSERT INTO `{TEST_TABLE_NAME}` (name, area, nullable_area) VALUES 
-    ('Square', ST_GeomFromText('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))'), ST_GeomFromText('POLYGON((0 0, 0 2, 2 2, 2 0, 0 0))')),
-    ('Triangle', ST_GeomFromText('POLYGON((0 0, 1 0, 0.5 1, 0 0))'), NULL),
-    ('Complex', ST_GeomFromText('POLYGON((0 0, 0 3, 3 3, 3 0, 0 0))'), ST_GeomFromText('POLYGON((1 1, 1 2, 2 2, 2 1, 1 1))'));
+    INSERT INTO `{TEST_TABLE_NAME}` (name, area, nullable_area, multi_area) VALUES 
+    ('Square', ST_GeomFromText('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))'), ST_GeomFromText('POLYGON((0 0, 0 2, 2 2, 2 0, 0 0))'), NULL),
+    ('Triangle', ST_GeomFromText('POLYGON((0 0, 1 0, 0.5 1, 0 0))'), NULL, NULL),
+    ('Complex', ST_GeomFromText('POLYGON((0 0, 0 3, 3 3, 3 0, 0 0))'), ST_GeomFromText('POLYGON((1 1, 1 2, 2 2, 2 1, 1 1))'), NULL);
     ''', commit=True)
 
     run_all_runner = RunAllRunner(cfg_file=config_file)
@@ -1772,6 +1773,7 @@ def test_polygon_type():
     assert results[0]['name'] == 'Square'
     assert len(results[0]['area']) == 5  # Square has 5 points (including closing point)
     assert len(results[0]['nullable_area']) == 5
+    assert results[0]['multi_area'] == []  # NULL multipolygon values are returned as empty list
     # Verify some specific points
     assert results[0]['area'][0] == {'x': 0.0, 'y': 0.0}
     assert results[0]['area'][1] == {'x': 0.0, 'y': 1.0}
@@ -1783,6 +1785,7 @@ def test_polygon_type():
     assert results[1]['name'] == 'Triangle'
     assert len(results[1]['area']) == 4  # Triangle has 4 points (including closing point)
     assert results[1]['nullable_area'] == []  # NULL values are returned as empty list
+    assert results[1]['multi_area'] == []  # NULL multipolygon values are returned as empty list
     # Verify some specific points
     assert results[1]['area'][0] == {'x': 0.0, 'y': 0.0}
     assert results[1]['area'][1] == {'x': 1.0, 'y': 0.0}
@@ -1793,6 +1796,7 @@ def test_polygon_type():
     assert results[2]['name'] == 'Complex'
     assert len(results[2]['area']) == 5  # Outer square
     assert len(results[2]['nullable_area']) == 5  # Inner square
+    assert results[2]['multi_area'] == []  # NULL multipolygon values are returned as empty list
     # Verify some specific points
     assert results[2]['area'][0] == {'x': 0.0, 'y': 0.0}
     assert results[2]['area'][2] == {'x': 3.0, 'y': 3.0}
@@ -1801,10 +1805,10 @@ def test_polygon_type():
 
     # Test realtime replication by adding more records
     mysql.execute(f'''
-    INSERT INTO `{TEST_TABLE_NAME}` (name, area, nullable_area) VALUES 
-    ('Pentagon', ST_GeomFromText('POLYGON((0 0, 1 0, 1.5 1, 0.5 1.5, 0 0))'), ST_GeomFromText('POLYGON((0.2 0.2, 0.8 0.2, 1 0.8, 0.5 1, 0.2 0.2))')),
-    ('Hexagon', ST_GeomFromText('POLYGON((0 0, 1 0, 1.5 0.5, 1 1, 0.5 1, 0 0))'), NULL),
-    ('Circle', ST_GeomFromText('POLYGON((0 0, 0 2, 2 2, 2 0, 0 0))'), ST_GeomFromText('POLYGON((0.5 0.5, 0.5 1.5, 1.5 1.5, 1.5 0.5, 0.5 0.5))'));
+    INSERT INTO `{TEST_TABLE_NAME}` (name, area, nullable_area, multi_area) VALUES 
+    ('Pentagon', ST_GeomFromText('POLYGON((0 0, 1 0, 1.5 1, 0.5 1.5, 0 0))'), ST_GeomFromText('POLYGON((0.2 0.2, 0.8 0.2, 1 0.8, 0.5 1, 0.2 0.2))'), NULL),
+    ('Hexagon', ST_GeomFromText('POLYGON((0 0, 1 0, 1.5 0.5, 1 1, 0.5 1, 0 0))'), NULL, NULL),
+    ('Circle', ST_GeomFromText('POLYGON((0 0, 0 2, 2 2, 2 0, 0 0))'), ST_GeomFromText('POLYGON((0.5 0.5, 0.5 1.5, 1.5 1.5, 1.5 0.5, 0.5 0.5))'), NULL);
     ''', commit=True)
 
     # Wait for new records to be replicated
@@ -1816,6 +1820,7 @@ def test_polygon_type():
     assert pentagon['name'] == 'Pentagon'
     assert len(pentagon['area']) == 5  # Pentagon has 5 points
     assert len(pentagon['nullable_area']) == 5  # Inner pentagon
+    assert pentagon['multi_area'] == []  # NULL multipolygon values are returned as empty list
     assert abs(pentagon['area'][0]['x'] - 0.0) < 1e-6
     assert abs(pentagon['area'][0]['y'] - 0.0) < 1e-6
     assert abs(pentagon['area'][2]['x'] - 1.5) < 1e-6
@@ -1830,6 +1835,7 @@ def test_polygon_type():
     assert hexagon['name'] == 'Hexagon'
     assert len(hexagon['area']) == 6  # Hexagon has 6 points
     assert hexagon['nullable_area'] == []  # NULL values are returned as empty list
+    assert hexagon['multi_area'] == []  # NULL multipolygon values are returned as empty list
     assert abs(hexagon['area'][0]['x'] - 0.0) < 1e-6
     assert abs(hexagon['area'][0]['y'] - 0.0) < 1e-6
     assert abs(hexagon['area'][2]['x'] - 1.5) < 1e-6
@@ -1842,6 +1848,7 @@ def test_polygon_type():
     assert circle['name'] == 'Circle'
     assert len(circle['area']) == 5  # Outer square
     assert len(circle['nullable_area']) == 5  # Inner square
+    assert circle['multi_area'] == []  # NULL multipolygon values are returned as empty list
     assert abs(circle['area'][0]['x'] - 0.0) < 1e-6
     assert abs(circle['area'][0]['y'] - 0.0) < 1e-6
     assert abs(circle['area'][2]['x'] - 2.0) < 1e-6
@@ -1850,6 +1857,46 @@ def test_polygon_type():
     assert abs(circle['nullable_area'][0]['y'] - 0.5) < 1e-6
     assert abs(circle['nullable_area'][2]['x'] - 1.5) < 1e-6
     assert abs(circle['nullable_area'][2]['y'] - 1.5) < 1e-6
+
+    # Test multipolygon type - insert a record with multipolygon data
+    mysql.execute(f'''
+    INSERT INTO `{TEST_TABLE_NAME}` (name, area, nullable_area, multi_area) VALUES 
+    ('MultiSquares', 
+     ST_GeomFromText('POLYGON((0 0, 0 1, 1 1, 1 0, 0 0))'), 
+     NULL,
+     ST_GeomFromText('MULTIPOLYGON(((0 0, 0 1, 1 1, 1 0, 0 0)), ((2 2, 2 3, 3 3, 3 2, 2 2)))')
+    );
+    ''', commit=True)
+
+    # Wait for the new record with multipolygon to be replicated
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 7)
+    
+    # Verify the multipolygon data
+    multi_squares = ch.select(TEST_TABLE_NAME, where="name='MultiSquares'")[0]
+    assert multi_squares['name'] == 'MultiSquares'
+    
+    # Check that multi_area contains multiple polygons
+    # The multipolygon should be represented as an array of polygon arrays
+    assert isinstance(multi_squares['multi_area'], list)
+    assert len(multi_squares['multi_area']) == 2  # Two polygons in the multipolygon
+    
+    # Check first polygon in multipolygon
+    first_polygon = multi_squares['multi_area'][0]
+    assert len(first_polygon) == 5  # Square has 5 points (including closing point)
+    assert first_polygon[0] == {'x': 0.0, 'y': 0.0}
+    assert first_polygon[1] == {'x': 0.0, 'y': 1.0}
+    assert first_polygon[2] == {'x': 1.0, 'y': 1.0}
+    assert first_polygon[3] == {'x': 1.0, 'y': 0.0}
+    assert first_polygon[4] == {'x': 0.0, 'y': 0.0}  # Closing point
+    
+    # Check second polygon in multipolygon
+    second_polygon = multi_squares['multi_area'][1]
+    assert len(second_polygon) == 5  # Square has 5 points (including closing point)
+    assert second_polygon[0] == {'x': 2.0, 'y': 2.0}
+    assert second_polygon[1] == {'x': 2.0, 'y': 3.0}
+    assert second_polygon[2] == {'x': 3.0, 'y': 3.0}
+    assert second_polygon[3] == {'x': 3.0, 'y': 2.0}
+    assert second_polygon[4] == {'x': 2.0, 'y': 2.0}  # Closing point
 
     run_all_runner.stop()
     assert_wait(lambda: 'stopping db_replicator' in read_logs(TEST_DB_NAME))
