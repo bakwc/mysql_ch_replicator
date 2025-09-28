@@ -182,6 +182,93 @@ def parse_mysql_polygon(binary):
     return points
 
 
+def parse_mysql_multipolygon(binary):
+    """
+    Parses the binary representation of a MySQL MULTIPOLYGON data type
+    and returns a list of polygons, where each polygon is a list of tuples 
+    [(x1,y1), (x2,y2), ...] representing the polygon vertices.
+
+    :param binary: The binary data representing the MULTIPOLYGON.
+    :return: A list of lists of tuples with the coordinate values.
+    """
+    if binary is None:
+        return []
+
+    # Determine if SRID is present
+    has_srid = len(binary) > 25
+    offset = 4 if has_srid else 0
+
+    # Read byte order
+    byte_order = binary[offset]
+    if byte_order == 0:
+        endian = '>'
+    elif byte_order == 1:
+        endian = '<'
+    else:
+        raise ValueError("Invalid byte order in WKB MULTIPOLYGON")
+
+    # Read WKB Type
+    wkb_type = struct.unpack(endian + 'I', binary[offset + 1:offset + 5])[0]
+    if wkb_type != 6:  # WKB type 6 means MULTIPOLYGON
+        raise ValueError("Not a WKB MULTIPOLYGON type")
+
+    # Read number of polygons
+    num_polygons = struct.unpack(endian + 'I', binary[offset + 5:offset + 9])[0]
+    if num_polygons == 0:
+        return []
+
+    polygons = []
+    current_offset = offset + 9
+
+    for polygon_idx in range(num_polygons):
+        # Each polygon starts with its own WKB header
+        # Read byte order for this polygon
+        polygon_byte_order = binary[current_offset]
+        if polygon_byte_order == 0:
+            polygon_endian = '>'
+        elif polygon_byte_order == 1:
+            polygon_endian = '<'
+        else:
+            raise ValueError("Invalid byte order in WKB POLYGON within MULTIPOLYGON")
+
+        # Read WKB Type for this polygon
+        polygon_wkb_type = struct.unpack(polygon_endian + 'I', binary[current_offset + 1:current_offset + 5])[0]
+        if polygon_wkb_type != 3:  # WKB type 3 means POLYGON
+            raise ValueError("Not a WKB POLYGON type within MULTIPOLYGON")
+
+        # Read number of rings for this polygon
+        num_rings = struct.unpack(polygon_endian + 'I', binary[current_offset + 5:current_offset + 9])[0]
+        if num_rings == 0:
+            polygons.append([])
+            current_offset += 9
+            continue
+
+        # Read the first ring (outer boundary) of this polygon
+        ring_offset = current_offset + 9
+        num_points = struct.unpack(polygon_endian + 'I', binary[ring_offset:ring_offset + 4])[0]
+        points = []
+
+        # Read each point in the ring
+        for i in range(num_points):
+            point_offset = ring_offset + 4 + (i * 16)  # 16 bytes per point (8 for x, 8 for y)
+            x = struct.unpack(polygon_endian + 'd', binary[point_offset:point_offset + 8])[0]
+            y = struct.unpack(polygon_endian + 'd', binary[point_offset + 8:point_offset + 16])[0]
+            points.append((x, y))
+
+        polygons.append(points)
+
+        # Move to next polygon
+        # Skip the current polygon's data: header (9 bytes) + ring header (4 bytes) + points (16 bytes each)
+        current_offset = ring_offset + 4 + (num_points * 16)
+
+        # Skip any additional rings (holes) for this polygon
+        for ring_idx in range(1, num_rings):
+            ring_num_points = struct.unpack(polygon_endian + 'I', binary[current_offset:current_offset + 4])[0]
+            current_offset += 4 + (ring_num_points * 16)
+
+    return polygons
+
+
 def strip_sql_name(name):
     name = name.strip()
     if name.startswith('`'):
@@ -260,6 +347,9 @@ class MysqlToClickhouseConverter:
 
         if mysql_type == 'polygon':
             return 'Array(Tuple(x Float32, y Float32))'
+
+        if mysql_type == 'multipolygon':
+            return 'Array(Array(Tuple(x Float32, y Float32)))'
 
         # Correctly handle numeric types
         if mysql_type.startswith('numeric'):
@@ -500,6 +590,9 @@ class MysqlToClickhouseConverter:
 
             if mysql_field_type.startswith('polygon'):
                 clickhouse_field_value = parse_mysql_polygon(clickhouse_field_value)
+
+            if mysql_field_type.startswith('multipolygon'):
+                clickhouse_field_value = parse_mysql_multipolygon(clickhouse_field_value)
 
             if mysql_field_type.startswith('enum('):
                 enum_values = mysql_structure.fields[idx].additional_data
