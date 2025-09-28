@@ -52,6 +52,7 @@ class ClickhouseSettings:
     password: str = ''
     connection_timeout: int = 30
     send_receive_timeout: int = 120
+    erase_batch_size: int = 100000  # Number of records to delete per batch
 
     def validate(self):
         if not isinstance(self.host, str):
@@ -77,6 +78,11 @@ class ClickhouseSettings:
 
         if self.send_receive_timeout <= 0:
             raise ValueError(f'send_receive_timeout timeout should be at least 1 second')
+
+        if not isinstance(self.erase_batch_size, int):
+            raise ValueError(f'erase_batch_size should be int and not {stype(self.erase_batch_size)}')
+        if self.erase_batch_size <= 0:
+            raise ValueError('erase_batch_size should be positive')
 
 
 @dataclass

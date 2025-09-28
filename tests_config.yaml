@@ -9,6 +9,7 @@ clickhouse:
   port: 9123
   user: 'default'
   password: 'admin'
+  erase_batch_size: 2
 
 binlog_replicator:
   data_dir: '/app/binlog/'
