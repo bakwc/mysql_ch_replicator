@@ -296,6 +296,7 @@ tables: ['table_1', 'table_2*']
 **Known Limitations**
 1. Migrations not supported during initial replication. You should either wait for initial replication finish and then apply migrations, or restart initial replication from scratch (by removing state file).
 2. Primary key changes not supported. This is a ClickHouse level limitation, it does not allow to make any changes realted to primary key.
+3. Tables without a primary key are not supported.
 
 #### Recovery Without Downtime
 
