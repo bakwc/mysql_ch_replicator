@@ -349,6 +349,8 @@ class MysqlToClickhouseConverter:
                 pass
         if mysql_type == "bool":
             return "Bool"
+        if mysql_type == "boolean":
+            return "Bool"
         if "smallint" in mysql_type:
             if is_unsigned:
                 return "UInt16"
