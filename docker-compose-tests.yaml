@@ -2,22 +2,15 @@ version: '2'
 services:
   clickhouse_db:
     image: clickhouse/clickhouse-server:latest
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "100m"
     environment:
       - CLICKHOUSE_USER=default
       - CLICKHOUSE_PASSWORD=admin
       - CLICKHOUSE_DB=default
     ports:
-      - "9123:8123"   # HTTP port
-      - "9000:9000"   # TCP port
+      - "9123:8123"
+      - "9000:9000"
     volumes:
       - ./tests_override.xml:/etc/clickhouse-server/config.d/override.xml:ro
-      - clickhouse_data:/var/lib/clickhouse
-    networks:
-      default:
     healthcheck:
       test: ["CMD-SHELL", "curl -sSf http://localhost:8123/ping || exit 1"]
       interval: 5s
