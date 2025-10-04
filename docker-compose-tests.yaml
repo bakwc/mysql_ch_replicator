@@ -1,28 +1,22 @@
 version: '2'
 services:
   clickhouse_db:
-    image: bitnami/clickhouse:latest
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "100m"
+    image: clickhouse/clickhouse-server:latest
     environment:
-      - ALLOW_EMPTY_PASSWORD=no
-      - CLICKHOUSE_ADMIN_PASSWORD=admin
-      - CLICKHOUSE_ADMIN_USER=default
-      - CLICKHOUSE_HTTP_PORT=9123
-    networks:
-      default:
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=admin
+      - CLICKHOUSE_DB=default
     ports:
-      - 9123:9123
+      - "9123:8123"
+      - "9000:9000"
     volumes:
-      - ./tests_override.xml:/bitnami/clickhouse/etc/conf.d/override.xml:ro
+      - ./tests_override.xml:/etc/clickhouse-server/config.d/override.xml:ro
     healthcheck:
-      test: ["CMD", "true"]
+      test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1;' || exit 1"]
       interval: 5s
-      timeout: 1s
-      retries: 1
-      start_period: 15s
+      timeout: 4s
+      retries: 10
+      start_period: 20s
 
   mysql_db:
     image: mysql:8.4.3
