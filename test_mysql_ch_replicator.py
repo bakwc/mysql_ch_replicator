@@ -1104,7 +1104,7 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
 
     value = ch.select(TEST_TABLE_NAME, 'test1=True')[0]['test5']
     assert isinstance(value, datetime.datetime)
-    assert str(value) == '2023-08-15 14:40:00+00:00'
+    assert str(value) == '2023-08-15 14:40:00'
 
     assert ch.select(TEST_TABLE_NAME, 'test1=True')[0]['test6'] == uuid.UUID('110e6103-e39b-51d4-a716-826755413099')
 
