@@ -88,6 +88,8 @@ Make sure to:
 
 ### Basic Usage
 
+Here is a [video tutorial](https://www.youtube.com/watch?v=pfbw8VzdIz4)
+
 For realtime data sync from MySQL to ClickHouse:
 
 1. Prepare config file. Use `example_config.yaml` as an example.
