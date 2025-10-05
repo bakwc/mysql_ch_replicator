@@ -85,6 +85,7 @@ class ClickhouseApi:
     def __init__(self, database: str | None, clickhouse_settings: ClickhouseSettings):
         self.database = database
         self.clickhouse_settings = clickhouse_settings
+        self.erase_batch_size = clickhouse_settings.erase_batch_size
         self.client = clickhouse_connect.get_client(
             host=clickhouse_settings.host,
             port=clickhouse_settings.port,
@@ -248,22 +249,34 @@ class ClickhouseApi:
 
     def erase(self, table_name, field_name, field_values):
         field_name = ','.join(field_name)
-        field_values = ', '.join(f'({v})' for v in field_values)
-        query = DELETE_QUERY.format(**{
-            'db_name': self.database,
-            'table_name': table_name,
-            'field_name': field_name,
-            'field_values': field_values,
-        })
-        t1 = time.time()
-        self.execute_command(query)
-        t2 = time.time()
-        duration = t2 - t1
+        
+        # Batch large deletions to avoid ClickHouse max query size limit
+        field_values_list = list(field_values)
+        
+        total_duration = 0.0
+        total_records = len(field_values_list)
+        
+        for i in range(0, len(field_values_list), self.erase_batch_size):
+            batch = field_values_list[i:i + self.erase_batch_size]
+            batch_field_values = ', '.join(f'({v})' for v in batch)
+            
+            query = DELETE_QUERY.format(**{
+                'db_name': self.database,
+                'table_name': table_name,
+                'field_name': field_name,
+                'field_values': batch_field_values,
+            })
+            
+            t1 = time.time()
+            self.execute_command(query)
+            t2 = time.time()
+            total_duration += (t2 - t1)
+        
         self.stats.on_event(
             table_name=table_name,
-            duration=duration,
+            duration=total_duration,
             is_insert=False,
-            records=len(field_values),
+            records=total_records,
         )
 
     def drop_database(self, db_name):
