@@ -311,7 +311,7 @@ Here is the checklist for production. Please read it carefully and confirm every
 
 #### Checklist
 
-- [ ] No manual changes are made directly to ClickHouse databases or tables. All modifications (indexes, table settings, etc.) must be applied as overrides in the mysql_ch_replicator config.yaml.
+- [ ] No manual changes are made directly to ClickHouse databases or tables. All modifications (indexes, table settings, etc.) must be applied as overrides in the `mysql_ch_replicator` `config.yaml`.
 - [ ] All MySQL migrations undergo either CI/CD or manual testing before deployment. No migration is applied to production without being tested. The tests verify that replication continues to work correctly and that new records are successfully replicated from MySQL to ClickHouse after the migration.
 
 ## Development
