@@ -30,6 +30,7 @@ With a focus on high performance, it utilizes batching heavily and uses C++ exte
   - [Advanced Features](#advanced-features)
     - [Migrations & Schema Changes](#migrations--schema-changes)
     - [Recovery Without Downtime](#recovery-without-downtime)
+    - [Known Limitations](#known-limitations)
 - [Production usage](#production-usage)
 - [Development](#development)
   - [Running Tests](#running-tests)
@@ -296,7 +297,7 @@ tables: ['table_1', 'table_2*']
  - Try to insert some record into mysql (to any table)
  - Check that this record appears in ClickHouse
 
-**Known Limitations**
+#### Known Limitations
 1. Migrations not supported during initial replication. You should either wait for initial replication finish and then apply migrations, or restart initial replication from scratch (by removing state file).
 2. Primary key changes not supported. This is a ClickHouse level limitation, it does not allow to make any changes realted to primary key.
 3. Tables without a primary key are not supported.
@@ -313,6 +314,7 @@ Here is the checklist for production. Please read it carefully and confirm every
 
 - [ ] No manual changes are made directly to ClickHouse databases or tables. All modifications (indexes, table settings, etc.) must be applied as overrides in the `mysql_ch_replicator` `config.yaml`.
 - [ ] All MySQL migrations undergo either CI/CD or manual testing before deployment. No migration is applied to production without being tested. The tests verify that replication continues to work correctly and that new records are successfully replicated from MySQL to ClickHouse after the migration.
+- [ ] Read and acknowledged [known limitations](#known-limitations).
 
 ## Development
 
