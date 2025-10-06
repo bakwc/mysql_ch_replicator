@@ -688,13 +688,23 @@ class MysqlToClickhouseConverter:
             if op_name == 'add':
                 if tokens[0].lower() in ('constraint', 'index', 'foreign', 'unique', 'key'):
                     continue
-                self.__convert_alter_table_add_column(db_name, table_name, tokens)
+                # Handle cases where keywords are combined with parentheses: INDEX(col), CONSTRAINT(name), etc.
+                for keyword in ('constraint', 'index', 'foreign', 'unique', 'key'):
+                    if tokens[0].lower().startswith(f'{keyword}('):
+                        break
+                else:
+                    self.__convert_alter_table_add_column(db_name, table_name, tokens)
                 continue
 
             if op_name == 'drop':
                 if tokens[0].lower() in ('constraint', 'index', 'foreign', 'unique', 'key'):
                     continue
-                self.__convert_alter_table_drop_column(db_name, table_name, tokens)
+                # Handle cases where keywords are combined with parentheses: INDEX(col), CONSTRAINT(name), etc.
+                for keyword in ('constraint', 'index', 'foreign', 'unique', 'key'):
+                    if tokens[0].lower().startswith(f'{keyword}('):
+                        break
+                else:
+                    self.__convert_alter_table_drop_column(db_name, table_name, tokens)
                 continue
 
             if op_name == 'modify':

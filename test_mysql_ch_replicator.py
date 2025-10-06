@@ -1439,6 +1439,16 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="id=45")[0]['c1'] == 1111)
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="id=45")[0].get('c2') is None)
 
+    # Test add index to c1 column
+    mysql.execute(
+        f"ALTER TABLE `{TEST_TABLE_NAME}` ADD INDEX(c1)")
+    mysql.execute(
+        f"INSERT INTO `{TEST_TABLE_NAME}` (id, c1) VALUES (47, 5555)",
+        commit=True,
+    )
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME, where="id=47")) == 1)
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="id=47")[0]['c1'] == 5555)
+
     db_replicator_runner.stop()
     binlog_replicator_runner.stop()
 
