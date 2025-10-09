@@ -6,6 +6,8 @@ from logging.handlers import RotatingFileHandler
 import sys
 import os
 
+import importlib.metadata
+
 from .config import Settings
 from .db_replicator import DbReplicator
 from .binlog_replicator import BinlogReplicator
@@ -145,11 +147,22 @@ def run_all(args, config: Settings):
 
 
 def main():
+    # Get version information
+    try:
+        version = importlib.metadata.version("mysql-ch-replicator")
+    except importlib.metadata.PackageNotFoundError:
+        version = "unknown"  # fallback version
+    
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--version", action="version", version=f"mysql-ch-replicator {version}"
+    )
     parser.add_argument(
         "mode", help="run mode",
         type=str,
-        choices=["run_all", "binlog_replicator", "db_replicator", "monitoring", "db_optimizer"])
+        choices=["run_all", "binlog_replicator", "db_replicator", "monitoring", "db_optimizer"],
+        nargs="?"
+    )
     parser.add_argument("--config", help="config file path", default='config.yaml', type=str)
     parser.add_argument("--db", help="source database(s) name", type=str)
     parser.add_argument("--target_db", help="target database(s) name, if not set will be same as source", type=str)
@@ -175,6 +188,11 @@ def main():
         help="FOR TESTING ONLY: Exit initial replication after processing this many records",
     )
     args = parser.parse_args()
+
+    # If no mode is provided, show help
+    if not args.mode:
+        parser.print_help()
+        return
 
     config = Settings()
     config.load(args.config)
