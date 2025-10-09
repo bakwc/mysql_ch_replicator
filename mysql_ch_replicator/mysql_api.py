@@ -28,6 +28,12 @@ class MySQLApi:
             user=self.mysql_settings.user,
             passwd=self.mysql_settings.password,
         )
+        # Use charset from config if available
+        if hasattr(self.mysql_settings, 'charset'):
+            conn_settings['charset'] = self.mysql_settings.charset
+            # Set appropriate collation based on charset
+            if self.mysql_settings.charset == 'utf8mb4':
+                conn_settings['collation'] = 'utf8mb4_unicode_ci'
         try:
             self.db = mysql.connector.connect(**conn_settings)
         except mysql.connector.errors.DatabaseError as e:

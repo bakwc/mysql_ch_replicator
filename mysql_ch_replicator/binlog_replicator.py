@@ -351,6 +351,7 @@ class BinlogReplicator:
             'port': self.mysql_settings.port,
             'user': self.mysql_settings.user,
             'passwd': self.mysql_settings.password,
+            'charset': self.mysql_settings.charset,
         }
         self.data_writer = DataWriter(self.replicator_settings)
         self.state = State(os.path.join(self.replicator_settings.data_dir, 'state.json'))
