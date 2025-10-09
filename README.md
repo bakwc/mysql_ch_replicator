@@ -58,7 +58,7 @@ With a focus on high performance, it utilizes batching heavily and uses C++ exte
 To install `mysql_ch_replicator`, use the following command:
 
 ```bash
-pip install mysql_ch_replicator
+pip install --upgrade mysql_ch_replicator
 ```
 
 You may need to also compile C++ components if they're not pre-built for your platform.
