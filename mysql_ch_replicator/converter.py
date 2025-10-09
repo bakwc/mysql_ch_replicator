@@ -688,13 +688,23 @@ class MysqlToClickhouseConverter:
             if op_name == 'add':
                 if tokens[0].lower() in ('constraint', 'index', 'foreign', 'unique', 'key'):
                     continue
-                self.__convert_alter_table_add_column(db_name, table_name, tokens)
+                # Handle cases where keywords are combined with parentheses: INDEX(col), CONSTRAINT(name), etc.
+                for keyword in ('constraint', 'index', 'foreign', 'unique', 'key'):
+                    if tokens[0].lower().startswith(f'{keyword}('):
+                        break
+                else:
+                    self.__convert_alter_table_add_column(db_name, table_name, tokens)
                 continue
 
             if op_name == 'drop':
                 if tokens[0].lower() in ('constraint', 'index', 'foreign', 'unique', 'key'):
                     continue
-                self.__convert_alter_table_drop_column(db_name, table_name, tokens)
+                # Handle cases where keywords are combined with parentheses: INDEX(col), CONSTRAINT(name), etc.
+                for keyword in ('constraint', 'index', 'foreign', 'unique', 'key'):
+                    if tokens[0].lower().startswith(f'{keyword}('):
+                        break
+                else:
+                    self.__convert_alter_table_drop_column(db_name, table_name, tokens)
                 continue
 
             if op_name == 'modify':
@@ -1065,8 +1075,51 @@ class MysqlToClickhouseConverter:
         raise Exception('not implement')
 
     def _strip_comments(self, create_statement):
-        pattern = r'\bCOMMENT(?:\s*=\s*|\s+)([\'"])(?:\\.|[^\\])*?\1'
-        return re.sub(pattern, '', create_statement, flags=re.IGNORECASE)
+        """
+        Strip COMMENT clauses from CREATE TABLE statements.
+        Handles MySQL-style quote escaping where quotes are doubled ('' or "").
+        """
+        result = []
+        i = 0
+        while i < len(create_statement):
+            # Look for COMMENT keyword (case insensitive)
+            if (i + 7 < len(create_statement) and 
+                create_statement[i:i+7].upper() == 'COMMENT' and
+                (i == 0 or not create_statement[i-1].isalnum()) and
+                (i + 7 >= len(create_statement) or not create_statement[i+7].isalnum())):
+                
+                # Skip COMMENT keyword
+                i += 7
+                
+                # Skip whitespace and optional '='
+                while i < len(create_statement) and create_statement[i].isspace():
+                    i += 1
+                if i < len(create_statement) and create_statement[i] == '=':
+                    i += 1
+                    while i < len(create_statement) and create_statement[i].isspace():
+                        i += 1
+                
+                # Find the quoted string
+                if i < len(create_statement) and create_statement[i] in ('"', "'"):
+                    quote_char = create_statement[i]
+                    i += 1  # Skip opening quote
+                    
+                    # Find the closing quote, handling escaped quotes
+                    while i < len(create_statement):
+                        if create_statement[i] == quote_char:
+                            # Check if this is an escaped quote (doubled)
+                            if i + 1 < len(create_statement) and create_statement[i + 1] == quote_char:
+                                i += 2  # Skip both quotes
+                            else:
+                                i += 1  # Skip closing quote
+                                break
+                        else:
+                            i += 1
+            else:
+                result.append(create_statement[i])
+                i += 1
+        
+        return ''.join(result)
 
     def parse_mysql_table_structure(self, create_statement, required_table_name=None):
         create_statement = self._strip_comments(create_statement)
