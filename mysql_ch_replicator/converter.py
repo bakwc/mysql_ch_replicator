@@ -1085,7 +1085,7 @@ class MysqlToClickhouseConverter:
             # Look for COMMENT keyword (case insensitive)
             if (i + 7 < len(create_statement) and 
                 create_statement[i:i+7].upper() == 'COMMENT' and
-                (i == 0 or not create_statement[i-1].isalnum()) and
+                (i == 0 or (not create_statement[i-1].isalnum() and create_statement[i-1] != '`')) and
                 (i + 7 >= len(create_statement) or not create_statement[i+7].isalnum())):
                 
                 # Skip COMMENT keyword
