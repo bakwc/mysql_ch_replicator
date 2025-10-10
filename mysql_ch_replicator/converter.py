@@ -1078,46 +1078,121 @@ class MysqlToClickhouseConverter:
         """
         Strip COMMENT clauses from CREATE TABLE statements.
         Handles MySQL-style quote escaping where quotes are doubled ('' or "").
+        
+        This function properly parses SQL syntax to distinguish between:
+        - COMMENT clauses (which should be removed)
+        - String literals containing "COMMENT" (which should be preserved)
+        - Identifiers containing "comment" (which should be preserved)
         """
         result = []
         i = 0
+        
         while i < len(create_statement):
-            # Look for COMMENT keyword (case insensitive)
-            if (i + 7 < len(create_statement) and 
+            char = create_statement[i]
+            
+            # Handle string literals (single quotes)
+            if char == "'":
+                result.append(char)
+                i += 1
+                # Copy the entire string literal, handling escaped quotes
+                while i < len(create_statement):
+                    char = create_statement[i]
+                    result.append(char)
+                    if char == "'":
+                        # Check if this is an escaped quote (doubled)
+                        if i + 1 < len(create_statement) and create_statement[i + 1] == "'":
+                            i += 1  # Skip to the second quote
+                            result.append(create_statement[i])  # Add the second quote
+                        else:
+                            i += 1  # End of string literal
+                            break
+                    i += 1
+                continue
+            
+            # Handle string literals (double quotes)
+            if char == '"':
+                result.append(char)
+                i += 1
+                # Copy the entire string literal, handling escaped quotes
+                while i < len(create_statement):
+                    char = create_statement[i]
+                    result.append(char)
+                    if char == '"':
+                        # Check if this is an escaped quote (doubled)
+                        if i + 1 < len(create_statement) and create_statement[i + 1] == '"':
+                            i += 1  # Skip to the second quote
+                            result.append(create_statement[i])  # Add the second quote
+                        else:
+                            i += 1  # End of string literal
+                            break
+                    i += 1
+                continue
+            
+            # Handle backtick-quoted identifiers
+            if char == '`':
+                result.append(char)
+                i += 1
+                # Copy the entire identifier
+                while i < len(create_statement):
+                    char = create_statement[i]
+                    result.append(char)
+                    if char == '`':
+                        i += 1  # End of identifier
+                        break
+                    i += 1
+                continue
+            
+            # Look for COMMENT keyword (case insensitive) outside of quotes
+            if (i + 7 <= len(create_statement) and 
                 create_statement[i:i+7].upper() == 'COMMENT' and
-                (i == 0 or (not create_statement[i-1].isalnum() and create_statement[i-1] != '`')) and
+                (i == 0 or not create_statement[i-1].isalnum()) and
                 (i + 7 >= len(create_statement) or not create_statement[i+7].isalnum())):
                 
+                # This looks like a COMMENT keyword, but we need to verify it's actually
+                # a COMMENT clause and not just an identifier that happens to be "comment"
+                
                 # Skip COMMENT keyword
-                i += 7
+                j = i + 7
                 
                 # Skip whitespace and optional '='
-                while i < len(create_statement) and create_statement[i].isspace():
-                    i += 1
-                if i < len(create_statement) and create_statement[i] == '=':
-                    i += 1
-                    while i < len(create_statement) and create_statement[i].isspace():
-                        i += 1
+                while j < len(create_statement) and create_statement[j].isspace():
+                    j += 1
+                if j < len(create_statement) and create_statement[j] == '=':
+                    j += 1
+                    while j < len(create_statement) and create_statement[j].isspace():
+                        j += 1
                 
-                # Find the quoted string
-                if i < len(create_statement) and create_statement[i] in ('"', "'"):
-                    quote_char = create_statement[i]
-                    i += 1  # Skip opening quote
+                # Check if this is followed by a quoted string (indicating a COMMENT clause)
+                if j < len(create_statement) and create_statement[j] in ('"', "'"):
+                    # This is a COMMENT clause - skip it entirely
+                    quote_char = create_statement[j]
+                    j += 1  # Skip opening quote
                     
                     # Find the closing quote, handling escaped quotes
-                    while i < len(create_statement):
-                        if create_statement[i] == quote_char:
+                    while j < len(create_statement):
+                        if create_statement[j] == quote_char:
                             # Check if this is an escaped quote (doubled)
-                            if i + 1 < len(create_statement) and create_statement[i + 1] == quote_char:
-                                i += 2  # Skip both quotes
+                            if j + 1 < len(create_statement) and create_statement[j + 1] == quote_char:
+                                j += 2  # Skip both quotes
                             else:
-                                i += 1  # Skip closing quote
+                                j += 1  # Skip closing quote
                                 break
                         else:
-                            i += 1
-            else:
-                result.append(create_statement[i])
-                i += 1
+                            j += 1
+                    
+                    # Skip the entire COMMENT clause
+                    i = j
+                    continue
+                else:
+                    # This is not a COMMENT clause (no quoted string follows)
+                    # Treat it as a regular identifier
+                    result.append(char)
+                    i += 1
+                    continue
+            
+            # Regular character - just copy it
+            result.append(char)
+            i += 1
         
         return ''.join(result)
 

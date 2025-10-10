@@ -3329,6 +3329,26 @@ def test_charset_configuration():
             PRIMARY KEY (departments,termine)
         )"""
     ),
+    # COMMENT keyword inside string literals (critical edge case)
+    (
+        "CREATE TABLE test (id int DEFAULT 'COMMENT test', name varchar(255))",
+        "CREATE TABLE test (id int DEFAULT 'COMMENT test', name varchar(255))"
+    ),
+    # Unquoted column name 'comment' (critical edge case)
+    (
+        "CREATE TABLE test (comment varchar(255), id int)",
+        "CREATE TABLE test (comment varchar(255), id int)"
+    ),
+    # COMMENT in DEFAULT with complex content (critical edge case)
+    (
+        "CREATE TABLE test (status varchar(50) DEFAULT 'COMMENT: active', id int)",
+        "CREATE TABLE test (status varchar(50) DEFAULT 'COMMENT: active', id int)"
+    ),
+    # Multiple string literals containing COMMENT (critical edge case)
+    (
+        "CREATE TABLE test (col1 varchar(50) DEFAULT 'COMMENT 1', col2 varchar(50) DEFAULT 'COMMENT 2')",
+        "CREATE TABLE test (col1 varchar(50) DEFAULT 'COMMENT 1', col2 varchar(50) DEFAULT 'COMMENT 2')"
+    ),
 ])
 def test_strip_comments_function(input_sql, expected_output):
     """
