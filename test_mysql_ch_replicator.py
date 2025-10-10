@@ -3314,6 +3314,21 @@ def test_charset_configuration():
         "CREATE TABLE test (id int comment 'lowercase', name varchar(255) Comment 'Mixed case')",
         "CREATE TABLE test (id int , name varchar(255) )"
     ),
+    # Field named comment
+    (
+        """CREATE TABLE test (
+            `departments int(11) NOT NULL,
+            `termine int(11) NOT NULL,
+            `comment` varchar(120) DEFAULT NULL,
+            PRIMARY KEY (departments,termine)
+        )""",
+        """CREATE TABLE test (
+            `departments int(11) NOT NULL,
+            `termine int(11) NOT NULL,
+            `comment` varchar(120) DEFAULT NULL,
+            PRIMARY KEY (departments,termine)
+        )"""
+    ),
 ])
 def test_strip_comments_function(input_sql, expected_output):
     """
