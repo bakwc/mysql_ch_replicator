@@ -22,8 +22,8 @@ from mysql_ch_replicator.converter import MysqlToClickhouseConverter
 from mysql_ch_replicator.runner import ProcessRunner
 
 
-CONFIG_FILE = 'tests_config.yaml'
-CONFIG_FILE_MARIADB = 'tests_config_mariadb.yaml'
+CONFIG_FILE = 'tests/tests_config.yaml'
+CONFIG_FILE_MARIADB = 'tests/tests_config_mariadb.yaml'
 TEST_DB_NAME = 'replication-test_db'
 TEST_DB_NAME_2 = 'replication-test_db_2'
 TEST_DB_NAME_2_DESTINATION = 'replication-destination'
@@ -323,7 +323,7 @@ def get_db_replicator_pid(cfg: config.Settings, db_name: str):
     return state.pid
 
 
-@pytest.mark.parametrize('cfg_file', [CONFIG_FILE, 'tests_config_parallel.yaml'])
+@pytest.mark.parametrize('cfg_file', [CONFIG_FILE, 'tests/tests_config_parallel.yaml'])
 def test_runner(cfg_file):
     cfg = config.Settings()
     cfg.load(cfg_file)
@@ -587,7 +587,7 @@ def test_parallel_initial_replication_record_versions():
     after parallel initial replication.
     """
     # Only run this test with parallel configuration
-    cfg_file = 'tests_config_parallel.yaml'
+    cfg_file = 'tests/tests_config_parallel.yaml'
     cfg = config.Settings()
     cfg.load(cfg_file)
     
@@ -706,7 +706,7 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
 
 def test_database_tables_filtering():
     cfg = config.Settings()
-    cfg.load('tests_config_databases_tables.yaml')
+    cfg.load('tests/tests_config_databases_tables.yaml')
 
     mysql = mysql_api.MySQLApi(
         database=None,
@@ -777,7 +777,7 @@ CREATE TABLE test_table_3 (
     mysql.execute(f"INSERT INTO test_table_3 (name, age) VALUES ('Ivan', 42);", commit=True)
     mysql.execute(f"INSERT INTO test_table_2 (name, age) VALUES ('Ivan', 42);", commit=True)
 
-    run_all_runner = RunAllRunner(cfg_file='tests_config_databases_tables.yaml')
+    run_all_runner = RunAllRunner(cfg_file='tests/tests_config_databases_tables.yaml')
     run_all_runner.run()
 
     assert_wait(lambda: 'test_db_2' in ch.get_databases())
@@ -1180,7 +1180,7 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
 
 def test_string_primary_key(monkeypatch):
     cfg = config.Settings()
-    cfg.load('tests_config_string_primary_key.yaml')
+    cfg.load('tests/tests_config_string_primary_key.yaml')
 
     mysql = mysql_api.MySQLApi(
         database=None,
@@ -1215,9 +1215,9 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
         commit=True,
     )
 
-    binlog_replicator_runner = BinlogReplicatorRunner(cfg_file='tests_config_string_primary_key.yaml')
+    binlog_replicator_runner = BinlogReplicatorRunner(cfg_file='tests/tests_config_string_primary_key.yaml')
     binlog_replicator_runner.run()
-    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file='tests_config_string_primary_key.yaml')
+    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file='tests/tests_config_string_primary_key.yaml')
     db_replicator_runner.run()
 
     assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
@@ -1240,7 +1240,7 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
 
 def test_if_exists_if_not_exists(monkeypatch):
     cfg = config.Settings()
-    cfg.load('tests_config_string_primary_key.yaml')
+    cfg.load('tests/tests_config_string_primary_key.yaml')
 
     mysql = mysql_api.MySQLApi(
         database=None,
@@ -1254,9 +1254,9 @@ def test_if_exists_if_not_exists(monkeypatch):
 
     prepare_env(cfg, mysql, ch)
 
-    binlog_replicator_runner = BinlogReplicatorRunner(cfg_file='tests_config_string_primary_key.yaml')
+    binlog_replicator_runner = BinlogReplicatorRunner(cfg_file='tests/tests_config_string_primary_key.yaml')
     binlog_replicator_runner.run()
-    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file='tests_config_string_primary_key.yaml')
+    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file='tests/tests_config_string_primary_key.yaml')
     db_replicator_runner.run()
 
     assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
@@ -1279,7 +1279,7 @@ def test_if_exists_if_not_exists(monkeypatch):
 
 def test_percona_migration(monkeypatch):
     cfg = config.Settings()
-    cfg.load('tests_config_string_primary_key.yaml')
+    cfg.load('tests/tests_config_string_primary_key.yaml')
 
     mysql = mysql_api.MySQLApi(
         database=None,
@@ -1304,9 +1304,9 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
         commit=True,
     )
 
-    binlog_replicator_runner = BinlogReplicatorRunner(cfg_file='tests_config_string_primary_key.yaml')
+    binlog_replicator_runner = BinlogReplicatorRunner(cfg_file='tests/tests_config_string_primary_key.yaml')
     binlog_replicator_runner.run()
-    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file='tests_config_string_primary_key.yaml')
+    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file='tests/tests_config_string_primary_key.yaml')
     db_replicator_runner.run()
 
     assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
@@ -1355,7 +1355,7 @@ CREATE TABLE `{TEST_DB_NAME}`.`_{TEST_TABLE_NAME}_new` (
 
 def test_add_column_first_after_and_drop_column(monkeypatch):
     cfg = config.Settings()
-    cfg.load('tests_config_string_primary_key.yaml')
+    cfg.load('tests/tests_config_string_primary_key.yaml')
 
     mysql = mysql_api.MySQLApi(
         database=None,
@@ -1380,9 +1380,9 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
         commit=True,
     )
 
-    binlog_replicator_runner = BinlogReplicatorRunner(cfg_file='tests_config_string_primary_key.yaml')
+    binlog_replicator_runner = BinlogReplicatorRunner(cfg_file='tests/tests_config_string_primary_key.yaml')
     binlog_replicator_runner.run()
-    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file='tests_config_string_primary_key.yaml')
+    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file='tests/tests_config_string_primary_key.yaml')
     db_replicator_runner.run()
 
     assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
@@ -1506,7 +1506,7 @@ def get_last_insert_from_binlog(cfg: config.Settings, db_name: str):
 
 @pytest.mark.optional
 def test_performance_realtime_replication():
-    config_file = 'tests_config_perf.yaml'
+    config_file = 'tests/tests_config_perf.yaml'
     num_records = 100000
 
     cfg = config.Settings()
@@ -2196,7 +2196,7 @@ def test_year_type():
 
 @pytest.mark.optional
 def test_performance_initial_only_replication():
-    config_file = 'tests_config_perf.yaml'
+    config_file = 'tests/tests_config_perf.yaml'
     num_records = 300000
 
     cfg = config.Settings()
@@ -2281,7 +2281,7 @@ def test_performance_initial_only_replication():
     t1 = time.time()
     
     # Create a custom config file for testing with parallel replication
-    parallel_config_file = 'tests_config_perf_parallel.yaml'
+    parallel_config_file = 'tests/tests_config_perf_parallel.yaml'
     if os.path.exists(parallel_config_file):
         os.remove(parallel_config_file)
 
@@ -2329,7 +2329,7 @@ def test_performance_initial_only_replication():
 def test_schema_evolution_with_db_mapping():
     """Test case to reproduce issue where schema evolution doesn't work with database mapping."""
     # Use the predefined config file with database mapping
-    config_file = "tests_config_db_mapping.yaml"
+    config_file = "tests/tests_config_db_mapping.yaml"
     
     cfg = config.Settings()
     cfg.load(config_file)
@@ -2430,7 +2430,7 @@ def test_dynamic_column_addition_user_config():
     This test reproduces the issue where columns are added on-the-fly via UPDATE
     rather than through ALTER TABLE statements, leading to an index error in the converter.
     """
-    config_path = 'tests_config_dynamic_column.yaml'
+    config_path = 'tests/tests_config_dynamic_column.yaml'
     
     cfg = config.Settings()
     cfg.load(config_path)

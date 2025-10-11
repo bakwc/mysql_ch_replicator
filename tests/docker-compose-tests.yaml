@@ -58,11 +58,11 @@ services:
 
   replicator:
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile
     network_mode: host
     volumes:
-      - ./:/app/
+      - ../:/app/
     entrypoint: ["/bin/bash"]
     command: ["-c", "touch /tmp/ready && tail -f /dev/null"]
     healthcheck:
