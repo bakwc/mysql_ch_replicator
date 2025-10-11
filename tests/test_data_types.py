@@ -1,11 +1,12 @@
-from common import *
 import datetime
 import json
+import tempfile
 import uuid
 
+from common import *
+from mysql_ch_replicator import clickhouse_api
 from mysql_ch_replicator import config
 from mysql_ch_replicator import mysql_api
-from mysql_ch_replicator import clickhouse_api
 
 
 def test_different_types_1():
