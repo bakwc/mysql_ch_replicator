@@ -3,6 +3,8 @@ import json
 import tempfile
 import uuid
 
+import yaml
+
 from common import *
 from mysql_ch_replicator import clickhouse_api
 from mysql_ch_replicator import config
