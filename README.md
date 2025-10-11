@@ -336,11 +336,11 @@ docker compose -f docker-compose-tests.yaml up
 ```
 2. Run tests with:
 ```bash
-docker exec -w /app/ -it tests-replicator-1 python3 -m pytest -v -s tests/test_mysql_ch_replicator.py
+docker exec -w /app/ -it tests-replicator-1 python3 -m pytest -v -s tests/
 ```
 3. To run a single test:
 ```bash
-docker exec -w /app/ -it tests-replicator-1 python3 -m pytest -v -s tests/test_mysql_ch_replicator.py -k test_your_test_name
+docker exec -w /app/ -it tests-replicator-1 python3 -m pytest -v -s tests/ -k test_your_test_name
 ```
 
 ## Contribution
