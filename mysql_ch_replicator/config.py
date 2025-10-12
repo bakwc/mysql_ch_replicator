@@ -49,6 +49,12 @@ class PartitionBy:
 
 
 @dataclass
+class PostInitialReplicationCommands:
+    databases: str | list = '*'
+    commands: list = None
+
+
+@dataclass
 class ClickhouseSettings:
     host: str = 'localhost'
     port: int = 3306
@@ -134,6 +140,7 @@ class Settings:
         self.check_db_updated_interval = 0
         self.indexes: list[Index] = []
         self.partition_bys: list[PartitionBy] = []
+        self.post_initial_replication_commands: list[PostInitialReplicationCommands] = []
         self.auto_restart_interval = 0
         self.http_host = ''
         self.http_port = 0
@@ -182,6 +189,12 @@ class Settings:
         for partition_by in partition_bys:
             self.partition_bys.append(
                 PartitionBy(**partition_by)
+            )
+        
+        post_initial_replication_commands = data.pop('post_initial_replication_commands', [])
+        for cmd_config in post_initial_replication_commands:
+            self.post_initial_replication_commands.append(
+                PostInitialReplicationCommands(**cmd_config)
             )
         
         assert isinstance(self.databases, str) or isinstance(self.databases, list)
@@ -248,6 +261,15 @@ class Settings:
             if not self.is_pattern_matches(table_name, partition_by.tables):
                 continue
             results.append(partition_by.partition_by)
+        return results
+
+    def get_post_initial_replication_commands(self, db_name):
+        results = []
+        for cmd_config in self.post_initial_replication_commands:
+            if not self.is_pattern_matches(db_name, cmd_config.databases):
+                continue
+            if cmd_config.commands:
+                results.extend(cmd_config.commands)
         return results
 
     def validate(self):

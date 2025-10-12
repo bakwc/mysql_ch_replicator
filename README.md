@@ -275,6 +275,16 @@ mysql_timezone: 'UTC'    # optional, timezone for MySQL timestamp conversion (de
 - `types_mappings` - custom types mapping, eg. you can map char(36) to UUID instead of String, etc.
 - `ignore_deletes` - when set to `true`, DELETE operations in MySQL will be ignored during replication. This creates an append-only model where data is only added, never removed. In this mode, the replicator doesn't create a temporary database and instead replicates directly to the target database.
 - `mysql_timezone` - timezone to use for MySQL timestamp conversion to ClickHouse DateTime64. Default is `'UTC'`. Accepts any valid timezone name (e.g., `'America/New_York'`, `'Europe/London'`, `'Asia/Tokyo'`). This setting ensures proper timezone handling when converting MySQL timestamp fields to ClickHouse DateTime64 with timezone information.
+- `post_initial_replication_commands` - SQL commands to execute in ClickHouse after initial replication completes for each database. Useful for creating materialized views, summary tables, or other database objects. Commands are executed in order, once per database matching the pattern.
+
+```yaml
+post_initial_replication_commands:
+  - databases: '*'
+    commands:
+      - 'CREATE TABLE IF NOT EXISTS summary_table (...) ENGINE = SummingMergeTree() ORDER BY (...)'
+      - 'CREATE MATERIALIZED VIEW IF NOT EXISTS data_mv TO summary_table AS SELECT ...'
+      - 'INSERT INTO summary_table SELECT ... FROM replicated_table'
+```
 
 Few more tables / dbs examples:
 
