@@ -956,3 +956,149 @@ def test_resume_initial_replication_with_ignore_deletes():
     finally:
         # Clean up temp config file
         os.unlink(config_file)
+
+
+def test_post_initial_replication_commands():
+    config_file = 'tests/tests_config_post_commands.yaml'
+
+    cfg = config.Settings()
+    cfg.load(config_file)
+
+    mysql = mysql_api.MySQLApi(
+        database=None,
+        mysql_settings=cfg.mysql,
+    )
+
+    ch = clickhouse_api.ClickhouseApi(
+        database=TEST_DB_NAME,
+        clickhouse_settings=cfg.clickhouse,
+    )
+
+    prepare_env(cfg, mysql, ch)
+
+    mysql.execute(f"""
+CREATE TABLE `{TEST_TABLE_NAME}` (
+    id int(11) NOT NULL AUTO_INCREMENT,
+    event_time DATETIME NOT NULL,
+    event_type VARCHAR(50) NOT NULL,
+    PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+""")
+
+    initial_inserts = [
+        ('2024-01-01', 'type_0'),
+        ('2024-01-02', 'type_1'),
+        ('2024-01-03', 'type_2'),
+        ('2024-01-01', 'type_0'),
+        ('2024-01-02', 'type_1'),
+        ('2024-01-03', 'type_2'),
+        ('2024-01-01', 'type_0'),
+        ('2024-01-02', 'type_1'),
+        ('2024-01-03', 'type_2'),
+        ('2024-01-04', 'type_0'),
+    ]
+    
+    for date, event_type in initial_inserts:
+        mysql.execute(
+            f"INSERT INTO `{TEST_TABLE_NAME}` (event_time, event_type) VALUES ('{date} 10:00:00', '{event_type}');",
+            commit=True
+        )
+
+    binlog_replicator_runner = BinlogReplicatorRunner(cfg_file=config_file)
+    binlog_replicator_runner.run()
+
+    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file=config_file)
+    db_replicator_runner.run()
+
+    assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
+    ch.execute_command(f'USE `{TEST_DB_NAME}`')
+    assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 10)
+
+    assert_wait(lambda: 'events_per_day' in ch.get_tables(), max_wait_time=15)
+    assert_wait(lambda: 'events_mv' in ch.get_tables(), max_wait_time=15)
+    
+    ch.execute_command('OPTIMIZE TABLE events_per_day FINAL')
+    
+    def check_initial_data_ready():
+        records = ch.select('events_per_day ORDER BY event_date, event_type')
+        return len(records) > 0
+    
+    assert_wait(check_initial_data_ready, max_wait_time=10)
+    
+    events_per_day_records = ch.select('events_per_day ORDER BY event_date, event_type')
+    assert len(events_per_day_records) > 0, "events_per_day should have aggregated data from initial replication backfill"
+    
+    aggregated_data = {}
+    for record in events_per_day_records:
+        date_str = str(record['event_date'])
+        event_type = record['event_type']
+        count = record['total_events']
+        key = (date_str, event_type)
+        aggregated_data[key] = count
+    
+    assert ('2024-01-01', 'type_0') in aggregated_data, "Should have 2024-01-01 + type_0"
+    assert aggregated_data[('2024-01-01', 'type_0')] == 3, f"Expected 3 events for 2024-01-01 + type_0, got {aggregated_data[('2024-01-01', 'type_0')]}"
+    
+    assert ('2024-01-02', 'type_1') in aggregated_data, "Should have 2024-01-02 + type_1"
+    assert aggregated_data[('2024-01-02', 'type_1')] == 3, f"Expected 3 events for 2024-01-02 + type_1, got {aggregated_data[('2024-01-02', 'type_1')]}"
+    
+    assert ('2024-01-03', 'type_2') in aggregated_data, "Should have 2024-01-03 + type_2"
+    assert aggregated_data[('2024-01-03', 'type_2')] == 3, f"Expected 3 events for 2024-01-03 + type_2, got {aggregated_data[('2024-01-03', 'type_2')]}"
+    
+    assert ('2024-01-04', 'type_0') in aggregated_data, "Should have 2024-01-04 + type_0"
+    assert aggregated_data[('2024-01-04', 'type_0')] == 1, f"Expected 1 event for 2024-01-04 + type_0, got {aggregated_data[('2024-01-04', 'type_0')]}"
+    
+    realtime_inserts = [
+        ('2024-01-05', 'type_new', 3),
+        ('2024-01-06', 'type_new', 2),
+        ('2024-01-01', 'type_0', 2),
+    ]
+    
+    for date, event_type, count in realtime_inserts:
+        for _ in range(count):
+            mysql.execute(
+                f"INSERT INTO `{TEST_TABLE_NAME}` (event_time, event_type) VALUES ('{date} 12:00:00', '{event_type}');",
+                commit=True
+            )
+    
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 17)
+    
+    ch.execute_command('OPTIMIZE TABLE events_per_day FINAL')
+    
+    def check_realtime_aggregated():
+        records = ch.select('events_per_day')
+        agg = {}
+        for r in records:
+            key = (str(r['event_date']), r['event_type'])
+            agg[key] = r['total_events']
+        return (
+            agg.get(('2024-01-05', 'type_new'), 0) == 3 and
+            agg.get(('2024-01-06', 'type_new'), 0) == 2 and
+            agg.get(('2024-01-01', 'type_0'), 0) == 5
+        )
+    
+    assert_wait(check_realtime_aggregated, max_wait_time=15)
+    
+    ch.execute_command('OPTIMIZE TABLE events_per_day FINAL')
+    
+    def check_final_aggregated():
+        final_records = ch.select('events_per_day ORDER BY event_date, event_type')
+        final_aggregated_data = {}
+        for record in final_records:
+            date_str = str(record['event_date'])
+            event_type = record['event_type']
+            count = record['total_events']
+            key = (date_str, event_type)
+            final_aggregated_data[key] = count
+        
+        return (
+            final_aggregated_data.get(('2024-01-05', 'type_new')) == 3 and
+            final_aggregated_data.get(('2024-01-06', 'type_new')) == 2 and
+            final_aggregated_data.get(('2024-01-01', 'type_0')) == 5
+        )
+    
+    assert_wait(check_final_aggregated, max_wait_time=15)
+
+    db_replicator_runner.stop()
+    binlog_replicator_runner.stop()

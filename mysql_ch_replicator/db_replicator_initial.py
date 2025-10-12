@@ -123,6 +123,9 @@ class DbReplicatorInitial:
                         f'RENAME DATABASE `{self.replicator.target_database_tmp}` TO `{self.replicator.target_database}`',
                     )
             self.replicator.clickhouse_api.database = self.replicator.target_database
+            
+            # Execute post-initial-replication commands
+            self.execute_post_initial_replication_commands()
         logger.info(f'initial replication - done')
 
     def perform_initial_replication_table(self, table_name):
@@ -425,3 +428,25 @@ class DbReplicatorInitial:
                 logger.info(f"Current version {current_version} is already up-to-date with ClickHouse version {max_version}")
         else:
             logger.warning(f"No record version found in ClickHouse for table {table_name}")
+
+    def execute_post_initial_replication_commands(self):
+        """
+        Execute custom commands after initial replication finishes.
+        Commands are configured per database in the config file.
+        """
+        commands = self.replicator.config.get_post_initial_replication_commands(self.replicator.database)
+        
+        if not commands:
+            logger.info(f'No post-initial-replication commands configured for database {self.replicator.database}')
+            return
+        
+        logger.info(f'Executing {len(commands)} post-initial-replication commands for database {self.replicator.database}')
+        
+        self.replicator.clickhouse_api.execute_command(f'USE `{self.replicator.target_database}`')
+        
+        for i, command in enumerate(commands, 1):
+            logger.info(f'Executing command {i}/{len(commands)}: {command[:100]}...')
+            self.replicator.clickhouse_api.execute_command(command)
+            logger.info(f'Command {i}/{len(commands)} executed successfully')
+        
+        logger.info(f'All post-initial-replication commands executed successfully')
