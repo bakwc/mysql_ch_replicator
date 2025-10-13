@@ -170,8 +170,9 @@ class DbReplicatorInitial:
 
         while True:
 
-            query_start_values = max_primary_key
-            if query_start_values is not None:
+            query_start_values = None
+            if max_primary_key is not None:
+                query_start_values = max_primary_key.copy()
                 for i in range(len(query_start_values)):
                     key_type = primary_key_types[i]
                     value = query_start_values[i]
