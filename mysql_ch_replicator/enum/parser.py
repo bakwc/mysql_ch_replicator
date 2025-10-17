@@ -47,7 +47,7 @@ def _extract_parenthesized_content(s, start_index):
     (Backticks do not process backslash escapes.)
     """
     if s[start_index] != '(':
-        raise ValueError("Expected '(' at position {}".format(start_index))
+        raise ValueError("Expected '(' at position {} in: {!r}".format(start_index, s))
     depth = 1
     i = start_index + 1
     content_start = i
@@ -99,7 +99,14 @@ def _extract_parenthesized_content(s, start_index):
             else:
                 i += 1
 
-    raise ValueError("Unbalanced parentheses in enum definition")
+    # Enhanced error message with actual input
+    raise ValueError(
+        f"Unbalanced parentheses in enum definition. "
+        f"Input: {s!r}, "
+        f"Started at index {start_index}, "
+        f"Depth at end: {depth}, "
+        f"Still in quote: {in_quote!r}"
+    )
 
 
 def _parse_enum_values(content):

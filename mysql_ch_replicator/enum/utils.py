@@ -17,7 +17,7 @@ def find_enum_definition_end(text: str, start_pos: int) -> int:
     
     for i in range(start_pos, len(text)):
         char = text[i]
-        
+
         # Handle quote state
         if not in_quotes and char in ("'", '"', '`'):
             in_quotes = True
@@ -32,7 +32,7 @@ def find_enum_definition_end(text: str, start_pos: int) -> int:
             in_quotes = False
             quote_char = None
             continue
-            
+
         # Only process parentheses when not in quotes
         if not in_quotes:
             if char == '(':
@@ -41,9 +41,15 @@ def find_enum_definition_end(text: str, start_pos: int) -> int:
                 open_parens -= 1
                 if open_parens == 0:
                     return i
-    
-    # If we get here, the definition is malformed
-    raise ValueError("Unbalanced parentheses in enum definition")
+
+    # If we get here, the definition is malformed - provide detailed error info
+    raise ValueError(
+        f"Unbalanced parentheses in enum definition. "
+        f"Input text: {text!r}, "
+        f"Start position: {start_pos}, "
+        f"Open parentheses remaining: {open_parens}, "
+        f"Still in quotes: {in_quotes} (quote_char={quote_char!r})"
+    )
 
 
 def extract_field_components(line: str) -> Tuple[str, str, List[str]]:
