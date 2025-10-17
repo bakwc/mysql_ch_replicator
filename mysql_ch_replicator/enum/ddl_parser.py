@@ -3,10 +3,10 @@ from typing import List, Tuple, Optional, Dict, Any
 def find_enum_or_set_definition_end(line: str) -> Tuple[int, str, str]:
     """
     Find the end of an enum or set definition in a DDL line
-    
+
     Args:
         line: The DDL line containing an enum or set definition
-        
+
     Returns:
         Tuple containing (end_position, field_type, field_parameters)
     """
@@ -34,56 +34,68 @@ def find_enum_or_set_definition_end(line: str) -> Tuple[int, str, str]:
         field_type = line[:end_pos]
         field_parameters = line[end_pos:].strip()
         return end_pos, field_type, field_parameters
-    
-    # Fallback to splitting by space if we can't find the end
-    # Use split() instead of split(' ') to handle multiple consecutive spaces
-    definition = line.split()
-    field_type = definition[0] if definition else ""
-    field_parameters = ' '.join(definition[1:]) if len(definition) > 1 else ''
-    
-    return -1, field_type, field_parameters
+
+    # If we couldn't find the end, raise an error with detailed information
+    # instead of silently falling back to incorrect parsing
+    raise ValueError(
+        f"Could not find end of enum/set definition in line. "
+        f"Input line: {line!r}, "
+        f"open_parens={open_parens}, "
+        f"in_quotes={in_quotes}, "
+        f"quote_char={quote_char!r}"
+    )
 
 
 def parse_enum_or_set_field(line: str, field_name: str, is_backtick_quoted: bool = False) -> Tuple[str, str, str]:
     """
     Parse a field definition line containing an enum or set type
-    
+
     Args:
         line: The line to parse
         field_name: The name of the field (already extracted)
         is_backtick_quoted: Whether the field name was backtick quoted
-        
+
     Returns:
         Tuple containing (field_name, field_type, field_parameters)
     """
-    # If the field name was backtick quoted, it's already been extracted
-    if is_backtick_quoted:
-        line = line.strip()
-        # Don't split by space for enum and set types that might contain spaces
-        if line.lower().startswith('enum(') or line.lower().startswith('set('):
-            end_pos, field_type, field_parameters = find_enum_or_set_definition_end(line)
+    try:
+        # If the field name was backtick quoted, it's already been extracted
+        if is_backtick_quoted:
+            line = line.strip()
+            # Don't split by space for enum and set types that might contain spaces
+            if line.lower().startswith('enum(') or line.lower().startswith('set('):
+                end_pos, field_type, field_parameters = find_enum_or_set_definition_end(line)
+            else:
+                # Use split() instead of split(' ') to handle multiple consecutive spaces
+                definition = line.split()
+                field_type = definition[0] if definition else ""
+                field_parameters = ' '.join(definition[1:]) if len(definition) > 1 else ''
         else:
+            # For non-backtick quoted fields
             # Use split() instead of split(' ') to handle multiple consecutive spaces
             definition = line.split()
-            field_type = definition[0] if definition else ""
-            field_parameters = ' '.join(definition[1:]) if len(definition) > 1 else ''
-    else:
-        # For non-backtick quoted fields
-        # Use split() instead of split(' ') to handle multiple consecutive spaces
-        definition = line.split()
-        definition = definition[1:]  # Skip the field name which was already extracted
-        
-        if definition and (
-            definition[0].lower().startswith('enum(')
-            or definition[0].lower().startswith('set(')
-        ):
-            line = ' '.join(definition)
-            end_pos, field_type, field_parameters = find_enum_or_set_definition_end(line)
-        else:
-            field_type = definition[0] if definition else ""
-            field_parameters = ' '.join(definition[1:]) if len(definition) > 1 else ''
-    
-    return field_name, field_type, field_parameters
+            definition = definition[1:]  # Skip the field name which was already extracted
+
+            if definition and (
+                definition[0].lower().startswith('enum(')
+                or definition[0].lower().startswith('set(')
+            ):
+                line = ' '.join(definition)
+                end_pos, field_type, field_parameters = find_enum_or_set_definition_end(line)
+            else:
+                field_type = definition[0] if definition else ""
+                field_parameters = ' '.join(definition[1:]) if len(definition) > 1 else ''
+
+        return field_name, field_type, field_parameters
+    except ValueError as e:
+        # Enhanced error reporting with full context
+        raise ValueError(
+            f"Failed to parse field definition. "
+            f"field_name={field_name!r}, "
+            f"line={line!r}, "
+            f"is_backtick_quoted={is_backtick_quoted}, "
+            f"Original error: {e}"
+        ) from e
 
 
 def extract_enum_or_set_values(field_type: str, from_parser_func=None) -> Optional[List[str]]:
