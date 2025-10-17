@@ -370,7 +370,16 @@ class MysqlToClickhouseConverter:
         if "varchar" in mysql_type:
             return "String"
         if mysql_type.startswith("enum"):
-            enum_values = parse_mysql_enum(mysql_type)
+            try:
+                enum_values = parse_mysql_enum(mysql_type)
+            except ValueError as e:
+                # Enhanced error reporting - show both mysql_type and parameters
+                raise ValueError(
+                    f"Failed to parse enum type. "
+                    f"mysql_type={mysql_type!r}, "
+                    f"parameters={parameters!r}, "
+                    f"Original error: {e}"
+                ) from e
             ch_enum_values = []
             for idx, value_name in enumerate(enum_values):
                 ch_enum_values.append(f"'{value_name.lower()}' = {idx + 1}")
