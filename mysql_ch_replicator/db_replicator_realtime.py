@@ -202,9 +202,11 @@ class DbReplicatorRealtime:
         mysql_structure, ch_structure = self.replicator.converter.parse_create_table_query(query)
         if not self.replicator.config.is_table_matches(mysql_structure.table_name):
             return
+        target_table_name = self.replicator.get_target_table_name(mysql_structure.table_name)
+        ch_structure.table_name = target_table_name
         self.replicator.state.tables_structure[mysql_structure.table_name] = (mysql_structure, ch_structure)
-        indexes = self.replicator.config.get_indexes(self.replicator.database, ch_structure.table_name)
-        partition_bys = self.replicator.config.get_partition_bys(self.replicator.database, ch_structure.table_name)
+        indexes = self.replicator.config.get_indexes(self.replicator.database, mysql_structure.table_name)
+        partition_bys = self.replicator.config.get_partition_bys(self.replicator.database, mysql_structure.table_name)
         self.replicator.clickhouse_api.create_table(ch_structure, additional_indexes=indexes, additional_partition_bys=partition_bys)
 
     def handle_drop_table_query(self, query, db_name):
@@ -225,9 +227,10 @@ class DbReplicatorRealtime:
         if not matches_config:
             return
 
+        target_table_name = self.replicator.get_target_table_name(table_name)
         if table_name in self.replicator.state.tables_structure:
             self.replicator.state.tables_structure.pop(table_name)
-        self.replicator.clickhouse_api.execute_command(f'DROP TABLE {"IF EXISTS" if if_exists else ""} `{db_name}`.`{table_name}`')
+        self.replicator.clickhouse_api.execute_command(f'DROP TABLE {"IF EXISTS" if if_exists else ""} `{db_name}`.`{target_table_name}`')
 
     def handle_rename_table_query(self, query, db_name):
         tokens = query.split()
@@ -250,10 +253,14 @@ class DbReplicatorRealtime:
 
             if src_db_name != self.replicator.target_database or dest_db_name != self.replicator.target_database:
                 raise Exception('cross databases table renames not implemented', tokens)
+            
+            src_target_table_name = self.replicator.get_target_table_name(src_table_name)
+            dest_target_table_name = self.replicator.get_target_table_name(dest_table_name)
+            
             if src_table_name in self.replicator.state.tables_structure:
                 self.replicator.state.tables_structure[dest_table_name] = self.replicator.state.tables_structure.pop(src_table_name)
 
-            ch_clauses.append(f"`{src_db_name}`.`{src_table_name}` TO `{dest_db_name}`.`{dest_table_name}`")
+            ch_clauses.append(f"`{src_db_name}`.`{src_target_table_name}` TO `{dest_db_name}`.`{dest_target_table_name}`")
         self.replicator.clickhouse_api.execute_command(f'RENAME TABLE {", ".join(ch_clauses)}')
 
     def handle_truncate_query(self, query, db_name):
@@ -281,9 +288,10 @@ class DbReplicatorRealtime:
         if table_name in self.records_to_delete:
             self.records_to_delete[table_name].clear()
 
+        target_table_name = self.replicator.get_target_table_name(table_name)
         # Execute TRUNCATE on ClickHouse
-        logger.info(f'Executing TRUNCATE on ClickHouse table: {db_name}.{table_name}')
-        self.replicator.clickhouse_api.execute_command(f'TRUNCATE TABLE `{db_name}`.`{table_name}`')
+        logger.info(f'Executing TRUNCATE on ClickHouse table: {db_name}.{target_table_name}')
+        self.replicator.clickhouse_api.execute_command(f'TRUNCATE TABLE `{db_name}`.`{target_table_name}`')
 
     def log_stats_if_required(self):
         curr_time = time.time()
@@ -333,19 +341,21 @@ class DbReplicatorRealtime:
             if not records:
                 continue
             _, ch_table_structure = self.replicator.state.tables_structure[table_name]
+            target_table_name = self.replicator.get_target_table_name(table_name)
             if self.replicator.config.debug_log_level:
-                logger.debug(f'inserting into {table_name}, records: {records}')
-            self.replicator.clickhouse_api.insert(table_name, records, table_structure=ch_table_structure)
+                logger.debug(f'inserting into {target_table_name}, records: {records}')
+            self.replicator.clickhouse_api.insert(target_table_name, records, table_structure=ch_table_structure)
 
         for table_name, keys_to_remove in self.records_to_delete.items():
             if not keys_to_remove:
                 continue
             table_structure: TableStructure = self.replicator.state.tables_structure[table_name][0]
             primary_key_names = table_structure.primary_keys
+            target_table_name = self.replicator.get_target_table_name(table_name)
             if self.replicator.config.debug_log_level:
-                logger.debug(f'erasing from {table_name}, primary key: {primary_key_names}, values: {keys_to_remove}')
+                logger.debug(f'erasing from {target_table_name}, primary key: {primary_key_names}, values: {keys_to_remove}')
             self.replicator.clickhouse_api.erase(
-                table_name=table_name,
+                table_name=target_table_name,
                 field_name=primary_key_names,
                 field_values=keys_to_remove,
             )

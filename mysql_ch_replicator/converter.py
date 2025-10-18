@@ -840,7 +840,8 @@ class MysqlToClickhouseConverter:
                     column_after,
                 )
 
-        query = f'ALTER TABLE `{db_name}`.`{table_name}` ADD COLUMN `{column_name}` {column_type_ch}'
+        target_table_name = self.db_replicator.get_target_table_name(table_name) if self.db_replicator else table_name
+        query = f'ALTER TABLE `{db_name}`.`{target_table_name}` ADD COLUMN `{column_name}` {column_type_ch}'
         if column_first:
             query += ' FIRST'
         else:
@@ -864,7 +865,8 @@ class MysqlToClickhouseConverter:
             mysql_table_structure.remove_field(field_name=column_name)
             ch_table_structure.remove_field(field_name=column_name)
 
-        query = f'ALTER TABLE `{db_name}`.`{table_name}` DROP COLUMN {column_name}'
+        target_table_name = self.db_replicator.get_target_table_name(table_name) if self.db_replicator else table_name
+        query = f'ALTER TABLE `{db_name}`.`{target_table_name}` DROP COLUMN {column_name}'
         if self.db_replicator:
             self.db_replicator.clickhouse_api.execute_command(query)
 
@@ -892,7 +894,8 @@ class MysqlToClickhouseConverter:
                 TableField(name=column_name, field_type=column_type_ch),
             )
 
-        query = f'ALTER TABLE `{db_name}`.`{table_name}` MODIFY COLUMN `{column_name}` {column_type_ch}'
+        target_table_name = self.db_replicator.get_target_table_name(table_name) if self.db_replicator else table_name
+        query = f'ALTER TABLE `{db_name}`.`{target_table_name}` MODIFY COLUMN `{column_name}` {column_type_ch}'
         if self.db_replicator:
             self.db_replicator.clickhouse_api.execute_command(query)
 
@@ -914,6 +917,7 @@ class MysqlToClickhouseConverter:
             ch_table_structure: TableStructure = table_structure[1]
 
             current_column_type_ch = ch_table_structure.get_field(column_name).field_type
+            target_table_name = self.db_replicator.get_target_table_name(table_name)
 
             if current_column_type_ch != column_type_ch:
 
@@ -925,7 +929,7 @@ class MysqlToClickhouseConverter:
                     TableField(name=column_name, field_type=column_type_ch),
                 )
 
-                query = f'ALTER TABLE `{db_name}`.`{table_name}` MODIFY COLUMN {column_name} {column_type_ch}'
+                query = f'ALTER TABLE `{db_name}`.`{target_table_name}` MODIFY COLUMN {column_name} {column_type_ch}'
                 self.db_replicator.clickhouse_api.execute_command(query)
 
             if column_name != new_column_name:
@@ -935,7 +939,7 @@ class MysqlToClickhouseConverter:
                 curr_field_mysql.name = new_column_name
                 curr_field_clickhouse.name = new_column_name
 
-                query = f'ALTER TABLE `{db_name}`.`{table_name}` RENAME COLUMN {column_name} TO {new_column_name}'
+                query = f'ALTER TABLE `{db_name}`.`{target_table_name}` RENAME COLUMN {column_name} TO {new_column_name}'
                 self.db_replicator.clickhouse_api.execute_command(query)
 
     def __convert_alter_table_rename_column(self, db_name, table_name, tokens):
@@ -981,7 +985,8 @@ class MysqlToClickhouseConverter:
                 ch_table_structure.preprocess()
             
         # Execute the RENAME COLUMN command in ClickHouse
-        query = f'ALTER TABLE `{db_name}`.`{table_name}` RENAME COLUMN `{old_column_name}` TO `{new_column_name}`'
+        target_table_name = self.db_replicator.get_target_table_name(table_name) if self.db_replicator else table_name
+        query = f'ALTER TABLE `{db_name}`.`{target_table_name}` RENAME COLUMN `{old_column_name}` TO `{new_column_name}`'
         if self.db_replicator:
             self.db_replicator.clickhouse_api.execute_command(query)
 

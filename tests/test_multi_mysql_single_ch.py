@@ -83,13 +83,13 @@ def test_multi_mysql_single_ch_replication():
     run_all_runner = RunAllRunner(cfg_file=CONFIG_FILE_MULTI_MYSQL)
     run_all_runner.run()
     
-    # Wait for both databases to be replicated
+    # Wait for both databases to be replicated (with renamed tables)
     assert_wait(lambda: SHARED_CH_DB_NAME in ch.get_databases())
     ch.execute_command(f'USE `{SHARED_CH_DB_NAME}`')
-    assert_wait(lambda: 'users' in ch.get_tables())
-    assert_wait(lambda: 'products' in ch.get_tables())
-    assert_wait(lambda: len(ch.select('users')) == 2)
-    assert_wait(lambda: len(ch.select('products')) == 2)
+    assert_wait(lambda: 'db1_users' in ch.get_tables())
+    assert_wait(lambda: 'db2_products' in ch.get_tables())
+    assert_wait(lambda: len(ch.select('db1_users')) == 2)
+    assert_wait(lambda: len(ch.select('db2_products')) == 2)
     
     # Test realtime replication - add more data
     mysql.set_database(TEST_DB_NAME_1)
@@ -98,16 +98,16 @@ def test_multi_mysql_single_ch_replication():
     mysql.set_database(TEST_DB_NAME_2)
     mysql.execute(f"INSERT INTO products (id, name) VALUES (3, 'Doohickey');", commit=True)
     
-    # Wait for realtime changes to replicate
-    assert_wait(lambda: len(ch.select('users')) == 3)
-    assert_wait(lambda: len(ch.select('products')) == 3)
+    # Wait for realtime changes to replicate (using renamed tables)
+    assert_wait(lambda: len(ch.select('db1_users')) == 3)
+    assert_wait(lambda: len(ch.select('db2_products')) == 3)
     
-    # Verify all data
-    users_results = ch.select('users')
+    # Verify all data (using renamed tables)
+    users_results = ch.select('db1_users')
     users_ids = sorted([row['id'] for row in users_results])
     assert users_ids == [1, 2, 3], f"Expected [1, 2, 3], got {users_ids}"
     
-    products_results = ch.select('products')
+    products_results = ch.select('db2_products')
     products_ids = sorted([row['id'] for row in products_results])
     assert products_ids == [1, 2, 3], f"Expected [1, 2, 3], got {products_ids}"
     

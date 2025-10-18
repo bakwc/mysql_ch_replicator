@@ -25,5 +25,10 @@ target_databases:
   replication-test_db: shared_target_db
   replication-test_db2: shared_target_db
 
+# Rename tables to avoid conflicts and test target_tables feature
+target_tables:
+  replication-test_db.users: db1_users
+  replication-test_db2.products: db2_products
+
 http_host: 'localhost'
 http_port: 9128

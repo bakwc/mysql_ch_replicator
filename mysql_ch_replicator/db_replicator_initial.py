@@ -48,6 +48,9 @@ class DbReplicatorInitial:
         self.validate_mysql_structure(mysql_structure)
         clickhouse_structure = self.replicator.converter.convert_table_structure(mysql_structure)
         
+        target_table_name = self.replicator.get_target_table_name(table_name)
+        clickhouse_structure.table_name = target_table_name
+        
         # Always set if_not_exists to True to prevent errors when tables already exist
         clickhouse_structure.if_not_exists = True
         
@@ -58,8 +61,8 @@ class DbReplicatorInitial:
         if not self.replicator.is_parallel_worker:
             # Drop table if multiple MySQL databases map to same ClickHouse database
             if self.replicator.is_multi_mysql_to_single_ch:
-                logger.info(f'dropping table {table_name} before recreating (multi-mysql-to-single-ch mode)')
-                self.replicator.clickhouse_api.drop_table(table_name)
+                logger.info(f'dropping table {target_table_name} before recreating (multi-mysql-to-single-ch mode)')
+                self.replicator.clickhouse_api.drop_table(target_table_name)
             
             self.replicator.clickhouse_api.create_table(clickhouse_structure, additional_indexes=indexes, additional_partition_bys=partition_bys)
 
@@ -208,7 +211,8 @@ class DbReplicatorInitial:
 
             if not records:
                 break
-            self.replicator.clickhouse_api.insert(table_name, records, table_structure=clickhouse_table_structure)
+            target_table_name = self.replicator.get_target_table_name(table_name)
+            self.replicator.clickhouse_api.insert(target_table_name, records, table_structure=clickhouse_table_structure)
             for record in records:
                 record_primary_key = [record[key_idx] for key_idx in primary_key_ids]
                 if max_primary_key is None:
@@ -427,8 +431,9 @@ class DbReplicatorInitial:
         """
         logger.info(f"Getting maximum record version from ClickHouse for table {table_name}")
         
+        target_table_name = self.replicator.get_target_table_name(table_name)
         # Query ClickHouse for the maximum record version
-        max_version = self.replicator.clickhouse_api.get_max_record_version(table_name)
+        max_version = self.replicator.clickhouse_api.get_max_record_version(target_table_name)
         
         if max_version is not None and max_version > 0:
             current_version = self.replicator.state.tables_last_record_version.get(table_name, 0)

@@ -1,0 +1,24 @@
+mysql:
+  host: 'localhost'
+  port: 9306
+  user: 'root'
+  password: 'admin'
+
+clickhouse:
+  host: 'localhost'
+  port: 9123
+  user: 'default'
+  password: 'admin'
+
+binlog_replicator:
+  data_dir: '/app/binlog/'
+  records_per_file: 100000
+
+databases: 'test_db'
+tables: '*'
+log_level: 'debug'
+
+target_tables:
+  test_db.users: users_renamed
+  test_db.products: products_renamed
+

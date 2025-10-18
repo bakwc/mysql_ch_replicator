@@ -184,6 +184,9 @@ class DbReplicator:
     def create_state(self):
         return State(self.state_path)
 
+    def get_target_table_name(self, source_table: str) -> str:
+        return self.config.get_target_table_name(self.database, source_table)
+
     def validate_database_settings(self):
         if not self.initial_only:
             final_setting = self.clickhouse_api.get_system_setting('final')
