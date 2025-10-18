@@ -226,6 +226,11 @@ target_databases:                                     # optional
   source_db_in_mysql_2: destination_db_in_clickhouse_2
   ...
 
+target_tables:                                        # optional
+  source_db_in_mysql_1.source_table_in_mysql_1: destination_table_name_1
+  source_db_in_mysql_1.source_table_in_mysql_2: destination_table_name_2
+  ...
+
 log_level: 'info'               # optional       
 optimize_interval: 86400        # optional
 auto_restart_interval: 3600     # optional
@@ -265,6 +270,7 @@ mysql_timezone: 'UTC'    # optional, timezone for MySQL timestamp conversion (de
 - `exclude_databases` - databases to __exclude__, string or list, eg `'table1*'` or `['table2', 'table3*']`. If same database matches `databases` and `exclude_databases`, exclude has higher priority.
 - `exclude_tables` - databases to __exclude__, string or list. If same table matches `tables` and `exclude_tables`, exclude has higher priority.
 - `target_databases` - if you want database in ClickHouse to have different name from MySQL database
+- `target_tables` - if you want table in ClickHouse to have different name from MySQL table. Specify as `source_database.source_table: target_table_name`. The target database is determined by existing rules (e.g., `target_databases` mapping). This mapping applies to both initial and realtime replication, including DDL operations like ALTER, DROP, etc.
 - `log_level` - log level, default is `info`, you can set to `debug` to get maximum information (allowed values are `debug`, `info`, `warning`, `error`, `critical`)
 - `optimize_interval` - interval (seconds) between automatic `OPTIMIZE table FINAL` calls. Default 86400 (1 day). This is required to perform all merges guaranteed and avoid increasing of used storage and decreasing performance.
 - `auto_restart_interval` - interval (seconds) between automatic db_replicator restart. Default 3600 (1 hour). This is done to reduce memory usage.

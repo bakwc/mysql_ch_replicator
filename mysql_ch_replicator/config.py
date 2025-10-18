@@ -146,6 +146,7 @@ class Settings:
         self.http_port = 0
         self.types_mapping = {}
         self.target_databases = {}
+        self.target_tables = {}
         self.initial_replication_threads = 0
         self.ignore_deletes = False
         self.mysql_timezone = 'UTC'
@@ -174,6 +175,7 @@ class Settings:
         self.http_host = data.pop('http_host', '')
         self.http_port = data.pop('http_port', 0)
         self.target_databases = data.pop('target_databases', {})
+        self.target_tables = data.pop('target_tables', {})
         self.initial_replication_threads = data.pop('initial_replication_threads', 0)
         self.ignore_deletes = data.pop('ignore_deletes', False)
         self.mysql_timezone = data.pop('mysql_timezone', 'UTC')
@@ -272,6 +274,33 @@ class Settings:
                 results.extend(cmd_config.commands)
         return results
 
+    def is_multiple_mysql_dbs_to_single_ch_db(self, mysql_database: str, target_database: str) -> bool:
+        """
+        Check if multiple MySQL databases are being replicated to the same ClickHouse database.
+        
+        Args:
+            mysql_database: The MySQL database being replicated
+            target_database: The ClickHouse target database
+            
+        Returns:
+            True if multiple MySQL databases map to the same ClickHouse database
+        """
+        if not self.target_databases:
+            return False
+        
+        same_target_count = 0
+        for mysql_db, ch_db in self.target_databases.items():
+            if ch_db == target_database:
+                same_target_count += 1
+                if same_target_count > 1:
+                    return True
+        
+        return False
+
+    def get_target_table_name(self, source_database: str, source_table: str) -> str:
+        key = f'{source_database}.{source_table}'
+        return self.target_tables.get(key, source_table)
+
     def validate(self):
         self.mysql.validate()
         self.clickhouse.validate()
@@ -279,6 +308,8 @@ class Settings:
         self.validate_log_level()
         if not isinstance(self.target_databases, dict):
             raise ValueError(f'wrong target databases {self.target_databases}')
+        if not isinstance(self.target_tables, dict):
+            raise ValueError(f'wrong target tables {self.target_tables}')
         if not isinstance(self.initial_replication_threads, int):
             raise ValueError(f'initial_replication_threads should be an integer, not {type(self.initial_replication_threads)}')
         if self.initial_replication_threads < 0:

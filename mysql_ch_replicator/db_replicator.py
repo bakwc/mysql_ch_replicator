@@ -141,6 +141,11 @@ class DbReplicator:
             self.state_path = os.path.join(self.config.binlog_replicator.data_dir, self.database, 'state.pckl')
             self.is_parallel_worker = False
 
+        # Check if multiple MySQL databases are being replicated to the same ClickHouse database
+        self.is_multi_mysql_to_single_ch = self.config.is_multiple_mysql_dbs_to_single_ch_db(
+            self.database, self.target_database
+        )
+        
         self.target_database_tmp = self.target_database + '_tmp'
         if self.is_parallel_worker:
             self.target_database_tmp = self.target_database
@@ -149,6 +154,11 @@ class DbReplicator:
         # This must be set here to ensure consistency between first run and resume
         if self.config.ignore_deletes:
             self.target_database_tmp = self.target_database
+        
+        # If multiple MySQL databases map to same ClickHouse database, replicate directly
+        if self.is_multi_mysql_to_single_ch:
+            self.target_database_tmp = self.target_database
+            logger.info(f'detected multiple MySQL databases mapping to {self.target_database} - using direct replication')
 
         self.mysql_api = MySQLApi(
             database=self.database,
@@ -173,6 +183,9 @@ class DbReplicator:
 
     def create_state(self):
         return State(self.state_path)
+
+    def get_target_table_name(self, source_table: str) -> str:
+        return self.config.get_target_table_name(self.database, source_table)
 
     def validate_database_settings(self):
         if not self.initial_only:
@@ -206,16 +219,21 @@ class DbReplicator:
                 self.run_realtime_replication()
                 return
 
-            # If ignore_deletes is enabled, we don't create a temporary DB and don't swap DBs
+            # If ignore_deletes is enabled OR multiple MySQL databases map to same ClickHouse database,
+            # we don't create a temporary DB and don't swap DBs
             # We replicate directly into the target DB
-            if self.config.ignore_deletes:
-                logger.info(f'using existing database (ignore_deletes=True)')
+            if self.config.ignore_deletes or self.is_multi_mysql_to_single_ch:
+                if self.config.ignore_deletes:
+                    logger.info(f'using existing database (ignore_deletes=True)')
+                if self.is_multi_mysql_to_single_ch:
+                    logger.info(f'using existing database (multi-mysql-to-single-ch mode)')
+                    
                 self.clickhouse_api.database = self.target_database
                 
-                # Create database if it doesn't exist
+                # Create database if it doesn't exist (use IF NOT EXISTS to avoid race condition)
                 if self.target_database not in self.clickhouse_api.get_databases():
                     logger.info(f'creating database {self.target_database}')
-                    self.clickhouse_api.create_database(db_name=self.target_database)
+                    self.clickhouse_api.create_database(db_name=self.target_database, if_not_exists=True)
             else:
                 logger.info('recreating database')
                 self.clickhouse_api.database = self.target_database_tmp
