@@ -282,8 +282,12 @@ class ClickhouseApi:
     def drop_database(self, db_name):
         self.execute_command(f'DROP DATABASE IF EXISTS `{db_name}`')
 
-    def create_database(self, db_name):
-        self.execute_command(f'CREATE DATABASE `{db_name}`')
+    def create_database(self, db_name, if_not_exists=False):
+        if_not_exists_clause = 'IF NOT EXISTS ' if if_not_exists else ''
+        self.execute_command(f'CREATE DATABASE {if_not_exists_clause}`{db_name}`')
+
+    def drop_table(self, table_name):
+        self.execute_command(f'DROP TABLE IF EXISTS `{self.database}`.`{table_name}`')
 
     def select(self, table_name, where=None, final=None):
         query = f'SELECT * FROM {table_name}'

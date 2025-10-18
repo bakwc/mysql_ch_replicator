@@ -56,6 +56,11 @@ class DbReplicatorInitial:
         partition_bys = self.replicator.config.get_partition_bys(self.replicator.database, table_name)
 
         if not self.replicator.is_parallel_worker:
+            # Drop table if multiple MySQL databases map to same ClickHouse database
+            if self.replicator.is_multi_mysql_to_single_ch:
+                logger.info(f'dropping table {table_name} before recreating (multi-mysql-to-single-ch mode)')
+                self.replicator.clickhouse_api.drop_table(table_name)
+            
             self.replicator.clickhouse_api.create_table(clickhouse_structure, additional_indexes=indexes, additional_partition_bys=partition_bys)
 
     def validate_mysql_structure(self, mysql_structure: TableStructure):
@@ -106,9 +111,15 @@ class DbReplicatorInitial:
             # Verify table structures after replication but before swapping databases
             self.verify_table_structures_after_replication()
             
-            # If ignore_deletes is enabled, we don't swap databases, as we're directly replicating
-            # to the target database
-            if not self.replicator.config.ignore_deletes:
+            # Skip database swap if:
+            # 1. ignore_deletes is enabled - we're replicating directly to target
+            # 2. Multiple MySQL databases map to same ClickHouse database - we're replicating directly to target
+            should_skip_db_swap = (
+                self.replicator.config.ignore_deletes or 
+                self.replicator.is_multi_mysql_to_single_ch
+            )
+            
+            if not should_skip_db_swap:
                 logger.info(f'initial replication - swapping database')
                 if self.replicator.target_database in self.replicator.clickhouse_api.get_databases():
                     self.replicator.clickhouse_api.execute_command(

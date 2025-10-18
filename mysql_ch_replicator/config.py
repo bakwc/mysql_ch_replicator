@@ -272,6 +272,29 @@ class Settings:
                 results.extend(cmd_config.commands)
         return results
 
+    def is_multiple_mysql_dbs_to_single_ch_db(self, mysql_database: str, target_database: str) -> bool:
+        """
+        Check if multiple MySQL databases are being replicated to the same ClickHouse database.
+        
+        Args:
+            mysql_database: The MySQL database being replicated
+            target_database: The ClickHouse target database
+            
+        Returns:
+            True if multiple MySQL databases map to the same ClickHouse database
+        """
+        if not self.target_databases:
+            return False
+        
+        same_target_count = 0
+        for mysql_db, ch_db in self.target_databases.items():
+            if ch_db == target_database:
+                same_target_count += 1
+                if same_target_count > 1:
+                    return True
+        
+        return False
+
     def validate(self):
         self.mysql.validate()
         self.clickhouse.validate()

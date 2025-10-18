@@ -1,0 +1,29 @@
+mysql:
+  host: 'localhost'
+  port: 9306
+  user: 'root'
+  password: 'admin'
+
+clickhouse:
+  host: 'localhost'
+  port: 9123
+  user: 'default'
+  password: 'admin'
+
+binlog_replicator:
+  data_dir: '/app/binlog/'
+  records_per_file: 100000
+  binlog_retention_period: 43200  # 12 hours in seconds
+
+databases: '*test*'
+log_level: 'info'
+optimize_interval: 3
+check_db_updated_interval: 3
+
+# Multiple MySQL databases mapping to same ClickHouse database
+target_databases:
+  replication-test_db: shared_target_db
+  replication-test_db2: shared_target_db
+
+http_host: 'localhost'
+http_port: 9128
