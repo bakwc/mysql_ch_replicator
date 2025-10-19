@@ -1,7 +1,9 @@
 import datetime
 import json
+import os
 import tempfile
 import uuid
+import zoneinfo
 
 import yaml
 
@@ -490,6 +492,72 @@ mysql_timezone: 'America/New_York'
     finally:
         # Clean up temporary config file
         os.unlink(temp_config_file)
+
+
+def test_timezone_conversion_values():
+    """
+    Test that MySQL timestamp values are correctly preserved with timezone conversion.
+    This test reproduces the issue from GitHub issue #177.
+    """
+    config_file = 'tests/tests_config_timezone.yaml'
+    cfg = config.Settings()
+    cfg.load(config_file)
+    
+    mysql = mysql_api.MySQLApi(
+        database=None,
+        mysql_settings=cfg.mysql,
+        mysql_timezone=cfg.mysql_timezone,
+    )
+
+    ch = clickhouse_api.ClickhouseApi(
+        database=TEST_DB_NAME,
+        clickhouse_settings=cfg.clickhouse,
+    )
+
+    prepare_env(cfg, mysql, ch)
+
+    mysql.execute(f'''
+    CREATE TABLE `{TEST_TABLE_NAME}` (
+        id int NOT NULL AUTO_INCREMENT,
+        name varchar(255),
+        created_at timestamp NULL,
+        updated_at timestamp(3) NULL,
+        PRIMARY KEY (id)
+    );
+    ''')
+
+    mysql.execute(
+        f"INSERT INTO `{TEST_TABLE_NAME}` (name, created_at, updated_at) "
+        f"VALUES ('test_timezone', '2023-08-15 14:30:00', '2023-08-15 14:30:00.123');",
+        commit=True,
+    )
+
+    run_all_runner = RunAllRunner(cfg_file=config_file)
+    run_all_runner.run()
+
+    assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
+    ch.execute_command(f'USE `{TEST_DB_NAME}`')
+    assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1)
+
+    results = ch.select(TEST_TABLE_NAME)
+    assert len(results) == 1
+    assert results[0]['name'] == 'test_timezone'
+    
+    created_at_value = results[0]['created_at']
+    updated_at_value = results[0]['updated_at']
+    
+    expected_dt = datetime.datetime(2023, 8, 15, 14, 30, 0)
+    ny_tz = zoneinfo.ZoneInfo('America/New_York')
+    expected_dt_with_tz = expected_dt.replace(tzinfo=ny_tz)
+    
+    assert created_at_value == expected_dt_with_tz, f"Expected {expected_dt_with_tz}, got {created_at_value}"
+    
+    expected_dt_with_microseconds = datetime.datetime(2023, 8, 15, 14, 30, 0, 123000)
+    expected_dt_with_microseconds_tz = expected_dt_with_microseconds.replace(tzinfo=ny_tz)
+    assert updated_at_value == expected_dt_with_microseconds_tz, f"Expected {expected_dt_with_microseconds_tz}, got {updated_at_value}"
+    
+    run_all_runner.stop()
 
 
 def test_year_type():

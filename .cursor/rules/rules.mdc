@@ -3,6 +3,10 @@ description:
 globs: 
 alwaysApply: true
 ---
-Use following command to run tests:
+1. Use following command to run tests:
 
 docker exec -w /app/ -it tests-replicator-1 python3 -m pytest -v -s tests/ -k test_your_test_name
+
+2. Never create a config files in tests code in runtime. Always create a real config files. Use log level info for newly added config files.
+
+3. Dont create analyzes md files.

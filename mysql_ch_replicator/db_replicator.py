@@ -163,6 +163,7 @@ class DbReplicator:
         self.mysql_api = MySQLApi(
             database=self.database,
             mysql_settings=config.mysql,
+            mysql_timezone=config.mysql_timezone,
         )
         self.clickhouse_api = ClickhouseApi(
             database=self.target_database,

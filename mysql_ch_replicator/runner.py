@@ -147,7 +147,9 @@ class Runner:
 
     def run(self):
         mysql_api = MySQLApi(
-            database=None, mysql_settings=self.config.mysql,
+            database=None,
+            mysql_settings=self.config.mysql,
+            mysql_timezone=self.config.mysql_timezone,
         )
         databases = mysql_api.get_databases()
         databases = [db for db in databases if self.config.is_database_matches(db)]

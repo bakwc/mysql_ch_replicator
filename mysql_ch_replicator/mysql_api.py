@@ -1,4 +1,7 @@
+import datetime
 import time
+import zoneinfo
+
 import mysql.connector
 
 from .config import MysqlSettings
@@ -8,9 +11,10 @@ from .table_structure import TableStructure, TableField
 class MySQLApi:
     RECONNECT_INTERVAL = 3 * 60
 
-    def __init__(self, database: str, mysql_settings: MysqlSettings):
+    def __init__(self, database: str, mysql_settings: MysqlSettings, mysql_timezone: str = 'UTC'):
         self.database = database
         self.mysql_settings = mysql_settings
+        self.mysql_timezone = mysql_timezone
         self.last_connect_time = 0
         self.reconnect_if_required()
 
@@ -44,6 +48,10 @@ class MySQLApi:
             else:
                 raise
         self.cursor = self.db.cursor()
+        
+        if self.mysql_timezone and self.mysql_timezone != 'UTC':
+            self.cursor.execute(f"SET time_zone = '{self.mysql_timezone}'")
+        
         if self.database is not None:
             self.cursor.execute(f'USE `{self.database}`')
         self.last_connect_time = curr_time
@@ -132,5 +140,18 @@ class MySQLApi:
         # Execute the query
         self.cursor.execute(query)
         res = self.cursor.fetchall()
+        
+        if self.mysql_timezone and self.mysql_timezone != 'UTC':
+            tz = zoneinfo.ZoneInfo(self.mysql_timezone)
+            records = []
+            for row in res:
+                new_row = []
+                for value in row:
+                    if isinstance(value, datetime.datetime) and value.tzinfo is None:
+                        value = value.replace(tzinfo=tz)
+                    new_row.append(value)
+                records.append(tuple(new_row))
+            return records
+        
         records = [x for x in res]
         return records
