@@ -6,8 +6,6 @@ import subprocess
 import json
 import uuid
 import decimal
-import tempfile
-import yaml
 
 import pytest
 import requests
@@ -560,145 +558,129 @@ def test_parse_db_name_from_query(query, expected):
 
 
 def test_ignore_deletes():
-    # Create a temporary config file with ignore_deletes=True
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as temp_config_file:
-        config_file = temp_config_file.name
-        
-        # Read the original config
-        with open(CONFIG_FILE, 'r') as original_config:
-            config_data = yaml.safe_load(original_config)
-        
-        # Add ignore_deletes=True
-        config_data['ignore_deletes'] = True
-        
-        # Write to the temp file
-        yaml.dump(config_data, temp_config_file)
+    config_file = 'tests/tests_config_ignore_deletes.yaml'
+    
+    cfg = config.Settings()
+    cfg.load(config_file)
+    
+    # Verify the ignore_deletes option was set
+    assert cfg.ignore_deletes is True
 
-    try:
-        cfg = config.Settings()
-        cfg.load(config_file)
-        
-        # Verify the ignore_deletes option was set
-        assert cfg.ignore_deletes is True
+    mysql = mysql_api.MySQLApi(
+        database=None,
+        mysql_settings=cfg.mysql,
+    )
 
-        mysql = mysql_api.MySQLApi(
-            database=None,
-            mysql_settings=cfg.mysql,
-        )
+    ch = clickhouse_api.ClickhouseApi(
+        database=TEST_DB_NAME,
+        clickhouse_settings=cfg.clickhouse,
+    )
 
-        ch = clickhouse_api.ClickhouseApi(
-            database=TEST_DB_NAME,
-            clickhouse_settings=cfg.clickhouse,
-        )
+    prepare_env(cfg, mysql, ch)
 
-        prepare_env(cfg, mysql, ch)
+    # Create a table with a composite primary key
+    mysql.execute(f'''
+    CREATE TABLE `{TEST_TABLE_NAME}` (
+        departments int(11) NOT NULL,
+        termine int(11) NOT NULL,
+        data varchar(255) NOT NULL,
+        PRIMARY KEY (departments,termine)
+    )
+    ''')
 
-        # Create a table with a composite primary key
-        mysql.execute(f'''
-        CREATE TABLE `{TEST_TABLE_NAME}` (
-            departments int(11) NOT NULL,
-            termine int(11) NOT NULL,
-            data varchar(255) NOT NULL,
-            PRIMARY KEY (departments,termine)
-        )
-        ''')
+    # Insert initial records
+    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (departments, termine, data) VALUES (10, 20, 'data1');", commit=True)
+    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (departments, termine, data) VALUES (30, 40, 'data2');", commit=True)
+    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (departments, termine, data) VALUES (50, 60, 'data3');", commit=True)
 
-        # Insert initial records
-        mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (departments, termine, data) VALUES (10, 20, 'data1');", commit=True)
-        mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (departments, termine, data) VALUES (30, 40, 'data2');", commit=True)
-        mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (departments, termine, data) VALUES (50, 60, 'data3');", commit=True)
+    # Run the replicator with ignore_deletes=True
+    run_all_runner = RunAllRunner(cfg_file=config_file)
+    run_all_runner.run()
 
-        # Run the replicator with ignore_deletes=True
-        run_all_runner = RunAllRunner(cfg_file=config_file)
-        run_all_runner.run()
+    # Wait for replication to complete
+    assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
+    ch.execute_command(f'USE `{TEST_DB_NAME}`')
+    assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
 
-        # Wait for replication to complete
-        assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
-        ch.execute_command(f'USE `{TEST_DB_NAME}`')
-        assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
-        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 3)
+    # Delete some records from MySQL
+    mysql.execute(f"DELETE FROM `{TEST_TABLE_NAME}` WHERE departments=10;", commit=True)
+    mysql.execute(f"DELETE FROM `{TEST_TABLE_NAME}` WHERE departments=30;", commit=True)
+    
+    # Wait a moment to ensure replication processes the events
+    time.sleep(5)
+    
+    # Verify records are NOT deleted in ClickHouse (since ignore_deletes=True)
+    # The count should still be 3
+    assert len(ch.select(TEST_TABLE_NAME)) == 3, "Deletions were processed despite ignore_deletes=True"
+    
+    # Insert a new record and verify it's added
+    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (departments, termine, data) VALUES (70, 80, 'data4');", commit=True)
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 4)
+    
+    # Verify the new record is correctly added
+    result = ch.select(TEST_TABLE_NAME, where="departments=70 AND termine=80")
+    assert len(result) == 1
+    assert result[0]['data'] == 'data4'
+    
+    # Clean up
+    run_all_runner.stop()
+    
+    # Verify no errors occurred
+    assert_wait(lambda: 'stopping db_replicator' in read_logs(TEST_DB_NAME))
+    assert('Traceback' not in read_logs(TEST_DB_NAME))
+    
+    # Additional tests for persistence after restart
+    
+    # 1. Remove all entries from table in MySQL
+    mysql.execute(f"DELETE FROM `{TEST_TABLE_NAME}` WHERE 1=1;", commit=True)
 
-        # Delete some records from MySQL
-        mysql.execute(f"DELETE FROM `{TEST_TABLE_NAME}` WHERE departments=10;", commit=True)
-        mysql.execute(f"DELETE FROM `{TEST_TABLE_NAME}` WHERE departments=30;", commit=True)
-        
-        # Wait a moment to ensure replication processes the events
-        time.sleep(5)
-        
-        # Verify records are NOT deleted in ClickHouse (since ignore_deletes=True)
-        # The count should still be 3
-        assert len(ch.select(TEST_TABLE_NAME)) == 3, "Deletions were processed despite ignore_deletes=True"
-        
-        # Insert a new record and verify it's added
-        mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (departments, termine, data) VALUES (70, 80, 'data4');", commit=True)
-        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 4)
-        
-        # Verify the new record is correctly added
-        result = ch.select(TEST_TABLE_NAME, where="departments=70 AND termine=80")
-        assert len(result) == 1
-        assert result[0]['data'] == 'data4'
-        
-        # Clean up
-        run_all_runner.stop()
-        
-        # Verify no errors occurred
-        assert_wait(lambda: 'stopping db_replicator' in read_logs(TEST_DB_NAME))
-        assert('Traceback' not in read_logs(TEST_DB_NAME))
-        
-        # Additional tests for persistence after restart
-        
-        # 1. Remove all entries from table in MySQL
-        mysql.execute(f"DELETE FROM `{TEST_TABLE_NAME}` WHERE 1=1;", commit=True)
+    # Add a new row in MySQL before starting the replicator
+    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (departments, termine, data) VALUES (110, 120, 'offline_data');", commit=True)
+    
+    # 2. Wait 5 seconds
+    time.sleep(5)
+    
+    # 3. Remove binlog directory (similar to prepare_env, but without removing tables)
+    if os.path.exists(cfg.binlog_replicator.data_dir):
+        shutil.rmtree(cfg.binlog_replicator.data_dir)
+    os.mkdir(cfg.binlog_replicator.data_dir)
+    
 
-                # Add a new row in MySQL before starting the replicator
-        mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (departments, termine, data) VALUES (110, 120, 'offline_data');", commit=True)
-        
-        # 2. Wait 5 seconds
-        time.sleep(5)
-        
-        # 3. Remove binlog directory (similar to prepare_env, but without removing tables)
-        if os.path.exists(cfg.binlog_replicator.data_dir):
-            shutil.rmtree(cfg.binlog_replicator.data_dir)
-        os.mkdir(cfg.binlog_replicator.data_dir)
-        
-
-        # 4. Create and run a new runner
-        new_runner = RunAllRunner(cfg_file=config_file)
-        new_runner.run()
-        
-        # 5. Ensure it has all the previous data (should still be 4 records from before + 1 new offline record)
-        assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
-        ch.execute_command(f'USE `{TEST_DB_NAME}`')
-        assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
-        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 5)
-        
-        # Verify we still have all the old data
-        assert len(ch.select(TEST_TABLE_NAME, where="departments=10 AND termine=20")) == 1
-        assert len(ch.select(TEST_TABLE_NAME, where="departments=30 AND termine=40")) == 1
-        assert len(ch.select(TEST_TABLE_NAME, where="departments=50 AND termine=60")) == 1
-        assert len(ch.select(TEST_TABLE_NAME, where="departments=70 AND termine=80")) == 1
-        
-        # Verify the offline data was replicated
-        assert len(ch.select(TEST_TABLE_NAME, where="departments=110 AND termine=120")) == 1
-        offline_data = ch.select(TEST_TABLE_NAME, where="departments=110 AND termine=120")[0]
-        assert offline_data['data'] == 'offline_data'
-        
-        # 6. Insert new data and verify it gets added to existing data
-        mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (departments, termine, data) VALUES (90, 100, 'data5');", commit=True)
-        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 6)
-        
-        # Verify the combined old and new data
-        result = ch.select(TEST_TABLE_NAME, where="departments=90 AND termine=100")
-        assert len(result) == 1
-        assert result[0]['data'] == 'data5'
-        
-        # Make sure we have all 6 records (4 original + 1 offline + 1 new one)
-        assert len(ch.select(TEST_TABLE_NAME)) == 6
-        
-        new_runner.stop()
-    finally:
-        # Clean up the temporary config file
-        os.unlink(config_file)
+    # 4. Create and run a new runner
+    new_runner = RunAllRunner(cfg_file=config_file)
+    new_runner.run()
+    
+    # 5. Ensure it has all the previous data (should still be 4 records from before + 1 new offline record)
+    assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
+    ch.execute_command(f'USE `{TEST_DB_NAME}`')
+    assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 5)
+    
+    # Verify we still have all the old data
+    assert len(ch.select(TEST_TABLE_NAME, where="departments=10 AND termine=20")) == 1
+    assert len(ch.select(TEST_TABLE_NAME, where="departments=30 AND termine=40")) == 1
+    assert len(ch.select(TEST_TABLE_NAME, where="departments=50 AND termine=60")) == 1
+    assert len(ch.select(TEST_TABLE_NAME, where="departments=70 AND termine=80")) == 1
+    
+    # Verify the offline data was replicated
+    assert len(ch.select(TEST_TABLE_NAME, where="departments=110 AND termine=120")) == 1
+    offline_data = ch.select(TEST_TABLE_NAME, where="departments=110 AND termine=120")[0]
+    assert offline_data['data'] == 'offline_data'
+    
+    # 6. Insert new data and verify it gets added to existing data
+    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (departments, termine, data) VALUES (90, 100, 'data5');", commit=True)
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 6)
+    
+    # Verify the combined old and new data
+    result = ch.select(TEST_TABLE_NAME, where="departments=90 AND termine=100")
+    assert len(result) == 1
+    assert result[0]['data'] == 'data5'
+    
+    # Make sure we have all 6 records (4 original + 1 offline + 1 new one)
+    assert len(ch.select(TEST_TABLE_NAME)) == 6
+    
+    new_runner.stop()
 
 def test_issue_160_unknown_mysql_type_bug():
     """
@@ -845,117 +827,97 @@ def test_resume_initial_replication_with_ignore_deletes():
     when ignore_deletes=True because the code would try to use the _tmp database instead
     of the target database directly.
     """
-    # Create a temporary config file with ignore_deletes=True
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as temp_config_file:
-        config_file = temp_config_file.name
-        
-        # Read the original config
-        with open(CONFIG_FILE, 'r') as original_config:
-            config_data = yaml.safe_load(original_config)
-        
-        # Add ignore_deletes=True
-        config_data['ignore_deletes'] = True
-        
-        # Set initial_replication_batch_size to 1 for testing
-        config_data['initial_replication_batch_size'] = 1
-        
-        # Write to the temp file
-        yaml.dump(config_data, temp_config_file)
+    config_file = 'tests/tests_config_ignore_deletes.yaml'
+    
+    cfg = config.Settings()
+    cfg.load(config_file)
+    
+    # Verify the ignore_deletes option was set
+    assert cfg.ignore_deletes is True
 
-    try:
-        cfg = config.Settings()
-        cfg.load(config_file)
-        
-        # Verify the ignore_deletes option was set
-        assert cfg.ignore_deletes is True
+    mysql = mysql_api.MySQLApi(
+        database=None,
+        mysql_settings=cfg.mysql,
+    )
 
-        mysql = mysql_api.MySQLApi(
-            database=None,
-            mysql_settings=cfg.mysql,
+    ch = clickhouse_api.ClickhouseApi(
+        database=TEST_DB_NAME,
+        clickhouse_settings=cfg.clickhouse,
+    )
+
+    prepare_env(cfg, mysql, ch)
+
+    # Create a table with many records to ensure initial replication takes time
+    mysql.execute(f'''
+    CREATE TABLE `{TEST_TABLE_NAME}` (
+        id int NOT NULL AUTO_INCREMENT,
+        name varchar(255),
+        data varchar(1000),
+        PRIMARY KEY (id)
+    )
+    ''')
+
+    # Insert many records to make initial replication take longer
+    for i in range(100):
+        mysql.execute(
+            f"INSERT INTO `{TEST_TABLE_NAME}` (name, data) VALUES ('test_{i}', 'data_{i}');",
+            commit=True
         )
 
-        ch = clickhouse_api.ClickhouseApi(
-            database=TEST_DB_NAME,
-            clickhouse_settings=cfg.clickhouse,
+    # Start binlog replicator
+    binlog_replicator_runner = BinlogReplicatorRunner(cfg_file=config_file)
+    binlog_replicator_runner.run()
+
+    # Start db replicator for initial replication with test flag to exit early
+    db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file=config_file, 
+                                             additional_arguments='--initial-replication-test-fail-records 30')
+    db_replicator_runner.run()
+    
+    # Wait for initial replication to start
+    assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
+    ch.execute_command(f'USE `{TEST_DB_NAME}`')
+    assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
+    
+    # Wait for some records to be replicated but not all (should hit the 30 record limit)
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) > 0)
+    
+    # The db replicator should have stopped automatically due to the test flag
+    # But we still call stop() to ensure proper cleanup
+    db_replicator_runner.stop()
+    
+    # Verify the state is still PERFORMING_INITIAL_REPLICATION
+    state_path = os.path.join(cfg.binlog_replicator.data_dir, TEST_DB_NAME, 'state.pckl')
+    state = DbReplicatorState(state_path)
+    assert state.status.value == 2  # PERFORMING_INITIAL_REPLICATION
+    
+    # Add more records while replication is stopped
+    for i in range(100, 150):
+        mysql.execute(
+            f"INSERT INTO `{TEST_TABLE_NAME}` (name, data) VALUES ('test_{i}', 'data_{i}');",
+            commit=True
         )
 
-        prepare_env(cfg, mysql, ch)
-
-        # Create a table with many records to ensure initial replication takes time
-        mysql.execute(f'''
-        CREATE TABLE `{TEST_TABLE_NAME}` (
-            id int NOT NULL AUTO_INCREMENT,
-            name varchar(255),
-            data varchar(1000),
-            PRIMARY KEY (id)
-        )
-        ''')
-
-        # Insert many records to make initial replication take longer
-        for i in range(100):
-            mysql.execute(
-                f"INSERT INTO `{TEST_TABLE_NAME}` (name, data) VALUES ('test_{i}', 'data_{i}');",
-                commit=True
-            )
-
-        # Start binlog replicator
-        binlog_replicator_runner = BinlogReplicatorRunner(cfg_file=config_file)
-        binlog_replicator_runner.run()
-
-        # Start db replicator for initial replication with test flag to exit early
-        db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file=config_file, 
-                                                 additional_arguments='--initial-replication-test-fail-records 30')
-        db_replicator_runner.run()
-        
-        # Wait for initial replication to start
-        assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
-        ch.execute_command(f'USE `{TEST_DB_NAME}`')
-        assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
-        
-        # Wait for some records to be replicated but not all (should hit the 30 record limit)
-        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) > 0)
-        
-        # The db replicator should have stopped automatically due to the test flag
-        # But we still call stop() to ensure proper cleanup
-        db_replicator_runner.stop()
-        
-        # Verify the state is still PERFORMING_INITIAL_REPLICATION
-        state_path = os.path.join(cfg.binlog_replicator.data_dir, TEST_DB_NAME, 'state.pckl')
-        state = DbReplicatorState(state_path)
-        assert state.status.value == 2  # PERFORMING_INITIAL_REPLICATION
-        
-        # Add more records while replication is stopped
-        for i in range(100, 150):
-            mysql.execute(
-                f"INSERT INTO `{TEST_TABLE_NAME}` (name, data) VALUES ('test_{i}', 'data_{i}');",
-                commit=True
-            )
-
-        # Verify that sirocco_tmp database does NOT exist (it should use sirocco directly)
-        assert f"{TEST_DB_NAME}_tmp" not in ch.get_databases(), "Temporary database should not exist with ignore_deletes=True"
-        
-        # Resume initial replication - this should NOT fail with "Database sirocco_tmp does not exist"
-        db_replicator_runner_2 = DbReplicatorRunner(TEST_DB_NAME, cfg_file=config_file)
-        db_replicator_runner_2.run()
-        
-        # Wait for all records to be replicated (100 original + 50 extra = 150)
-        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 150, max_wait_time=30)
-        
-        # Verify the replication completed successfully
-        records = ch.select(TEST_TABLE_NAME)
-        assert len(records) == 150, f"Expected 150 records, got {len(records)}"
-        
-        # Verify we can continue with realtime replication
-        mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, data) VALUES ('realtime_test', 'realtime_data');", commit=True)
-        assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 151)
-        
-        # Clean up
-        db_replicator_runner_2.stop()
-        binlog_replicator_runner.stop()
-        
-    finally:
-        # Clean up temp config file
-        os.unlink(config_file)
+    # Verify that sirocco_tmp database does NOT exist (it should use sirocco directly)
+    assert f"{TEST_DB_NAME}_tmp" not in ch.get_databases(), "Temporary database should not exist with ignore_deletes=True"
+    
+    # Resume initial replication - this should NOT fail with "Database sirocco_tmp does not exist"
+    db_replicator_runner_2 = DbReplicatorRunner(TEST_DB_NAME, cfg_file=config_file)
+    db_replicator_runner_2.run()
+    
+    # Wait for all records to be replicated (100 original + 50 extra = 150)
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 150, max_wait_time=30)
+    
+    # Verify the replication completed successfully
+    records = ch.select(TEST_TABLE_NAME)
+    assert len(records) == 150, f"Expected 150 records, got {len(records)}"
+    
+    # Verify we can continue with realtime replication
+    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, data) VALUES ('realtime_test', 'realtime_data');", commit=True)
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 151)
+    
+    # Clean up
+    db_replicator_runner_2.stop()
+    binlog_replicator_runner.stop()
 
 
 def test_post_initial_replication_commands():
