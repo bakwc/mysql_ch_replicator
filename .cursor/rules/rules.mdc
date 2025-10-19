@@ -7,6 +7,8 @@ alwaysApply: true
 
 docker exec -w /app/ -it tests-replicator-1 python3 -m pytest -v -s tests/ -k test_your_test_name
 
-2. Never create a config files in tests code in runtime. Always create a real config files. Use log level info for newly added config files.
+2. NEVER CREATE CONFIG FILES IN RUNTIME!!!!!!. Always create a real config files. Use log level info for newly added config files.
 
 3. Dont create analyzes md files.
+
+4. DOUBLE CHECK YOU FOLLOWED EVERY RULE EVERY TIME !!!!!!
