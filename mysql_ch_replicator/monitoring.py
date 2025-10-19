@@ -18,7 +18,11 @@ class Monitoring:
     def __init__(self, databases: str, config: Settings):
         self.config = config
         self.databases = [db.strip() for db in databases.split(',') if db.strip()]
-        self.mysql_api = MySQLApi(database=None, mysql_settings=config.mysql)
+        self.mysql_api = MySQLApi(
+            database=None,
+            mysql_settings=config.mysql,
+            mysql_timezone=config.mysql_timezone,
+        )
 
     def run(self):
         stats = []

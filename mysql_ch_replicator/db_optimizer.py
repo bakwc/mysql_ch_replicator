@@ -47,6 +47,7 @@ class DbOptimizer:
         self.mysql_api = MySQLApi(
             database=None,
             mysql_settings=config.mysql,
+            mysql_timezone=config.mysql_timezone,
         )
         self.clickhouse_api = ClickhouseApi(
             database=None,
