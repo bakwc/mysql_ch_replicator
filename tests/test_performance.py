@@ -256,16 +256,8 @@ def test_performance_initial_only_replication():
     
     t1 = time.time()
     
-    # Create a custom config file for testing with parallel replication
+    # Use the static parallel config file
     parallel_config_file = 'tests/tests_config_perf_parallel.yaml'
-    if os.path.exists(parallel_config_file):
-        os.remove(parallel_config_file)
-
-    with open(config_file, 'r') as src_file:
-        config_content = src_file.read()
-    config_content += f"\ninitial_replication_threads: 8\n"
-    with open(parallel_config_file, 'w') as dest_file:
-        dest_file.write(config_content)
     
     # Use the DbReplicator directly to test the new parallel implementation
     db_replicator_runner = DbReplicatorRunner(
@@ -297,6 +289,3 @@ def test_performance_initial_only_replication():
     print('\n\n')
     
     db_replicator_runner.stop()
-    
-    # Clean up the temporary config file
-    os.remove(parallel_config_file)
