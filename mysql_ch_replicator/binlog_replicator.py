@@ -12,6 +12,7 @@ from logging import getLogger
 
 from pymysql.err import OperationalError
 
+from .binlog_recovery import recover_from_binlog_corruption
 from .config import BinlogReplicatorSettings, Settings
 from .pymysqlreplication import BinLogStreamReader
 from .pymysqlreplication.event import QueryEvent
@@ -617,6 +618,11 @@ class BinlogReplicator:
                     time.sleep(BinlogReplicator.READ_LOG_INTERVAL)
 
             except OperationalError as e:
+                # Check if this is Error 1236 (binlog corruption) - needs automatic recovery
+                if e.args[0] == 1236:
+                    recover_from_binlog_corruption(self.replicator_settings.data_dir, e)
+
+                # For other operational errors, log and retry
                 logger.error(f"operational error {str(e)}", exc_info=True)
                 time.sleep(15)
             except Exception as e:

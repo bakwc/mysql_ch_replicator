@@ -1,12 +1,12 @@
 import json
 import os
-import shutil
 import time
 from collections import defaultdict
 from logging import getLogger
 
 import pymysql.err
 
+from .binlog_recovery import recover_from_binlog_corruption
 from .binlog_replicator import EventType, LogEvent
 from .common import Status
 from .converter import strip_sql_comments
@@ -79,34 +79,12 @@ class DbReplicatorRealtime:
             except pymysql.err.OperationalError as e:
                 # Check if this is the binlog index file corruption error (Error 1236)
                 if e.args[0] == 1236:
-                    logger.error(
-                        "[binlogrepl] operational error (1236, 'Could not find first log file name in binary log index file')"
-                    )
-                    logger.error(f"[binlogrepl] Full error: {e}")
-                    logger.info("[binlogrepl] Attempting automatic recovery...")
-
                     # Get binlog directory path for this database
                     binlog_dir = os.path.join(
                         self.replicator.config.binlog_replicator.data_dir,
                         self.replicator.database
                     )
-
-                    # Delete the corrupted binlog directory
-                    if os.path.exists(binlog_dir):
-                        logger.warning(f"[binlogrepl] Deleting corrupted binlog directory: {binlog_dir}")
-                        try:
-                            shutil.rmtree(binlog_dir)
-                            logger.info(f"[binlogrepl] Successfully deleted binlog directory: {binlog_dir}")
-                        except Exception as delete_error:
-                            logger.error(f"[binlogrepl] Failed to delete binlog directory: {delete_error}", exc_info=True)
-                            raise RuntimeError("Failed to delete corrupted binlog directory") from delete_error
-                    else:
-                        logger.warning(f"[binlogrepl] Binlog directory does not exist: {binlog_dir}")
-
-                    # Exit process cleanly to trigger automatic restart by runner
-                    logger.info("[binlogrepl] Exiting process for automatic restart by runner")
-                    logger.info("[binlogrepl] The runner will automatically restart this process")
-                    raise RuntimeError("Binlog corruption detected (Error 1236) - restarting for recovery") from e
+                    recover_from_binlog_corruption(binlog_dir, e)
                 else:
                     # Re-raise other OperationalErrors
                     logger.error(f"[binlogrepl] Unhandled OperationalError: {e}", exc_info=True)
