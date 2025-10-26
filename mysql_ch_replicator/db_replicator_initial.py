@@ -167,14 +167,9 @@ class DbReplicatorInitial:
 
         while True:
 
+            # Pass raw primary key values to mysql_api - it will handle proper SQL parameterization
+            # No need to manually add quotes - parameterized queries handle this safely
             query_start_values = max_primary_key
-            if query_start_values is not None:
-                for i in range(len(query_start_values)):
-                    key_type = primary_key_types[i]
-                    value = query_start_values[i]
-                    if 'int' not in key_type.lower():
-                        value = f"'{value}'"
-                        query_start_values[i] = value
 
             records = self.replicator.mysql_api.get_records(
                 table_name=table_name,
