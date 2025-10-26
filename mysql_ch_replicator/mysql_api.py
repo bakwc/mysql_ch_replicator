@@ -92,10 +92,14 @@ class MySQLApi:
             order_by_str = ",".join(order_by_escaped)
 
             where = ""
+            query_params = []
+
             if start_value is not None:
-                # Build the start_value condition for pagination
-                start_value_str = ",".join(map(str, start_value))
-                where = f"WHERE ({order_by_str}) > ({start_value_str}) "
+                # Build the start_value condition for pagination using parameterized query
+                # This prevents SQL injection and handles special characters properly
+                placeholders = ",".join(["%s"] * len(start_value))
+                where = f"WHERE ({order_by_str}) > ({placeholders}) "
+                query_params.extend(start_value)
 
             # Add partitioning filter for parallel processing (e.g., sharded crawling)
             if (
@@ -116,10 +120,23 @@ class MySQLApi:
             # Construct final query
             query = f"SELECT * FROM `{table_name}` {where}ORDER BY {order_by_str} LIMIT {limit}"
 
+            # Log query details for debugging
             logger.debug(f"Executing query: {query}")
+            if query_params:
+                logger.debug(f"Query parameters: {query_params}")
 
-            # Execute the query
-            cursor.execute(query)
-            res = cursor.fetchall()
-            records = [x for x in res]
-            return records
+            # Execute the query with proper parameterization
+            try:
+                if query_params:
+                    cursor.execute(query, tuple(query_params))
+                else:
+                    cursor.execute(query)
+                res = cursor.fetchall()
+                records = [x for x in res]
+                return records
+            except Exception as e:
+                logger.error(f"Query execution failed: {query}")
+                if query_params:
+                    logger.error(f"Query parameters: {query_params}")
+                logger.error(f"Error details: {e}")
+                raise
