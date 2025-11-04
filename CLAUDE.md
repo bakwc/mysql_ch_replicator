@@ -1,5 +1,23 @@
 # MySQL ClickHouse Replicator - Claude Code Guide
 
+## ⚠️ CRITICAL DATABASE RULES
+
+**NEVER DELETE THE FINAL DATABASE (`mysql_ch_replicator_rematter_default`)**
+
+The replication system uses a two-database strategy:
+1. **Temporary Database** (`mysql_ch_replicator_rematter_default_tmp`): Initial replication target
+2. **Final Database** (`mysql_ch_replicator_rematter_default`): Production database that gets swapped
+
+**How It Works:**
+- System replicates all tables to `_tmp` database
+- Once complete, `_tmp` database is renamed to final database name
+- The final database should persist across runs for real-time updates
+
+**What You Can Delete:**
+- ✅ `mysql_ch_replicator_rematter_default_tmp` - Safe to delete for fresh start
+- ✅ State files in `./data/binlog/rematter_default/*.pckl` - Safe to delete for fresh start
+- ❌ `mysql_ch_replicator_rematter_default` - **NEVER DELETE** - This is the production database
+
 ## Overview
 
 This project is a real-time replication system that synchronizes data from MySQL databases to ClickHouse for analytics and reporting. The replicator uses MySQL binary logs (binlog) to capture changes and applies them to ClickHouse tables with appropriate schema transformations.

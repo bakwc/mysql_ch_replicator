@@ -216,7 +216,10 @@ class DbReplicator:
                 return
             if self.state.status == Status.PERFORMING_INITIAL_REPLICATION:
                 self.initial_replicator.perform_initial_replication()
-                self.run_realtime_replication()
+                if not self.initial_only:
+                    self.run_realtime_replication()
+                else:
+                    logger.info('initial_only mode enabled - exiting after initial replication')
                 return
 
             # If ignore_deletes is enabled, we don't create a temporary DB and don't swap DBs
@@ -244,7 +247,10 @@ class DbReplicator:
             logger.info(f'last known transaction {self.state.last_processed_transaction}')
             self.initial_replicator.create_initial_structure()
             self.initial_replicator.perform_initial_replication()
-            self.run_realtime_replication()
+            if not self.initial_only:
+                self.run_realtime_replication()
+            else:
+                logger.info('initial_only mode enabled - exiting after initial replication')
         except Exception:
             logger.error(f'unhandled exception', exc_info=True)
             raise

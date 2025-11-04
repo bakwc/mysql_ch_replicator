@@ -137,8 +137,40 @@ class ClickhouseApi:
                 time.sleep(ClickhouseApi.RETRY_INTERVAL)
 
     def recreate_database(self):
-        self.execute_command(f'DROP DATABASE IF EXISTS `{self.database}`')
+        """
+        Recreate the database by dropping and creating it.
+        Includes retry logic to handle concurrent table creation from binlog replicator.
+        """
+        max_retries = 5
+        
+        # Retry DROP DATABASE to handle concurrent table creation
+        for attempt in range(max_retries):
+            try:
+                self.execute_command(f'DROP DATABASE IF EXISTS `{self.database}`')
+                logger.info(f'Successfully dropped database `{self.database}`')
+                break
+            except Exception as e:
+                error_str = str(e).lower()
+                # ClickHouse error code 219: DATABASE_NOT_EMPTY
+                # This happens when binlog replicator creates tables during drop
+                if 'database_not_empty' in error_str or 'code: 219' in error_str or 'code 219' in error_str:
+                    if attempt < max_retries - 1:
+                        wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s, 8s, 16s
+                        logger.warning(
+                            f'Database drop failed due to concurrent table creation '
+                            f'(attempt {attempt + 1}/{max_retries}), retrying in {wait_time}s: {e}'
+                        )
+                        time.sleep(wait_time)
+                    else:
+                        logger.error(f'Failed to drop database `{self.database}` after {max_retries} attempts')
+                        raise
+                else:
+                    # Different error, don't retry
+                    raise
+        
+        # Create the database
         self.execute_command(f'CREATE DATABASE `{self.database}`')
+        logger.info(f'Successfully created database `{self.database}`')
 
     def get_last_used_version(self, table_name):
         return self.tables_last_record_version.get(table_name, 0)

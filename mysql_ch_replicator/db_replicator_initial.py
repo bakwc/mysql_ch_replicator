@@ -345,10 +345,14 @@ class DbReplicatorInitial:
 
         # Create and launch worker processes
         processes = []
+        log_files = []
+        start_time = time.time()
+        timeout_seconds = 3600  # 1 hour timeout per table
+        
         for worker_id in range(self.replicator.config.initial_replication_threads):
             # Prepare command to launch a worker process
             cmd = [
-                sys.executable, "-m", "mysql_ch_replicator.main",
+                sys.executable, "-m", "mysql_ch_replicator",
                 "db_replicator",  # Required positional mode argument
                 "--config", self.replicator.settings_file,
                 "--db", self.replicator.database,
@@ -358,9 +362,26 @@ class DbReplicatorInitial:
                 "--target_db", self.replicator.target_database_tmp,
                 "--initial_only=True",
             ]
+            
+            # Create temporary log file to prevent subprocess deadlock
+            import tempfile
+            log_file = tempfile.NamedTemporaryFile(
+                mode="w+", delete=False, prefix=f"worker_{worker_id}_{table_name}_", suffix=".log"
+            )
+            log_files.append(log_file)
                 
-            logger.info(f"Launching worker {worker_id}: {' '.join(cmd)}")
-            process = subprocess.Popen(cmd)
+            logger.info(f"Launching worker {worker_id} for {table_name}: {' '.join(cmd)}")
+            logger.info(f"Worker {worker_id} logs: {log_file.name}")
+            
+            # Fix: Redirect stdout/stderr to log file to prevent buffer deadlock
+            process = subprocess.Popen(
+                cmd,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                universal_newlines=True,
+                start_new_session=True
+            )
+            log_file.flush()
             processes.append(process)
         
         # Wait for all worker processes to complete
@@ -368,33 +389,62 @@ class DbReplicatorInitial:
         
         try:
             while processes:
+                # Check for timeout
+                elapsed_time = time.time() - start_time
+                if elapsed_time > timeout_seconds:
+                    logger.error(f"Timeout reached ({timeout_seconds}s) for table {table_name}, terminating workers")
+                    for process in processes:
+                        process.terminate()
+                    raise Exception(f"Worker processes for table {table_name} timed out after {timeout_seconds}s")
+                
                 for i, process in enumerate(processes[:]):
                     # Check if process is still running
                     if process.poll() is not None:
                         exit_code = process.returncode
                         if exit_code == 0:
-                            logger.info(f"Worker process {i} completed successfully")
+                            logger.info(f"Worker process {i} for table {table_name} completed successfully (exit code 0)")
                         else:
-                            logger.error(f"Worker process {i} failed with exit code {exit_code}")
-                            # Optional: can raise an exception here to abort the entire operation
-                            raise Exception(f"Worker process failed with exit code {exit_code}")
-                        
+                            logger.error(f"Worker process {i} for table {table_name} failed with exit code {exit_code}")
+                            
+                            # Read log file for debugging
+                            if i < len(log_files):
+                                try:
+                                    log_files[i].seek(0)
+                                    log_content = log_files[i].read()
+                                    if log_content:
+                                        lines = log_content.strip().split('\n')
+                                        last_lines = lines[-10:] if len(lines) > 10 else lines
+                                        logger.error(f"Worker {i} last output:\n" + "\n".join(last_lines))
+                                except Exception as e:
+                                    logger.debug(f"Could not read worker {i} log: {e}")
+                            
+                            raise Exception(f"Worker process {i} for table {table_name} failed with exit code {exit_code}")
+
                         processes.remove(process)
                 
                 if processes:
                     # Wait a bit before checking again
                     time.sleep(0.1)
-                    
-                    # Every 30 seconds, log progress
-                    if int(time.time()) % 30 == 0:
-                        logger.info(f"Still waiting for {len(processes)} workers to complete")
+
+                    # Every 10 seconds, log progress with table name and elapsed time
+                    if int(time.time()) % 10 == 0:
+                        logger.info(f"Still waiting for {len(processes)} workers to complete table {table_name} (elapsed: {int(elapsed_time)}s)")
         except KeyboardInterrupt:
             logger.warning("Received interrupt, terminating worker processes")
             for process in processes:
                 process.terminate()
             raise
+        finally:
+            # Clean up log files
+            for log_file in log_files:
+                try:
+                    log_file.close()
+                    import os
+                    os.unlink(log_file.name)
+                except Exception as e:
+                    logger.debug(f"Could not clean up log file {log_file.name}: {e}")
         
-        logger.info(f"All workers completed replication of table {table_name}")
+        logger.info(f"All workers completed replication of table {table_name} in {int(time.time() - start_time)}s")
         
         # Consolidate record versions from all worker states
         logger.info(f"Consolidating record versions from worker states for table {table_name}")
