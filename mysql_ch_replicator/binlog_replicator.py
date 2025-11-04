@@ -101,7 +101,7 @@ class FileReader:
 
 def get_existing_file_nums(data_dir, db_name):
     db_path = os.path.join(data_dir, db_name)
-    
+
     # CRITICAL FIX: Always try to create the full directory hierarchy first
     # This handles the case where intermediate directories don't exist
     try:
@@ -114,22 +114,24 @@ def get_existing_file_nums(data_dir, db_name):
     except OSError as e:
         # If makedirs fails, try creating step by step
         logger.warning(f"Failed to create {db_path} in one step: {e}")
-        
+
         # Find the deepest existing parent directory
         current_path = db_path
         missing_paths = []
-        
-        while current_path and current_path != '/' and not os.path.exists(current_path):
+
+        while current_path and current_path != "/" and not os.path.exists(current_path):
             missing_paths.append(current_path)
             current_path = os.path.dirname(current_path)
-        
+
         # Create directories from deepest existing to the target
         for path_to_create in reversed(missing_paths):
             try:
                 os.makedirs(path_to_create, exist_ok=True)
                 logger.debug(f"Created directory: {path_to_create}")
             except OSError as create_error:
-                logger.error(f"Failed to create directory {path_to_create}: {create_error}")
+                logger.error(
+                    f"Failed to create directory {path_to_create}: {create_error}"
+                )
                 raise
     existing_files = os.listdir(db_path)
     existing_files = [f for f in existing_files if f.endswith(".bin")]
@@ -311,7 +313,7 @@ class DataWriter:
 
     def create_file_writer(self, db_name: str) -> FileWriter:
         next_free_file = self.get_next_file_name(db_name)
-        
+
         # Ensure parent directory exists before creating file
         parent_dir = os.path.dirname(next_free_file)
         if parent_dir:
@@ -319,9 +321,11 @@ class DataWriter:
                 os.makedirs(parent_dir, exist_ok=True)
                 logger.debug(f"Ensured directory exists for binlog file: {parent_dir}")
             except OSError as e:
-                logger.error(f"Critical: Failed to create binlog file directory {parent_dir}: {e}")
+                logger.error(
+                    f"Critical: Failed to create binlog file directory {parent_dir}: {e}"
+                )
                 raise
-        
+
         return FileWriter(next_free_file)
 
     def get_next_file_name(self, db_name: str):
@@ -377,7 +381,7 @@ class State:
 
     def save(self):
         file_name = self.file_name
-        
+
         # Ensure parent directory exists before saving - handles nested isolation paths
         parent_dir = os.path.dirname(file_name)
         if parent_dir:  # Only proceed if there's actually a parent directory
@@ -385,11 +389,15 @@ class State:
                 # Use makedirs with exist_ok=True to create all directories recursively
                 # This handles nested isolation paths like /app/binlog/w2_7cf22b01
                 os.makedirs(parent_dir, exist_ok=True)
-                logger.debug(f"Ensured directory exists for binlog state file: {parent_dir}")
+                logger.debug(
+                    f"Ensured directory exists for binlog state file: {parent_dir}"
+                )
             except OSError as e:
-                logger.error(f"Critical: Failed to create binlog state directory {parent_dir}: {e}")
+                logger.error(
+                    f"Critical: Failed to create binlog state directory {parent_dir}: {e}"
+                )
                 raise
-        
+
         data = json.dumps(
             {
                 "last_seen_transaction": self.last_seen_transaction,
@@ -521,7 +529,7 @@ class BinlogReplicator:
 
                     self.update_state_if_required(transaction_id)
 
-                    logger.debug(f"received event {type(event)}, {transaction_id}")
+                    # logger.debug(f"received event {type(event)}, {transaction_id}")
 
                     if type(event) not in (
                         DeleteRowsEvent,
