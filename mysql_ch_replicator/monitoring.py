@@ -31,7 +31,7 @@ class Monitoring:
             stats.append(database)
             stats.append(database + '_diff')
 
-        print('|'.join(map(str, stats)), flush=True)
+        logger.info('|'.join(map(str, stats)))
 
         while True:
             binlog_file_binlog = self.get_last_binlog_binlog()
@@ -48,7 +48,7 @@ class Monitoring:
                 stats.append(database_binlog)
                 stats.append(bnum(binlog_file_mysql) - bnum(database_binlog))
 
-            print('|'.join(map(str, stats)), flush=True)
+            logger.info('|'.join(map(str, stats)))
             time.sleep(Monitoring.CHECK_INTERVAL)
 
     def get_last_binlog_binlog(self):

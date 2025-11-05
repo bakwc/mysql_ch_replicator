@@ -3,6 +3,7 @@ import json
 import re
 import struct
 import uuid
+from logging import getLogger
 
 import sqlparse
 from pyparsing import CaselessKeyword, Suppress, Word, alphanums, alphas, delimitedList
@@ -14,6 +15,8 @@ from .enum import (
     parse_mysql_enum,
 )
 from .table_structure import TableField, TableStructure
+
+logger = getLogger(__name__)
 
 CHARSET_MYSQL_TO_PYTHON = {
     "armscii8": None,  # ARMSCII-8 is not directly supported in Python
@@ -1087,7 +1090,7 @@ class MysqlToClickhouseConverter:
                 error_msg = (
                     f"Could not get source table structure for LIKE statement: {str(e)}"
                 )
-                print(f"Error: {error_msg}")
+                logger.error(f"Error: {error_msg}")
                 raise Exception(error_msg, create_statement)
 
         # If we got here, we couldn't determine the structure
@@ -1178,8 +1181,6 @@ class MysqlToClickhouseConverter:
         if not isinstance(tokens[3], sqlparse.sql.Parenthesis):
             raise Exception("wrong create statement", create_statement)
 
-        # print(' --- processing statement:\n', create_statement, '\n')
-
         inner_tokens = tokens[3].tokens
         inner_tokens = "".join([str(t) for t in inner_tokens[1:-1]]).strip()
         inner_tokens = split_high_level(inner_tokens, ",")
@@ -1243,7 +1244,6 @@ class MysqlToClickhouseConverter:
                 continue
 
             line = line.strip()
-            # print(" === processing line", line)
 
             if line.startswith("`"):
                 end_pos = line.find("`", 1)
@@ -1274,7 +1274,6 @@ class MysqlToClickhouseConverter:
                     additional_data=additional_data,
                 )
             )
-            # print(' ---- params:', field_parameters)
 
         if not structure.primary_keys:
             for field in structure.fields:

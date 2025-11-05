@@ -1,3 +1,8 @@
+from logging import getLogger
+
+logger = getLogger(__name__)
+
+
 def parse_mysql_enum(enum_definition):
     """
     Accepts a MySQL ENUM definition string (case–insensitive),
@@ -217,6 +222,6 @@ if __name__ == '__main__':
     for t in tests:
         try:
             result = parse_mysql_enum(t)
-            print("Input: {}\nParsed: {}\n".format(t, result))
+            logger.debug("Input: {}\nParsed: {}\n".format(t, result))
         except Exception as e:
-            print("Error parsing {}: {}\n".format(t, e))
+            logger.error("Error parsing {}: {}\n".format(t, e))

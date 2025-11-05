@@ -2,7 +2,6 @@
 
 import argparse
 import logging
-from logging.handlers import RotatingFileHandler
 import sys
 import os
 
@@ -14,38 +13,9 @@ from .monitoring import Monitoring
 from .runner import Runner
 
 
-def set_logging_config(tags, log_file=None, log_level_str=None):
-
-    handlers = []
-    handlers.append(logging.StreamHandler(sys.stderr))
-    if log_file is not None:
-        # Ensure log file directory exists before creating handler
-        log_dir = os.path.dirname(log_file)
-        if log_dir:
-            try:
-                os.makedirs(log_dir, exist_ok=True)
-            except FileNotFoundError:
-                # Handle nested directory creation for isolated test paths
-                try:
-                    # Create all parent directories recursively
-                    os.makedirs(os.path.dirname(log_dir), exist_ok=True)
-                    os.makedirs(log_dir, exist_ok=True)
-                except Exception as e:
-                    print(f"Warning: Could not create log directory {log_dir}: {e}")
-                    # Skip file logging if directory creation fails
-                    log_file = None
-        
-        # Only add file handler if log directory was created successfully
-        if log_file is not None:
-            handlers.append(
-                RotatingFileHandler(
-                    filename=log_file,
-                    maxBytes=50*1024*1024,  # 50 Mb
-                    backupCount=3,
-                    encoding='utf-8',
-                    delay=True,  # Defer file creation until first log
-                )
-            )
+def set_logging_config(tags, log_level_str=None):
+    """Configure logging to output only to stderr (stdout for containerized environments)."""
+    handlers = [logging.StreamHandler(sys.stderr)]
 
     log_levels = {
         'critical': logging.CRITICAL,
@@ -57,7 +27,7 @@ def set_logging_config(tags, log_file=None, log_level_str=None):
 
     log_level = log_levels.get(log_level_str)
     if log_level is None:
-        print(f'[warning] unknown log level {log_level_str}, setting info')
+        logging.warning(f'Unknown log level {log_level_str}, setting info')
         log_level = 'info'
 
     logging.basicConfig(
@@ -77,12 +47,7 @@ def run_binlog_replicator(args, config: Settings):
         os.makedirs(parent_dir, exist_ok=True)
         os.makedirs(config.binlog_replicator.data_dir, exist_ok=True)
 
-    log_file = os.path.join(
-        config.binlog_replicator.data_dir,
-        'binlog_replicator.log',
-    )
-
-    set_logging_config('binlogrepl', log_file=log_file, log_level_str=config.log_level)
+    set_logging_config('binlogrepl', log_level_str=config.log_level)
     binlog_replicator = BinlogReplicator(
         settings=config,
     )
@@ -128,11 +93,6 @@ def run_db_replicator(args, config: Settings):
         logging.warning(f"Could not create database directory {db_dir}: {e}")
         # Continue execution - logging will attempt to create directory when needed
 
-    log_file = os.path.join(
-        db_dir,
-        'db_replicator.log',
-    )
-
     # Set log tag according to whether this is a worker or main process
     if args.worker_id is not None:
         if args.table:
@@ -142,7 +102,7 @@ def run_db_replicator(args, config: Settings):
     else:
         log_tag = f'dbrepl {db_name}'
 
-    set_logging_config(log_tag, log_file=log_file, log_level_str=config.log_level)
+    set_logging_config(log_tag, log_level_str=config.log_level)
 
     if args.table:
         logging.info(f"Processing specific table: {args.table}")
@@ -165,12 +125,7 @@ def run_db_optimizer(args, config: Settings):
     if not os.path.exists(data_dir):
         os.makedirs(data_dir, exist_ok=True)
 
-    log_file = os.path.join(
-        data_dir,
-        'db_optimizer.log',
-    )
-
-    set_logging_config(f'dbopt {args.db}', log_file=log_file, log_level_str=config.log_level)
+    set_logging_config(f'dbopt {args.db}', log_level_str=config.log_level)
 
     db_optimizer = DbOptimizer(
         config=config,
@@ -231,7 +186,7 @@ def main():
     try:
         os.makedirs(config.binlog_replicator.data_dir, exist_ok=True)
     except Exception as e:
-        print(f"Warning: Could not ensure binlog directory exists: {e}")
+        logging.warning(f"Could not ensure binlog directory exists: {e}")
         # Try to create with full path
         try:
             parent_dir = os.path.dirname(config.binlog_replicator.data_dir)
@@ -239,7 +194,7 @@ def main():
                 os.makedirs(parent_dir, exist_ok=True)
             os.makedirs(config.binlog_replicator.data_dir, exist_ok=True)
         except Exception as e2:
-            print(f"CRITICAL: Failed to create binlog directory: {e2}")
+            logging.critical(f"Failed to create binlog directory: {e2}")
             # This will likely cause failures but let's continue to see the specific error
     if args.mode == 'binlog_replicator':
         run_binlog_replicator(args, config)

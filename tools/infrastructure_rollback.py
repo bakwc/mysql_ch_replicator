@@ -16,12 +16,15 @@ Usage:
 """
 
 import argparse
+import shutil
 import subprocess
 import time
-import shutil
-from pathlib import Path
-from typing import List, Dict, Optional
 from dataclasses import dataclass
+from logging import getLogger
+from pathlib import Path
+from typing import Dict, List, Optional
+
+logger = getLogger(__name__)
 
 
 @dataclass
@@ -314,29 +317,29 @@ class InfrastructureRecoveryManager:
     
     def emergency_reset(self) -> List[RecoveryAction]:
         """Perform complete emergency infrastructure reset"""
-        print("🚨 Performing emergency infrastructure reset...")
-        
+        logger.warning("🚨 Performing emergency infrastructure reset...")
+
         all_actions = []
-        
-        print("Step 1: Resetting processes...")
+
+        logger.info("Step 1: Resetting processes...")
         all_actions.extend(self.reset_processes())
-        
-        print("Step 2: Cleaning filesystem...")
+
+        logger.info("Step 2: Cleaning filesystem...")
         all_actions.extend(self.cleanup_filesystem())
-        
+
         # Wait for cleanup to settle
         time.sleep(2)
-        
-        print("Step 3: Restarting infrastructure...")
+
+        logger.info("Step 3: Restarting infrastructure...")
         all_actions.extend(self.restart_infrastructure())
-        
+
         # Wait for services to initialize
-        print("Waiting for services to initialize...")
+        logger.info("Waiting for services to initialize...")
         time.sleep(10)
-        
-        print("Step 4: Validating recovery...")
+
+        logger.info("Step 4: Validating recovery...")
         all_actions.extend(self.validate_recovery())
-        
+
         return all_actions
     
     def format_recovery_report(self, actions: List[RecoveryAction]) -> str:
@@ -408,7 +411,7 @@ def main():
     
     # Print report
     report = recovery_manager.format_recovery_report(actions)
-    print(report)
+    logger.info(report)
     
     # Exit with appropriate code
     has_failures = any(a.status == 'failed' for a in actions)

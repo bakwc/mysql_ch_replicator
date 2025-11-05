@@ -11,6 +11,8 @@ from .util.bytes import parse_decimal_from_bytes
 from typing import Union, Optional
 import json
 
+logger = logging.getLogger(__name__)
+
 
 class BinLogEvent(object):
     def __init__(
@@ -76,13 +78,13 @@ class BinLogEvent(object):
         return datetime.datetime.utcfromtimestamp(self.timestamp).isoformat()
 
     def dump(self):
-        print(f"=== {self.__class__.__name__} ===")
-        print(f"Date: {self.formatted_timestamp}")
-        print(f"Log position: {self.packet.log_pos}")
-        print(f"Event size: {self.event_size}")
-        print(f"Read bytes: {self.packet.read_bytes}")
+        logger.debug(f"=== {self.__class__.__name__} ===")
+        logger.debug(f"Date: {self.formatted_timestamp}")
+        logger.debug(f"Log position: {self.packet.log_pos}")
+        logger.debug(f"Event size: {self.event_size}")
+        logger.debug(f"Read bytes: {self.packet.read_bytes}")
         self._dump()
-        print()
+        logger.debug("")
 
     def to_dict(self) -> dict:
         return {
@@ -145,11 +147,11 @@ class GtidEvent(BinLogEvent):
         return gtid
 
     def _dump(self):
-        print(f"Commit: {self.commit_flag}")
-        print(f"GTID_NEXT: {self.gtid}")
+        logger.debug(f"Commit: {self.commit_flag}")
+        logger.debug(f"GTID_NEXT: {self.gtid}")
         if hasattr(self, "last_committed"):
-            print(f"last_committed: {self.last_committed}")
-            print(f"sequence_number: {self.sequence_number}")
+            logger.debug(f"last_committed: {self.last_committed}")
+            logger.debug(f"sequence_number: {self.sequence_number}")
 
     def __repr__(self):
         return f'<GtidEvent "{self.gtid}">'
@@ -194,7 +196,7 @@ class PreviousGtidsEvent(BinLogEvent):
         self._previous_gtids = ",".join(self._gtids)
 
     def _dump(self):
-        print(f"previous_gtids: {self._previous_gtids}")
+        logger.debug(f"previous_gtids: {self._previous_gtids}")
 
     def __repr__(self):
         return f'<PreviousGtidsEvent "{self._previous_gtids}">'
@@ -224,8 +226,8 @@ class MariadbGtidEvent(BinLogEvent):
 
     def _dump(self):
         super()._dump()
-        print(f"Flags: {self.flags}")
-        print(f"GTID: {self.gtid}")
+        logger.debug(f"Flags: {self.flags}")
+        logger.debug(f"GTID: {self.gtid}")
 
 
 class MariadbBinLogCheckPointEvent(BinLogEvent):
@@ -247,7 +249,7 @@ class MariadbBinLogCheckPointEvent(BinLogEvent):
         self.filename = self.packet.read(filename_length).decode()
 
     def _dump(self):
-        print(f"Filename: {self.filename}")
+        logger.debug(f"Filename: {self.filename}")
 
 
 class MariadbAnnotateRowsEvent(BinLogEvent):
@@ -265,7 +267,7 @@ class MariadbAnnotateRowsEvent(BinLogEvent):
 
     def _dump(self):
         super()._dump()
-        print(f"SQL statement : {self.sql_statement}")
+        logger.debug(f"SQL statement : {self.sql_statement}")
 
 
 class MariadbGtidListEvent(BinLogEvent):
@@ -330,10 +332,10 @@ class RotateEvent(BinLogEvent):
         self.next_binlog = self.packet.read(event_size - 8).decode()
 
     def dump(self):
-        print(f"=== {self.__class__.__name__} ===")
-        print(f"Position: {self.position}")
-        print(f"Next binlog file: {self.next_binlog}")
-        print()
+        logger.debug(f"=== {self.__class__.__name__} ===")
+        logger.debug(f"Position: {self.position}")
+        logger.debug(f"Next binlog file: {self.next_binlog}")
+        logger.debug("")
 
 
 class XAPrepareEvent(BinLogEvent):
@@ -365,9 +367,9 @@ class XAPrepareEvent(BinLogEvent):
         return self.xid_gtrid.decode() + self.xid_bqual.decode()
 
     def _dump(self):
-        print(f"One phase: {self.one_phase}")
-        print(f"XID formatID: {self.xid_format_id}")
-        print(f"XID: {self.xid}")
+        logger.debug(f"One phase: {self.one_phase}")
+        logger.debug(f"XID formatID: {self.xid_format_id}")
+        logger.debug(f"XID: {self.xid}")
 
 
 class FormatDescriptionEvent(BinLogEvent):
@@ -400,13 +402,13 @@ class FormatDescriptionEvent(BinLogEvent):
         self.number_of_event_types = struct.unpack("<B", self.packet.read(1))[0]
 
     def _dump(self):
-        print(f"Binlog version: {self.binlog_version}")
-        print(f"mysql version: {self.mysql_version_str}")
-        print(f"Created: {self.created}")
-        print(f"Common header length: {self.common_header_len}")
-        print(f"Post header length: {self.post_header_len}")
-        print(f"Server version split: {self.server_version_split}")
-        print(f"Number of event types: {self.number_of_event_types}")
+        logger.debug(f"Binlog version: {self.binlog_version}")
+        logger.debug(f"mysql version: {self.mysql_version_str}")
+        logger.debug(f"Created: {self.created}")
+        logger.debug(f"Common header length: {self.common_header_len}")
+        logger.debug(f"Post header length: {self.post_header_len}")
+        logger.debug(f"Server version split: {self.server_version_split}")
+        logger.debug(f"Number of event types: {self.number_of_event_types}")
 
 
 class StopEvent(BinLogEvent):
@@ -428,7 +430,7 @@ class XidEvent(BinLogEvent):
 
     def _dump(self):
         super()._dump()
-        print(f"Transaction ID: {self.xid}")
+        logger.debug(f"Transaction ID: {self.xid}")
 
 
 class HeartbeatLogEvent(BinLogEvent):
@@ -461,7 +463,7 @@ class HeartbeatLogEvent(BinLogEvent):
 
     def _dump(self):
         super()._dump()
-        print(f"Current binlog: {self.indent}")
+        logger.debug(f"Current binlog: {self.ident}")
 
 
 class QueryEvent(BinLogEvent):
@@ -507,9 +509,9 @@ class QueryEvent(BinLogEvent):
 
     def _dump(self):
         super()._dump()
-        print(f"Schema: {self.schema}" % (self.schema))
-        print(f"Execution time: {self.execution_time}")
-        print(f"Query: {self.query}")
+        logger.debug(f"Schema: {self.schema}")
+        logger.debug(f"Execution time: {self.execution_time}")
+        logger.debug(f"Query: {self.query}")
 
     def _read_status_vars_value_for_key(self, key):
         """parse status variable VALUE for given KEY
@@ -616,8 +618,8 @@ class BeginLoadQueryEvent(BinLogEvent):
 
     def _dump(self):
         super()._dump()
-        print(f"File id: {self.file_id}")
-        print(f"Block data: {self.block_data}")
+        logger.debug(f"File id: {self.file_id}")
+        logger.debug(f"Block data: {self.block_data}")
 
 
 class ExecuteLoadQueryEvent(BinLogEvent):
@@ -656,15 +658,15 @@ class ExecuteLoadQueryEvent(BinLogEvent):
 
     def _dump(self):
         super(ExecuteLoadQueryEvent, self)._dump()
-        print(f"Slave proxy id: {self.slave_proxy_id}")
-        print(f"Execution time: {self.execution_time}")
-        print(f"Schema length: {self.schema_length}")
-        print(f"Error code: {self.error_code}")
-        print(f"Status vars length: {self.status_vars_length}")
-        print(f"File id: {self.file_id}")
-        print(f"Start pos: {self.start_pos}")
-        print(f"End pos: {self.end_pos}")
-        print(f"Dup handling flags: {self.dup_handling_flags}")
+        logger.debug(f"Slave proxy id: {self.slave_proxy_id}")
+        logger.debug(f"Execution time: {self.execution_time}")
+        logger.debug(f"Schema length: {self.schema_length}")
+        logger.debug(f"Error code: {self.error_code}")
+        logger.debug(f"Status vars length: {self.status_vars_length}")
+        logger.debug(f"File id: {self.file_id}")
+        logger.debug(f"Start pos: {self.start_pos}")
+        logger.debug(f"End pos: {self.end_pos}")
+        logger.debug(f"Dup handling flags: {self.dup_handling_flags}")
 
 
 class IntvarEvent(BinLogEvent):
@@ -686,8 +688,8 @@ class IntvarEvent(BinLogEvent):
 
     def _dump(self):
         super()._dump()
-        print(f"type: {self.type}")
-        print(f"Value: {self.value}")
+        logger.debug(f"type: {self.type}")
+        logger.debug(f"Value: {self.value}")
 
 
 class RandEvent(BinLogEvent):
@@ -720,8 +722,8 @@ class RandEvent(BinLogEvent):
 
     def _dump(self):
         super()._dump()
-        print(f"seed1: {self.seed1}")
-        print(f"seed2: {self.seed2}")
+        logger.debug(f"seed1: {self.seed1}")
+        logger.debug(f"seed2: {self.seed2}")
 
 
 class UserVarEvent(BinLogEvent):
@@ -827,15 +829,15 @@ class UserVarEvent(BinLogEvent):
 
     def _dump(self) -> None:
         super(UserVarEvent, self)._dump()
-        print(f"User variable name: {self.name}")
-        print(f'Is NULL: {"Yes" if self.is_null else "No"}')
+        logger.debug(f"User variable name: {self.name}")
+        logger.debug(f'Is NULL: {"Yes" if self.is_null else "No"}')
         if not self.is_null:
-            print(
+            logger.debug(
                 f'Type: {self.type_to_codes_and_method.get(self.type, ["UNKNOWN_TYPE"])[0]}'
             )
-            print(f"Charset: {self.charset}")
-            print(f"Value: {self.value}")
-            print(f"Flags: {self.flags}")
+            logger.debug(f"Charset: {self.charset}")
+            logger.debug(f"Value: {self.value}")
+            logger.debug(f"Flags: {self.flags}")
 
 
 class MariadbStartEncryptionEvent(BinLogEvent):
@@ -862,9 +864,9 @@ class MariadbStartEncryptionEvent(BinLogEvent):
         self.nonce = self.packet.read(12)
 
     def _dump(self):
-        print(f"Schema: {self.schema}")
-        print(f"Key version: {self.key_version}")
-        print(f"Nonce: {self.nonce}")
+        logger.debug(f"Schema: {self.schema}")
+        logger.debug(f"Key version: {self.key_version}")
+        logger.debug(f"Nonce: {self.nonce}")
 
 
 class RowsQueryLogEvent(BinLogEvent):
@@ -885,8 +887,8 @@ class RowsQueryLogEvent(BinLogEvent):
         self.query = self.packet.read_available().decode("utf-8")
 
     def dump(self):
-        print(f"=== {self.__class__.__name__} ===")
-        print(f"Query: {self.query}")
+        logger.debug(f"=== {self.__class__.__name__} ===")
+        logger.debug(f"Query: {self.query}")
 
 
 class NotImplementedEvent(BinLogEvent):

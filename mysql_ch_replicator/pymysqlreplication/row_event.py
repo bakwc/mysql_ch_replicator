@@ -2,9 +2,12 @@ import struct
 import decimal
 import datetime
 import zoneinfo
+import logging
 
 from pymysql.charset import charset_by_name
 from enum import Enum
+
+logger = logging.getLogger(__name__)
 
 from .event import BinLogEvent
 from .constants import FIELD_TYPE
@@ -569,10 +572,10 @@ class RowsEvent(BinLogEvent):
 
     def _dump(self):
         super()._dump()
-        print(f"Table: {self.schema}.{self.table}")
-        print(f"Affected columns: {self.number_of_columns}")
-        print(f"Changed rows: {len(self.rows)}")
-        print(
+        logger.debug(f"Table: {self.schema}.{self.table}")
+        logger.debug(f"Affected columns: {self.number_of_columns}")
+        logger.debug(f"Changed rows: {len(self.rows)}")
+        logger.debug(
             f"Column Name Information Flag: {self.table_map[self.table_id].column_name_flag}"
         )
 
@@ -615,17 +618,17 @@ class DeleteRowsEvent(RowsEvent):
 
     def _dump(self):
         super()._dump()
-        print("Values:")
+        logger.debug("Values:")
         for row in self.rows:
-            print("--")
+            logger.debug("--")
             for key in row["values"]:
                 none_source = (
                     row["none_sources"][key] if key in row["none_sources"] else ""
                 )
                 if none_source:
-                    print(f"* {key} : {row['values'][key]} ({none_source})")
+                    logger.debug(f"* {key} : {row['values'][key]} ({none_source})")
                 else:
-                    print(f"* {key} : {row['values'][key]}")
+                    logger.debug(f"* {key} : {row['values'][key]}")
 
 
 class WriteRowsEvent(RowsEvent):
@@ -651,17 +654,17 @@ class WriteRowsEvent(RowsEvent):
 
     def _dump(self):
         super()._dump()
-        print("Values:")
+        logger.debug("Values:")
         for row in self.rows:
-            print("--")
+            logger.debug("--")
             for key in row["values"]:
                 none_source = (
                     row["none_sources"][key] if key in row["none_sources"] else ""
                 )
                 if none_source:
-                    print(f"* {key} : {row['values'][key]} ({none_source})")
+                    logger.debug(f"* {key} : {row['values'][key]} ({none_source})")
                 else:
-                    print(f"* {key} : {row['values'][key]}")
+                    logger.debug(f"* {key} : {row['values'][key]}")
 
 
 class UpdateRowsEvent(RowsEvent):
@@ -698,9 +701,9 @@ class UpdateRowsEvent(RowsEvent):
 
     def _dump(self):
         super()._dump()
-        print("Values:")
+        logger.debug("Values:")
         for row in self.rows:
-            print("--")
+            logger.debug("--")
             for key in row["before_values"]:
                 if key in row["before_none_sources"]:
                     before_value_info = (
@@ -718,7 +721,7 @@ class UpdateRowsEvent(RowsEvent):
                 else:
                     after_value_info = row["after_values"][key]
 
-                print(f"*{key}:{before_value_info}=>{after_value_info}")
+                logger.debug(f"*{key}:{before_value_info}=>{after_value_info}")
 
 
 class OptionalMetaData:
@@ -741,20 +744,20 @@ class OptionalMetaData:
         self.visibility_list = []
 
     def dump(self):
-        print(f"=== {self.__class__.__name__} ===")
-        print(f"unsigned_column_list: {self.unsigned_column_list}")
-        print(f"default_charset_collation: {self.default_charset_collation}")
-        print(f"charset_collation: {self.charset_collation}")
-        print(f"column_charset: {self.column_charset}")
-        print(f"column_name_list: {self.column_name_list}")
-        print(f"set_str_value_list : {self.set_str_value_list}")
-        print(f"set_enum_str_value_list : {self.set_enum_str_value_list}")
-        print(f"geometry_type_list : {self.geometry_type_list}")
-        print(f"simple_primary_key_list: {self.simple_primary_key_list}")
-        print(f"primary_keys_with_prefix: {self.primary_keys_with_prefix}")
-        print(f"visibility_list: {self.visibility_list}")
-        print(f"charset_collation_list: {self.charset_collation_list}")
-        print(f"enum_and_set_collation_list: {self.enum_and_set_collation_list}")
+        logger.debug(f"=== {self.__class__.__name__} ===")
+        logger.debug(f"unsigned_column_list: {self.unsigned_column_list}")
+        logger.debug(f"default_charset_collation: {self.default_charset_collation}")
+        logger.debug(f"charset_collation: {self.charset_collation}")
+        logger.debug(f"column_charset: {self.column_charset}")
+        logger.debug(f"column_name_list: {self.column_name_list}")
+        logger.debug(f"set_str_value_list : {self.set_str_value_list}")
+        logger.debug(f"set_enum_str_value_list : {self.set_enum_str_value_list}")
+        logger.debug(f"geometry_type_list : {self.geometry_type_list}")
+        logger.debug(f"simple_primary_key_list: {self.simple_primary_key_list}")
+        logger.debug(f"primary_keys_with_prefix: {self.primary_keys_with_prefix}")
+        logger.debug(f"visibility_list: {self.visibility_list}")
+        logger.debug(f"charset_collation_list: {self.charset_collation_list}")
+        logger.debug(f"enum_and_set_collation_list: {self.enum_and_set_collation_list}")
 
 
 class TableMapEvent(BinLogEvent):
@@ -830,10 +833,10 @@ class TableMapEvent(BinLogEvent):
 
     def _dump(self):
         super()._dump()
-        print(f"Table id: {self.table_id}")
-        print(f"Schema: {self.schema}")
-        print(f"Table: {self.table}")
-        print(f"Columns: {self.column_count}")
+        logger.debug(f"Table id: {self.table_id}")
+        logger.debug(f"Schema: {self.schema}")
+        logger.debug(f"Table: {self.table}")
+        logger.debug(f"Columns: {self.column_count}")
         if self.__optional_meta_data:
             self.optional_metadata.dump()
 

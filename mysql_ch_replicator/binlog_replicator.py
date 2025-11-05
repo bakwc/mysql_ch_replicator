@@ -621,7 +621,6 @@ class BinlogReplicator:
 
                 self.update_state_if_required(last_transaction_id)
                 self.clear_old_binlog_if_required()
-                # print("last read count", last_read_count)
                 if last_read_count < 50:
                     time.sleep(BinlogReplicator.READ_LOG_INTERVAL)
 
@@ -655,4 +654,3 @@ class BinlogReplicator:
         self.state.last_seen_transaction = transaction_id
         self.state.save()
         self.last_state_update = curr_time
-        # print('saved state', transaction_id, self.state.prev_last_seen_transaction)

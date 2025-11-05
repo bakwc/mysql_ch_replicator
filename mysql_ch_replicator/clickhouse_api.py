@@ -336,11 +336,11 @@ class ClickhouseApi:
                 # Table name already includes database
                 query = f'SELECT * FROM `{table_name}`'
             else:
-                # Qualify table name with database if database is set
+                # 🐛 FIX Bug #2C: Always require database qualification to avoid UNKNOWN_TABLE errors
                 if self.database:
                     query = f'SELECT * FROM `{self.database}`.`{table_name}`'
                 else:
-                    query = f'SELECT * FROM `{table_name}`'
+                    raise ValueError(f"Database not set, cannot query table '{table_name}' without database context")
                 
             if where:
                 query += f' WHERE {where}'
@@ -367,7 +367,8 @@ class ClickhouseApi:
         return self.client.query(query)
 
     def show_create_table(self, table_name):
-        return self.client.query(f'SHOW CREATE TABLE `{table_name}`').result_rows[0][0]
+        # 🐛 FIX Bug #2A: Always qualify table name with database to avoid UNKNOWN_TABLE errors
+        return self.client.query(f'SHOW CREATE TABLE `{self.database}`.`{table_name}`').result_rows[0][0]
 
     def get_system_setting(self, name):
         results = self.select('system.settings', f"name = '{name}'")

@@ -3,7 +3,6 @@ import shlex
 import signal
 import subprocess
 import sys
-import tempfile
 import threading
 import time
 from logging import getLogger
@@ -38,18 +37,14 @@ class ProcessRunner:
     def __init__(self, cmd):
         self.cmd = cmd
         self.process = None
-        self.log_file = None
         self.log_forwarding_thread = None
         self.should_stop_forwarding = False
     
     def _forward_logs(self):
         """Forward subprocess logs to the main process logger in real-time."""
-        if not self.log_file or not hasattr(self.log_file, 'name'):
+        if not self.process or not self.process.stdout:
             return
-            
-        log_path = self.log_file.name
-        last_position = 0
-        
+
         # Extract process name from command for logging prefix
         cmd_parts = self.cmd.split()
         process_name = "subprocess"
@@ -66,41 +61,27 @@ class ProcessRunner:
                     process_name = "dbrepl"
             elif "db_optimizer" in self.cmd:
                 process_name = "dbopt"
-        
-        while not self.should_stop_forwarding:
-            try:
-                if os.path.exists(log_path):
-                    with open(log_path, 'r') as f:
-                        f.seek(last_position)
-                        new_content = f.read()
-                        if new_content:
-                            # Forward each line to main logger with subprocess prefix
-                            lines = new_content.strip().split('\n')
-                            for line in lines:
-                                if line.strip():
-                                    # Remove timestamp and level from subprocess log to avoid duplication
-                                    # Format: [tag timestamp level] message -> message
-                                    clean_line = line
-                                    if '] ' in line:
-                                        bracket_end = line.find('] ')
-                                        if bracket_end != -1:
-                                            clean_line = line[bracket_end + 2:]
-                                    
-                                    # Only forward important log messages to avoid spam
-                                    # Forward stats, errors, warnings, and key info messages
-                                    if any(keyword in clean_line.lower() for keyword in 
-                                          ['stats:', 'ch_stats:', 'error', 'warning', 'failed', 'last transaction', 
-                                           'processed events', 'connection', 'replication', 'events_count',
-                                           'insert_events_count', 'erase_events_count']):
-                                        logger.info(f"[{process_name}] {clean_line}")
-                        
-                        last_position = f.tell()
-                
-                time.sleep(2)  # Check for new logs every 2 seconds to reduce overhead
-                
-            except Exception as e:
+
+        # Read from process stdout line by line
+        try:
+            for line in iter(self.process.stdout.readline, ''):
+                if self.should_stop_forwarding:
+                    break
+
+                if line.strip():
+                    # Remove timestamp and level from subprocess log to avoid duplication
+                    # Format: [tag timestamp level] message -> message
+                    clean_line = line.strip()
+                    if '] ' in clean_line:
+                        bracket_end = clean_line.find('] ')
+                        if bracket_end != -1:
+                            clean_line = clean_line[bracket_end + 2:]
+
+                    # Forward ALL logs (no filtering)
+                    logger.info(f"[{process_name}] {clean_line}")
+        except Exception as e:
+            if not self.should_stop_forwarding:
                 logger.debug(f"Error forwarding logs for {process_name}: {e}")
-                time.sleep(2)
 
     def run(self):
         """
@@ -122,11 +103,6 @@ class ProcessRunner:
             cmd = self.cmd.split()  # Fallback to simple split
 
         try:
-            # Create temporary log file to prevent subprocess deadlock
-            self.log_file = tempfile.NamedTemporaryFile(
-                mode="w+", delete=False, prefix="replicator_", suffix=".log"
-            )
-
             # Prepare environment for subprocess
             subprocess_env = os.environ.copy()
 
@@ -197,18 +173,18 @@ class ProcessRunner:
                         f"ProcessRunner environment for {self.cmd}: {test_related_vars}"
                     )
 
-            # Prevent subprocess deadlock by redirecting to files instead of PIPE
+            # Use PIPE for subprocess output and forward logs to prevent deadlock
             # and use start_new_session for better process isolation
             self.process = subprocess.Popen(
                 cmd,
                 env=subprocess_env,  # CRITICAL: Explicit environment passing
-                stdout=self.log_file,
+                stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,  # Combine stderr with stdout
                 universal_newlines=True,
+                bufsize=1,  # Line buffered for real-time output
                 start_new_session=True,  # Process isolation - prevents signal propagation
                 cwd=os.getcwd(),  # Explicit working directory
             )
-            self.log_file.flush()
             logger.debug(f"Started process {self.process.pid}: {self.cmd}")
             
             # Start log forwarding thread
@@ -221,32 +197,12 @@ class ProcessRunner:
             self.log_forwarding_thread.start()
             
         except Exception as e:
-            if self.log_file:
-                self.log_file.close()
-                try:
-                    os.unlink(self.log_file.name)
-                except:
-                    pass
-                self.log_file = None
             logger.error(f"Failed to start process '{self.cmd}': {e}")
             raise
 
     def _read_log_output(self):
         """Read current log output for debugging"""
-        if not self.log_file or not hasattr(self.log_file, "name"):
-            return "No log file available"
-
-        try:
-            # Close and reopen to read current contents
-            log_path = self.log_file.name
-            if os.path.exists(log_path):
-                with open(log_path, "r") as f:
-                    content = f.read().strip()
-                    return content if content else "No output captured"
-            else:
-                return "Log file does not exist"
-        except Exception as e:
-            return f"Error reading log: {e}"
+        return "Logs are being forwarded in real-time to main logger via stdout"
 
     def restart_dead_process_if_required(self):
         if self.process is None:
@@ -267,26 +223,7 @@ class ProcessRunner:
             except Exception as e:
                 logger.debug(f"Error joining log forwarding thread during restart: {e}")
 
-        # Read log file for debugging instead of using communicate() to avoid deadlock
-        log_content = ""
-        if self.log_file:
-            try:
-                self.log_file.close()
-                with open(self.log_file.name, "r") as f:
-                    log_content = f.read().strip()
-                # Clean up old log file
-                os.unlink(self.log_file.name)
-            except Exception as e:
-                logger.debug(f"Could not read process log: {e}")
-            finally:
-                self.log_file = None
-
         logger.warning(f"Process dead (exit code: {res}), restarting: < {self.cmd} >")
-        if log_content:
-            # Show last few lines of log for debugging
-            lines = log_content.split("\n")
-            last_lines = lines[-5:] if len(lines) > 5 else lines
-            logger.error(f"Process last output: {' | '.join(last_lines)}")
 
         self.run()
 
@@ -318,16 +255,6 @@ class ProcessRunner:
             finally:
                 self.process = None
 
-        # Clean up log file
-        if self.log_file:
-            try:
-                self.log_file.close()
-                os.unlink(self.log_file.name)
-            except Exception as e:
-                logger.debug(f"Could not clean up log file: {e}")
-            finally:
-                self.log_file = None
-
     def wait_complete(self):
         if self.process is not None:
             self.process.wait()
@@ -340,16 +267,6 @@ class ProcessRunner:
                 self.log_forwarding_thread.join(timeout=2.0)
             except Exception as e:
                 logger.debug(f"Error joining log forwarding thread: {e}")
-
-        # Clean up log file
-        if self.log_file:
-            try:
-                self.log_file.close()
-                os.unlink(self.log_file.name)
-            except Exception as e:
-                logger.debug(f"Could not clean up log file: {e}")
-            finally:
-                self.log_file = None
 
     def __del__(self):
         self.stop()

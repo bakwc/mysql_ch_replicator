@@ -147,6 +147,23 @@ class MySQLApi:
                     cursor.execute(query)
                 res = cursor.fetchall()
                 records = [x for x in res]
+
+                # 🔍 PHASE 1: Enhanced result logging
+                logger.info(f"📊 QUERY RESULT: table='{table_name}', worker={worker_id}, records_count={len(records)}")
+
+                # Log first and last PK values if records were returned
+                if records and order_by:
+                    # Get column indices for order_by columns
+                    # Assume records are tuples/lists with columns in table order
+                    # We need to get the column names from cursor.description
+                    col_names = [desc[0] for desc in cursor.description]
+                    pk_indices = [col_names.index(col) for col in order_by if col in col_names]
+
+                    if pk_indices:
+                        first_record_pk = [records[0][idx] for idx in pk_indices]
+                        last_record_pk = [records[-1][idx] for idx in pk_indices]
+                        logger.info(f"📊 PK RANGE: table='{table_name}', worker={worker_id}, first_pk={first_record_pk}, last_pk={last_record_pk}")
+
                 return records
             except Exception as e:
                 logger.error(f"Query execution failed: {query}")

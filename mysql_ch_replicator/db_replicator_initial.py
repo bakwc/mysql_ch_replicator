@@ -5,6 +5,7 @@ import time
 import sys
 import subprocess
 import pickle
+import threading
 from logging import getLogger
 from enum import Enum
 
@@ -248,20 +249,33 @@ class DbReplicatorInitial:
                 break
             self.replicator.clickhouse_api.insert(table_name, records, table_structure=clickhouse_table_structure)
 
-            # 🔍 PHASE 2.1: Track primary key progression
+            # 🔍 PHASE 2: Track primary key progression - FIX for worker partitioning
             old_max_primary_key = max_primary_key
+            all_record_pks = []  # Collect all PKs for diagnostic logging
+
+            # 🐛 FIX: Track LAST record's PK (not MAX across all records)
+            # Why: Worker partitioning (CRC32 hash) breaks ordering assumptions
+            # - Query has ORDER BY pk, so results ARE ordered by PK
+            # - But hash filter skips records, creating "gaps" in PK sequence
+            # - Using max() across all records can return a PK from middle of batch
+            # - This causes pagination to get stuck when next query returns records from gaps
+            # Solution: Always use the LAST record's PK (highest in this ordered batch)
             for record in records:
                 record_primary_key = [record[key_idx] for key_idx in primary_key_ids]
-                if max_primary_key is None:
-                    max_primary_key = record_primary_key
-                else:
-                    max_primary_key = max(max_primary_key, record_primary_key)
+                all_record_pks.append(record_primary_key)
+                # Always set max_primary_key to current record (last one wins)
+                max_primary_key = record_primary_key
 
             # 🔍 PHASE 2.1: Log primary key advancement
             if old_max_primary_key != max_primary_key:
                 logger.info(f"⬆️  PK ADVANCE: table='{table_name}', worker={self.replicator.worker_id}, old_pk={old_max_primary_key} → new_pk={max_primary_key}")
             else:
-                logger.warning(f"⚠️  PK STUCK: table='{table_name}', worker={self.replicator.worker_id}, iteration={iteration_count}, pk={max_primary_key} (NOT ADVANCING!)")
+                # 🚨 PHASE 1: Enhanced PK STUCK diagnostic logging
+                logger.warning(f"⚠️  PK STUCK: table='{table_name}', worker={self.replicator.worker_id}/{self.replicator.total_workers}, iteration={iteration_count}, pk={max_primary_key} (NOT ADVANCING!)")
+                logger.warning(f"⚠️  PK STUCK DETAILS: records_fetched={len(records)}, start_value={query_start_values}")
+                logger.warning(f"⚠️  PK STUCK ALL PKs: {all_record_pks[:10]}{'...' if len(all_record_pks) > 10 else ''}")  # Show first 10 PKs
+                logger.warning(f"⚠️  PK STUCK DIAGNOSIS: This indicates infinite loop - same records returned repeatedly")
+                logger.warning(f"⚠️  PK STUCK CAUSE: Likely worker partitioning (CRC32 hash) breaks pagination ordering with max() tracking")
 
             self.replicator.state.initial_replication_max_primary_key = max_primary_key
             self.save_state_if_required()
@@ -403,6 +417,30 @@ class DbReplicatorInitial:
                 
         return True
 
+    def _forward_worker_logs(self, process, worker_id, table_name):
+        """
+        Read logs from a worker process stdout and forward them to the parent logger.
+        This runs in a separate thread to enable real-time log visibility.
+
+        Args:
+            process: subprocess.Popen instance
+            worker_id: Worker identifier for log prefixing
+            table_name: Table being replicated (for log context)
+        """
+        try:
+            for line in iter(process.stdout.readline, ''):
+                if line:
+                    # Strip newline and forward to parent logger
+                    # Prefix with worker ID for clarity
+                    clean_line = line.rstrip('\n\r')
+                    logger.info(f"[worker-{worker_id}] {clean_line}")
+        except Exception as e:
+            logger.error(f"Error forwarding logs from worker {worker_id}: {e}")
+        finally:
+            # Ensure stdout is closed when done
+            if process.stdout:
+                process.stdout.close()
+
     def perform_initial_replication_table_parallel(self, table_name):
         """
         Execute initial replication for a table using multiple parallel worker processes.
@@ -412,18 +450,9 @@ class DbReplicatorInitial:
 
         # Create and launch worker processes
         processes = []
-        log_file_paths = []  # Store paths instead of handles
+        log_threads = []
         start_time = time.time()
         timeout_seconds = 3600  # 1 hour timeout per table
-
-        # Create persistent log directory
-        import os
-        log_dir = os.path.join(
-            self.replicator.config.binlog_replicator.data_dir,
-            self.replicator.database,
-            "worker_logs"
-        )
-        os.makedirs(log_dir, exist_ok=True)
 
         for worker_id in range(self.replicator.config.initial_replication_threads):
             # Prepare command to launch a worker process
@@ -439,29 +468,30 @@ class DbReplicatorInitial:
                 "--initial_only=True",
             ]
 
-            # Create persistent log file in worker_logs directory
-            log_filename = os.path.join(
-                log_dir,
-                f"worker_{worker_id}_{table_name}_{int(time.time())}.log"
-            )
-            log_file_paths.append(log_filename)
-
             # 🔨 PHASE 1.3: Worker spawn logging
-            logger.info(f"🔨 WORKER SPAWN: table='{table_name}', worker_id={worker_id}/{self.replicator.config.initial_replication_threads}, log={log_filename}")
+            logger.info(f"🔨 WORKER SPAWN: table='{table_name}', worker_id={worker_id}/{self.replicator.config.initial_replication_threads}")
             logger.debug(f"Worker {worker_id} cmd: {' '.join(cmd)}")
 
-            # Open log file for subprocess - parent closes handle immediately
-            with open(log_filename, 'w') as log_file:
-                process = subprocess.Popen(
-                    cmd,
-                    stdout=log_file,
-                    stderr=subprocess.STDOUT,
-                    universal_newlines=True,
-                    bufsize=1,  # Line-buffered for faster writes
-                    start_new_session=True
-                )
-            # File handle closed here - only child holds it
+            # Use PIPE for subprocess output - logs will be forwarded to parent logger
+            process = subprocess.Popen(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                universal_newlines=True,
+                bufsize=1,  # Line-buffered for faster writes
+                start_new_session=True
+            )
             processes.append(process)
+
+            # Start a thread to forward logs from this worker to parent logger
+            log_thread = threading.Thread(
+                target=self._forward_worker_logs,
+                args=(process, worker_id, table_name),
+                daemon=True,
+                name=f"log-forwarder-worker-{worker_id}"
+            )
+            log_thread.start()
+            log_threads.append(log_thread)
         
         # Wait for all worker processes to complete
         logger.info(f"Waiting for {len(processes)} workers to complete replication of {table_name}")
@@ -485,26 +515,11 @@ class DbReplicatorInitial:
                             # ✅ PHASE 1.3: Worker completion logging
                             logger.info(f"✅ WORKER DONE: table='{table_name}', worker_id={i}, exit_code=0, elapsed={elapsed}s")
                         else:
-                            # Give subprocess time to flush final output
-                            time.sleep(0.5)
-
                             # ❌ PHASE 1.3: Worker failure logging
-                            logger.error(f"❌ WORKER FAILED: table='{table_name}', worker_id={i}, exit_code={exit_code}, elapsed={elapsed}s, log={log_file_paths[i]}")
+                            logger.error(f"❌ WORKER FAILED: table='{table_name}', worker_id={i}, exit_code={exit_code}, elapsed={elapsed}s")
 
-                            # Read log file from path (not file handle) for debugging
-                            if i < len(log_file_paths):
-                                try:
-                                    # Open fresh file handle to get latest content
-                                    with open(log_file_paths[i], 'r') as f:
-                                        log_content = f.read()
-                                    if log_content:
-                                        lines = log_content.strip().split('\n')
-                                        last_lines = lines[-20:] if len(lines) > 20 else lines  # Show more context
-                                        logger.error(f"Worker {i} last output:\n" + "\n".join(last_lines))
-                                    else:
-                                        logger.error(f"Worker {i} log file is empty: {log_file_paths[i]}")
-                                except Exception as e:
-                                    logger.error(f"Could not read worker {i} log from {log_file_paths[i]}: {e}")
+                            # Worker logs should have been forwarded to stderr/main logger in real-time
+                            logger.error(f"Worker {i} failed - check logs above for error details")
 
                             raise Exception(f"Worker process {i} for table {table_name} failed with exit code {exit_code}")
 
@@ -522,37 +537,23 @@ class DbReplicatorInitial:
             for process in processes:
                 process.terminate()
             raise
-        finally:
-            # Only clean up log files for SUCCESSFUL runs
-            # Check if all completed processes exited successfully
-            all_success = all(
-                p.returncode == 0
-                for p in processes
-                if p.poll() is not None
-            )
-
-            if all_success and not processes:  # All completed and all successful
-                for log_file_path in log_file_paths:
-                    try:
-                        import os
-                        os.unlink(log_file_path)
-                        logger.debug(f"Cleaned up log file {log_file_path}")
-                    except Exception as e:
-                        logger.debug(f"Could not clean up log file {log_file_path}: {e}")
-            else:
-                # Preserve logs for debugging
-                logger.info(f"Preserving worker logs for debugging in: {log_dir}")
-                for log_file_path in log_file_paths:
-                    logger.info(f"  - {log_file_path}")
         
         # 🎉 PHASE 1.3: All workers complete logging
         elapsed_time = int(time.time() - start_time)
         logger.info(f"🎉 ALL WORKERS COMPLETE: table='{table_name}', total_elapsed={elapsed_time}s")
 
+        # Wait for all log forwarding threads to finish
+        logger.debug(f"Waiting for {len(log_threads)} log forwarding threads to complete")
+        for thread in log_threads:
+            thread.join(timeout=5.0)  # Give threads 5 seconds to finish forwarding remaining logs
+        logger.debug("All log forwarding threads completed")
+
+        # 🐛 FIX Bug #2B: Use client.query() for SELECT, not execute_command() (which returns None)
         # Verify row count in ClickHouse
-        total_rows = self.replicator.clickhouse_api.execute_command(
-            f"SELECT count() FROM `{table_name}`"
-        )[0][0]
+        result = self.replicator.clickhouse_api.client.query(
+            f"SELECT count() FROM `{self.replicator.clickhouse_api.database}`.`{table_name}`"
+        )
+        total_rows = result.result_rows[0][0]
         logger.info(f"Table {table_name}: {total_rows:,} total rows replicated to ClickHouse")
 
         # Consolidate record versions from all worker states

@@ -24,8 +24,11 @@ Key Features:
 import fnmatch
 import zoneinfo
 from dataclasses import dataclass
+from logging import getLogger
 
 import yaml
+
+logger = getLogger(__name__)
 
 
 def stype(obj):
@@ -339,8 +342,8 @@ class Settings:
             
             # Ensure all parent directories exist recursively
             os.makedirs(full_data_dir, exist_ok=True)
-            print(f"DEBUG: Created all directories for path: {full_data_dir}")
-            
+            logger.debug(f"Created all directories for path: {full_data_dir}")
+
             # Test if we can actually create files in the directory
             test_file = os.path.join(self.binlog_replicator.data_dir, ".test_write")
             try:
@@ -348,9 +351,9 @@ class Settings:
                     f.write("test")
                 os.remove(test_file)
                 # Directory works, we're good
-                print(f"DEBUG: Binlog directory writability confirmed: {self.binlog_replicator.data_dir}")
+                logger.debug(f"Binlog directory writability confirmed: {self.binlog_replicator.data_dir}")
             except (OSError, IOError) as e:
-                print(f"DEBUG: Directory exists but not writable, recreating: {e}")
+                logger.warning(f"Directory exists but not writable, recreating: {e}")
                 # Directory exists but is not writable, recreate it
                 shutil.rmtree(self.binlog_replicator.data_dir, ignore_errors=True)
                 os.makedirs(self.binlog_replicator.data_dir, exist_ok=True)
@@ -359,18 +362,18 @@ class Settings:
                     with open(test_file, "w") as f:
                         f.write("test")
                     os.remove(test_file)
-                    print(f"DEBUG: Binlog directory successfully recreated and writable: {self.binlog_replicator.data_dir}")
+                    logger.info(f"Binlog directory successfully recreated and writable: {self.binlog_replicator.data_dir}")
                 except (OSError, IOError) as e2:
-                    print(f"WARNING: Binlog directory still not writable after recreation: {e2}")
-                
+                    logger.error(f"Binlog directory still not writable after recreation: {e2}")
+
         except Exception as e:
-            print(f"WARNING: Could not ensure binlog directory is writable: {e}")
+            logger.error(f"Could not ensure binlog directory is writable: {e}")
             # Fallback - try creating anyway
             try:
                 os.makedirs(self.binlog_replicator.data_dir, exist_ok=True)
-                print(f"DEBUG: Fallback directory creation successful: {self.binlog_replicator.data_dir}")
+                logger.info(f"Fallback directory creation successful: {self.binlog_replicator.data_dir}")
             except Exception as e2:
-                print(f"CRITICAL: Final binlog directory creation failed: {e2}")
+                logger.critical(f"Final binlog directory creation failed: {e2}")
         
         if data:
             raise Exception(f"Unsupported config options: {list(data.keys())}")
