@@ -784,7 +784,16 @@ class BinLogStreamReader(object):
                 items = ", ".join(string_list)
                 comment = f"{parameter}: [{items}]"
             else:
-                comment = f"{parameter}: {value}"
+                # Obfuscate password in connection_settings
+                if parameter == "connection_settings" and isinstance(value, dict):
+                    sanitized_value = value.copy()
+                    if "passwd" in sanitized_value:
+                        sanitized_value["passwd"] = "***"
+                    if "password" in sanitized_value:
+                        sanitized_value["password"] = "***"
+                    comment = f"{parameter}: {sanitized_value}"
+                else:
+                    comment = f"{parameter}: {value}"
             logging.info(comment)
 
     def __iter__(self):

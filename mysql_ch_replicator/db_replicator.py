@@ -208,18 +208,37 @@ class DbReplicator:
                 if self.target_database not in self.clickhouse_api.get_databases() and f"{self.target_database}_tmp" not in self.clickhouse_api.get_databases():
                     logger.warning(f'database {self.target_database} missing in CH')
                     logger.warning('will run replication from scratch')
+                    # 🔄 PHASE 1.2: Status transition logging
+                    old_status = self.state.status
                     self.state.remove()
                     self.state = self.create_state()
+                    logger.info(f"🔄 STATUS CHANGE: {old_status} → {Status.NONE}, reason='database_missing_resetting_state'")
 
             if self.state.status == Status.RUNNING_REALTIME_REPLICATION:
                 self.run_realtime_replication()
                 return
             if self.state.status == Status.PERFORMING_INITIAL_REPLICATION:
+                logger.info(f'🔍 DEBUG: Starting initial replication (initial_only={self.initial_only})')
+                logger.info(f'🔍 DEBUG: Current state status: {self.state.status}')
+                logger.info(f'🔍 DEBUG: Process PID: {os.getpid()}')
+
                 self.initial_replicator.perform_initial_replication()
+
+                logger.info(f'🔍 DEBUG: Initial replication completed')
+                logger.info(f'🔍 DEBUG: State status before update: {self.state.status}')
+
                 if not self.initial_only:
+                    logger.info(f'🔍 DEBUG: initial_only=False, transitioning to realtime replication')
                     self.run_realtime_replication()
                 else:
+                    logger.info(f'🔍 DEBUG: initial_only=True, will exit after state update')
                     logger.info('initial_only mode enabled - exiting after initial replication')
+                    # FIX #1: Update status to indicate completion
+                    self.state.status = Status.RUNNING_REALTIME_REPLICATION
+                    self.state.save()
+                    logger.info('State updated: Initial replication completed successfully')
+                    logger.info(f'🔍 DEBUG: State status after update: {self.state.status}')
+                    logger.info(f'🔍 DEBUG: Process {os.getpid()} exiting normally')
                 return
 
             # If ignore_deletes is enabled, we don't create a temporary DB and don't swap DBs
@@ -251,8 +270,33 @@ class DbReplicator:
                 self.run_realtime_replication()
             else:
                 logger.info('initial_only mode enabled - exiting after initial replication')
-        except Exception:
-            logger.error(f'unhandled exception', exc_info=True)
+        except Exception as exc:
+            # Build rich error context for debugging
+            error_context = {
+                'database': self.database,
+                'table': getattr(self, 'table', None),
+                'worker_id': self.worker_id,
+                'total_workers': self.total_workers,
+                'target_database': self.target_database,
+                'is_worker': self.is_parallel_worker,
+                'initial_only': self.initial_only,
+            }
+            logger.error(f'Worker {self.worker_id} unhandled exception: {error_context}', exc_info=True)
+
+            # Ensure exception info gets to stderr for parent process
+            # This guarantees output even if logging fails
+            import sys
+            import traceback
+            sys.stderr.write(f"\n{'='*60}\n")
+            sys.stderr.write(f"WORKER FAILURE CONTEXT:\n")
+            for key, value in error_context.items():
+                sys.stderr.write(f"  {key}: {value}\n")
+            sys.stderr.write(f"{'='*60}\n")
+            sys.stderr.write(f"Exception: {type(exc).__name__}: {exc}\n")
+            sys.stderr.write(f"{'='*60}\n")
+            traceback.print_exc(file=sys.stderr)
+            sys.stderr.flush()
+
             raise
 
     def run_realtime_replication(self):

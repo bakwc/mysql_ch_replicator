@@ -54,7 +54,10 @@ class DbReplicatorRealtime:
         logger.info(
             f"running realtime replication from the position: {self.replicator.state.last_processed_transaction}"
         )
+        # 🔄 PHASE 1.2: Status transition logging
+        old_status = self.replicator.state.status
         self.replicator.state.status = Status.RUNNING_REALTIME_REPLICATION
+        logger.info(f"🔄 STATUS CHANGE: {old_status} → {Status.RUNNING_REALTIME_REPLICATION}, reason='perform_realtime_replication'")
         self.replicator.state.save()
         self.replicator.data_reader.set_position(
             self.replicator.state.last_processed_transaction

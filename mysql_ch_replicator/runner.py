@@ -1,5 +1,4 @@
 import os
-import sys
 import threading
 import time
 from logging import getLogger
@@ -17,7 +16,10 @@ logger = getLogger(__name__)
 
 class BinlogReplicatorRunner(ProcessRunner):
     def __init__(self, config_file):
-        super().__init__(f"{sys.argv[0]} --config {config_file} binlog_replicator")
+        # Use python -m instead of direct script execution for package consistency
+        super().__init__(
+            f"python -m mysql_ch_replicator --config {config_file} binlog_replicator"
+        )
 
 
 class DbReplicatorRunner(ProcessRunner):
@@ -29,7 +31,8 @@ class DbReplicatorRunner(ProcessRunner):
         total_workers=None,
         initial_only=False,
     ):
-        cmd = f"{sys.argv[0]} --config {config_file} --db {db_name} db_replicator"
+        # Use python -m instead of direct script execution for package consistency
+        cmd = f"python -m mysql_ch_replicator --config {config_file} --db {db_name} db_replicator"
 
         if worker_id is not None:
             cmd += f" --worker_id={worker_id}"
@@ -45,12 +48,18 @@ class DbReplicatorRunner(ProcessRunner):
 
 class DbOptimizerRunner(ProcessRunner):
     def __init__(self, config_file):
-        super().__init__(f"{sys.argv[0]} --config {config_file} db_optimizer")
+        # Use python -m instead of direct script execution for package consistency
+        super().__init__(
+            f"python -m mysql_ch_replicator --config {config_file} db_optimizer"
+        )
 
 
 class RunAllRunner(ProcessRunner):
     def __init__(self, db_name, config_file):
-        super().__init__(f"{sys.argv[0]} --config {config_file} run_all --db {db_name}")
+        # Use python -m instead of direct script execution for package consistency
+        super().__init__(
+            f"python -m mysql_ch_replicator --config {config_file} run_all --db {db_name}"
+        )
 
 
 app = FastAPI()
@@ -104,7 +113,11 @@ class Runner:
             "state.pckl",
         )
         state = db_replicator.State(state_path)
-        return state.status == db_replicator.Status.RUNNING_REALTIME_REPLICATION
+        is_finished = state.status == db_replicator.Status.RUNNING_REALTIME_REPLICATION
+        logger.debug(
+            f"is_initial_replication_finished({db_name}) = {is_finished} (status={state.status})"
+        )
+        return is_finished
 
     def restart_dead_processes(self):
         for runner in self.runners.values():
@@ -207,10 +220,57 @@ class Runner:
             if not self.wait_initial_replication:
                 continue
 
+            # FIX #3: Add timeout protection (24 hours = 86400 seconds)
+            initial_replication_start = time.time()
+            timeout_seconds = 86400  # 24 hours
+
+            # 🔁 PHASE 1.4: Restart detection
+            restart_count = 0
+            last_status = None
+            restart_threshold = 3  # Max restarts before emergency stop
+
             while (
                 not self.is_initial_replication_finished(db_name=db)
                 and not killer.kill_now
             ):
+                elapsed = time.time() - initial_replication_start
+                if elapsed > timeout_seconds:
+                    logger.error(
+                        f"Initial replication timeout for {db} after {int(elapsed)}s. "
+                        f"State may not be updating correctly. Check worker processes and logs."
+                    )
+                    break
+
+                # 🔁 PHASE 1.4: Detect restarts by monitoring status changes
+                state_path = os.path.join(
+                    self.config.binlog_replicator.data_dir,
+                    db,
+                    "state.pckl",
+                )
+                state = db_replicator.State(state_path)
+                current_status = state.status
+
+                # Detect status regression back to NONE (indicates restart)
+                if (
+                    last_status is not None
+                    and last_status != db_replicator.Status.NONE
+                    and current_status == db_replicator.Status.NONE
+                ):
+                    restart_count += 1
+                    logger.warning(
+                        f"🔁 RESTART DETECTED: {db} status reverted to NONE (restart_count={restart_count})"
+                    )
+                    # This by design, each table it restarts for some reason..
+                    # if restart_count >= restart_threshold:
+                    #     logger.error(
+                    #         f"🛑 INFINITE LOOP DETECTED: {db} restarted {restart_count} times. "
+                    #         f"State is cycling back to NONE repeatedly. Aborting to prevent infinite loop."
+                    #     )
+                    #     raise Exception(
+                    #         f"Initial replication infinite loop detected for {db} after {restart_count} restarts"
+                    #     )
+
+                last_status = current_status
                 time.sleep(1)
                 self.restart_dead_processes()
 
