@@ -14,8 +14,18 @@ from .runner import Runner
 
 
 def set_logging_config(tags, log_level_str=None):
-    """Configure logging to output only to stderr (stdout for containerized environments)."""
-    handlers = [logging.StreamHandler(sys.stderr)]
+    """Configure logging to output to stdout for real-time subprocess visibility.
+
+    Why stdout instead of stderr:
+    - ProcessRunner captures subprocess stdout with subprocess.PIPE
+    - stderr is fully buffered, preventing real-time log forwarding
+    - stdout is line-buffered, enabling immediate visibility in parent process
+    - This fixes the worker log forwarding issue where logs were buffered and never visible
+    """
+    # Use stdout with explicit flushing for real-time subprocess log visibility
+    handler = logging.StreamHandler(sys.stdout)
+    handler.flush = lambda: sys.stdout.flush()  # Force immediate flush after each log
+    handlers = [handler]
 
     log_levels = {
         'critical': logging.CRITICAL,

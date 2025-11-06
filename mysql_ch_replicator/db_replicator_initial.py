@@ -101,8 +101,7 @@ class DbReplicatorInitial:
         logger.info(f"🔄 STATUS CHANGE: {old_status} → {Status.PERFORMING_INITIAL_REPLICATION}, reason='perform_initial_replication'")
         self.replicator.state.save()
         start_table = self.replicator.state.initial_replication_table
-        failed_tables = []
-        
+
         # 🚀 PHASE 1.1: Main loop progress tracking
         total_tables = len(self.replicator.state.tables)
         logger.info(f"🚀 INIT REPL START: total_tables={total_tables}, start_table={start_table}, single_table={self.replicator.single_table}")
@@ -117,18 +116,11 @@ class DbReplicatorInitial:
             # 📋 Log table processing start
             table_idx += 1
             logger.info(f"📋 TABLE {table_idx}/{total_tables}: Processing table='{table}'")
-            
-            try:
-                self.perform_initial_replication_table(table)
-                # ✅ Log successful completion
-                logger.info(f"✅ TABLE COMPLETE: table='{table}' succeeded, moving to next table")
-            except Exception as e:
-                # ❌ Log failure with error details
-                logger.error(f"❌ TABLE FAILED: table='{table}', error='{str(e)}', continuing to next table")
-                failed_tables.append((table, str(e)))
-                # Continue to next table instead of terminating entire replication
-                continue
-            
+
+            self.perform_initial_replication_table(table)
+            # ✅ Log successful completion
+            logger.info(f"✅ TABLE COMPLETE: table='{table}' succeeded, moving to next table")
+
             start_table = None
 
         if not self.replicator.is_parallel_worker:
@@ -152,17 +144,9 @@ class DbReplicatorInitial:
                         f'RENAME DATABASE `{self.replicator.target_database_tmp}` TO `{self.replicator.target_database}`',
                     )
             self.replicator.clickhouse_api.database = self.replicator.target_database
-        
+
         # 📊 Final summary logging
-        succeeded_count = total_tables - len(failed_tables)
-        logger.info(f"📊 INIT REPL DONE: succeeded={succeeded_count}/{total_tables}, failed={len(failed_tables)}/{total_tables}")
-        
-        # Report failed tables
-        if failed_tables:
-            logger.error(f"Initial replication completed with {len(failed_tables)} failed tables:")
-            for table, error in failed_tables:
-                logger.error(f"  - {table}: {error}")
-            raise Exception(f"Initial replication failed for {len(failed_tables)} tables: {', '.join([t[0] for t in failed_tables])}")
+        logger.info(f"📊 INIT REPL DONE: all {total_tables} tables succeeded")
 
         # FIX #2: Clear the initial replication tracking state on success
         self.replicator.state.initial_replication_table = None
