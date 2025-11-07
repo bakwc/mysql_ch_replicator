@@ -158,8 +158,8 @@ class Settings:
         data = yaml.safe_load(data)
 
         self.settings_file = settings_file
-        self.mysql = MysqlSettings(**data.pop('mysql'))
-        self.clickhouse = ClickhouseSettings(**data.pop('clickhouse'))
+        self.mysql = MysqlSettings(**data.pop('mysql', {}))
+        self.clickhouse = ClickhouseSettings(**data.pop('clickhouse', {}))
         
         self._apply_env_overrides()
         
