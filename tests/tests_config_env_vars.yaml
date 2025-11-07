@@ -1,0 +1,20 @@
+mysql:
+  host: 'mysql.local'
+  port: 3306
+  user: 'mysql_user'
+  password: 'mysql_pass'
+  charset: 'utf8mb4'
+
+clickhouse:
+  host: 'clickhouse.local'
+  port: 9000
+  user: 'ch_user'
+  password: 'ch_pass'
+
+binlog_replicator:
+  data_dir: '/tmp/binlog'
+  records_per_file: 100000
+
+databases: 'test_db'
+log_level: 'info'
+

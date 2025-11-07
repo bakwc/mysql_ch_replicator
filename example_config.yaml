@@ -1,4 +1,8 @@
 
+# MySQL and ClickHouse credentials can be overridden using environment variables:
+# MySQL: MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD, MYSQL_CHARSET
+# ClickHouse: CLICKHOUSE_HOST, CLICKHOUSE_PORT, CLICKHOUSE_USER, CLICKHOUSE_PASSWORD
+
 mysql:
   host: 'localhost'
   port: 8306
