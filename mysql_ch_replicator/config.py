@@ -1,3 +1,4 @@
+import os
 import yaml
 import fnmatch
 import zoneinfo
@@ -157,8 +158,11 @@ class Settings:
         data = yaml.safe_load(data)
 
         self.settings_file = settings_file
-        self.mysql = MysqlSettings(**data.pop('mysql'))
-        self.clickhouse = ClickhouseSettings(**data.pop('clickhouse'))
+        self.mysql = MysqlSettings(**data.pop('mysql', {}))
+        self.clickhouse = ClickhouseSettings(**data.pop('clickhouse', {}))
+        
+        self._apply_env_overrides()
+        
         self.databases = data.pop('databases')
         self.tables = data.pop('tables', '*')
         self.exclude_databases = data.pop('exclude_databases', '')
@@ -205,6 +209,27 @@ class Settings:
         if data:
             raise Exception(f'Unsupported config options: {list(data.keys())}')
         self.validate()
+
+    def _apply_env_overrides(self):
+        if os.getenv('MYSQL_HOST'):
+            self.mysql.host = os.getenv('MYSQL_HOST')
+        if os.getenv('MYSQL_PORT'):
+            self.mysql.port = int(os.getenv('MYSQL_PORT'))
+        if os.getenv('MYSQL_USER'):
+            self.mysql.user = os.getenv('MYSQL_USER')
+        if os.getenv('MYSQL_PASSWORD'):
+            self.mysql.password = os.getenv('MYSQL_PASSWORD')
+        if os.getenv('MYSQL_CHARSET'):
+            self.mysql.charset = os.getenv('MYSQL_CHARSET')
+        
+        if os.getenv('CLICKHOUSE_HOST'):
+            self.clickhouse.host = os.getenv('CLICKHOUSE_HOST')
+        if os.getenv('CLICKHOUSE_PORT'):
+            self.clickhouse.port = int(os.getenv('CLICKHOUSE_PORT'))
+        if os.getenv('CLICKHOUSE_USER'):
+            self.clickhouse.user = os.getenv('CLICKHOUSE_USER')
+        if os.getenv('CLICKHOUSE_PASSWORD'):
+            self.clickhouse.password = os.getenv('CLICKHOUSE_PASSWORD')
 
     @classmethod
     def is_pattern_matches(cls, substr, pattern):

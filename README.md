@@ -81,10 +81,25 @@ docker run -d \
   --config /app/config.yaml run_all
 ```
 
+Or with environment variables for credentials:
+
+```bash
+docker run -d \
+  -v /path/to/your/config.yaml:/app/config.yaml \
+  -v /path/to/your/data:/app/data \
+  -e MYSQL_USER=root \
+  -e MYSQL_PASSWORD=secret \
+  -e CLICKHOUSE_USER=default \
+  -e CLICKHOUSE_PASSWORD=secret \
+  fippo/mysql-ch-replicator:latest \
+  --config /app/config.yaml run_all
+```
+
 Make sure to:
 1. Mount your configuration file using the `-v` flag
 2. Mount a persistent volume for the data directory
 3. Adjust the paths according to your setup
+4. Optionally use `-e` flags to override credentials via environment variables
 
 ## Usage
 
@@ -187,7 +202,7 @@ __Hint__: _set `initial_replication_threads` to a number of cpu cores to acceler
 
 ### Configuration
 
-`mysql_ch_replicator` can be configured through a configuration file. Here is the config example:
+`mysql_ch_replicator` can be configured through a configuration file and also by using enviromnent variables to override some of config settings. Here is the config example:
 
 ```yaml
 mysql:
@@ -298,6 +313,10 @@ Few more tables / dbs examples:
 databases: ['my_database_1', 'my_database_2']
 tables: ['table_1', 'table_2*']
 ```
+
+**Environment Variables**: MySQL and ClickHouse credentials can be overridden using environment variables for better security in containerized environments:
+- MySQL: `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_CHARSET`
+- ClickHouse: `CLICKHOUSE_HOST`, `CLICKHOUSE_PORT`, `CLICKHOUSE_USER`, `CLICKHOUSE_PASSWORD`
 
 ### Advanced Features
 
