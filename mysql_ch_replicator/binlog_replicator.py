@@ -360,7 +360,7 @@ class BinlogReplicator:
 
         log_file, log_pos = None, None
         if self.state.prev_last_seen_transaction:
-            log_file, log_pos = self.state.prev_last_seen_transaction
+            log_file, log_pos = self.state.prev_last_seen_transaction[:2]
 
         is_mariadb = self._detect_mariadb(mysql_settings)
         logger.info(f'detected database type: {"MariaDB" if is_mariadb else "MySQL"}')
