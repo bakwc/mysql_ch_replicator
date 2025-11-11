@@ -47,6 +47,9 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
 
     binlog_replicator_runner = BinlogReplicatorRunner(cfg_file=config_file)
     binlog_replicator_runner.run()
+
+    time.sleep(10)
+
     db_replicator_runner = DbReplicatorRunner(TEST_DB_NAME, cfg_file=config_file)
     db_replicator_runner.run()
 
