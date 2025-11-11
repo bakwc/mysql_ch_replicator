@@ -32,9 +32,6 @@ def test_issue_209_bulk_insert():
 
     prepare_env(cfg, mysql, ch)
 
-    mysql.execute("RESET MASTER", commit=True)
-    time.sleep(1)
-
     mysql.execute(f"""
 CREATE TABLE `sites` (
   `id` int(11) NOT NULL AUTO_INCREMENT,
