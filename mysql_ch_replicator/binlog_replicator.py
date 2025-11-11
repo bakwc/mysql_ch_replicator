@@ -11,6 +11,7 @@ import pymysql
 from enum import Enum
 from logging import getLogger
 from dataclasses import dataclass
+from collections import OrderedDict
 
 from pymysql.err import OperationalError
 
@@ -446,8 +447,8 @@ class BinlogReplicator:
 
     def run(self):
         last_transaction_id = None
-        last_base_transaction_id = None
-        transaction_seq = 0
+        position_seq_cache = OrderedDict()
+        max_cache_size = 500
 
         killer = GracefulKiller()
 
@@ -470,11 +471,16 @@ class BinlogReplicator:
                     base_transaction_id = (self.stream.log_file, self.stream.log_pos)
                     
                     if self.stream.is_mariadb:
-                        if base_transaction_id != last_base_transaction_id:
-                            transaction_seq = 0
-                            last_base_transaction_id = base_transaction_id
+                        if base_transaction_id in position_seq_cache:
+                            transaction_seq = position_seq_cache[base_transaction_id] + 1
                         else:
-                            transaction_seq += 1
+                            transaction_seq = 0
+                        
+                        position_seq_cache[base_transaction_id] = transaction_seq
+                        
+                        if len(position_seq_cache) > max_cache_size:
+                            position_seq_cache.popitem(last=False)
+                        
                         transaction_id = (base_transaction_id[0], base_transaction_id[1], transaction_seq)
                     else:
                         transaction_id = base_transaction_id
