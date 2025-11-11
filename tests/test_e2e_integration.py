@@ -1,9 +1,11 @@
 from common import *
 import pytest
 import decimal
+import os
 from mysql_ch_replicator import config
 from mysql_ch_replicator import mysql_api
 from mysql_ch_replicator import clickhouse_api
+from mysql_ch_replicator.binlog_replicator import FileReader, EventType
 
 
 @pytest.mark.parametrize('config_file', [
@@ -147,6 +149,27 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
 
     mysql.execute(f'DROP TABLE `{TEST_TABLE_NAME_3}`')
     assert_wait(lambda: TEST_TABLE_NAME_3 not in ch.get_tables())
+
+    binlog_dir = os.path.join(cfg.binlog_replicator.data_dir, TEST_DB_NAME)
+    binlog_files = [f for f in os.listdir(binlog_dir) if f.endswith('.bin')]
+    assert len(binlog_files) > 0, 'no binlog files found'
+
+    expected_tuple_len = 2 if config_file == CONFIG_FILE else 3
+    binlog_file_path = os.path.join(binlog_dir, binlog_files[0])
+    file_reader = FileReader(binlog_file_path)
+    
+    event_found = False
+    while True:
+        event = file_reader.read_next_event()
+        if event is None:
+            break
+        if event.event_type == EventType.ADD_EVENT.value:
+            assert len(event.transaction_id) == expected_tuple_len, \
+                f'expected transaction_id tuple length {expected_tuple_len}, got {len(event.transaction_id)}: {event.transaction_id}'
+            event_found = True
+    
+    assert event_found, 'no ADD_EVENT found in binlog file'
+    file_reader.close()
 
     db_replicator_runner.stop()
 
