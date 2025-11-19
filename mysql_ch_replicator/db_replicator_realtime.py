@@ -266,11 +266,16 @@ class DbReplicatorRealtime:
     def handle_truncate_query(self, query, db_name):
         """Handle TRUNCATE TABLE operations by clearing data in ClickHouse"""
         tokens = query.strip().split()
-        if len(tokens) < 3 or tokens[0].lower() != 'truncate' or tokens[1].lower() != 'table':
+        if len(tokens) < 2 or tokens[0].lower() != 'truncate':
             raise Exception('Invalid TRUNCATE query format', query)
 
-        # Get table name from the third token (after TRUNCATE TABLE)
-        table_token = tokens[2]
+        # MySQL supports both "TRUNCATE TABLE table_name" and "TRUNCATE table_name"
+        if tokens[1].lower() == 'table':
+            if len(tokens) < 3:
+                raise Exception('Invalid TRUNCATE query format', query)
+            table_token = tokens[2]
+        else:
+            table_token = tokens[1]
         
         # Parse database and table name from the token
         db_name, table_name, matches_config = self.replicator.converter.get_db_and_table_name(table_token, db_name)
