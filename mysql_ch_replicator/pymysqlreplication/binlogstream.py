@@ -643,6 +643,8 @@ class BinLogStreamReader(object):
             )
 
             if binlog_event.event_type == ROTATE_EVENT:
+                if self.log_file == binlog_event.event.next_binlog:
+                    continue
                 self.log_pos = binlog_event.event.position
                 self.log_file = binlog_event.event.next_binlog
                 # Table Id in binlog are NOT persistent in MySQL - they are in-memory identifiers

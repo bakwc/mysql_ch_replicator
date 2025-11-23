@@ -204,13 +204,13 @@ class DbReplicatorRealtime:
             return
         target_table_name = self.replicator.get_target_table_name(mysql_structure.table_name)
         ch_structure.table_name = target_table_name
-        check_table_exists = f"EXISTS TABLE `{self.replicator.clickhouse_api.database}`.`{target_table_name}`"
-        table_exists = self.replicator.clickhouse_api.client.command(check_table_exists)
-        if table_exists:
-            logger.info(f'table {target_table_name} already exists in {self.replicator.clickhouse_api.database}, skipping CREATE TABLE')
-            if mysql_structure.table_name not in self.replicator.state.tables_structure:
-                self.replicator.state.tables_structure[mysql_structure.table_name] = (mysql_structure, ch_structure)
-            return
+        # check_table_exists = f"EXISTS TABLE `{self.replicator.clickhouse_api.database}`.`{target_table_name}`"
+        # table_exists = self.replicator.clickhouse_api.client.command(check_table_exists)
+        # if table_exists:
+        #     logger.info(f'table {target_table_name} already exists in {self.replicator.clickhouse_api.database}, skipping CREATE TABLE')
+        #     if mysql_structure.table_name not in self.replicator.state.tables_structure:
+        #         self.replicator.state.tables_structure[mysql_structure.table_name] = (mysql_structure, ch_structure)
+        #     return
         self.replicator.state.tables_structure[mysql_structure.table_name] = (mysql_structure, ch_structure)
         indexes = self.replicator.config.get_indexes(self.replicator.database, mysql_structure.table_name)
         partition_bys = self.replicator.config.get_partition_bys(self.replicator.database, mysql_structure.table_name)
