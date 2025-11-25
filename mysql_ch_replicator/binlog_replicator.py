@@ -424,7 +424,13 @@ class BinlogReplicator:
             "port": self.mysql_settings.port,
             "user": self.mysql_settings.user,
             "passwd": self.mysql_settings.password,
+            "connect_timeout": self.mysql_settings.connect_timeout,
         }
+        logger.debug(
+            f"Binlog stream connection settings: host={self.mysql_settings.host}, "
+            f"port={self.mysql_settings.port}, user={self.mysql_settings.user}, "
+            f"connect_timeout={self.mysql_settings.connect_timeout}s"
+        )
         self.data_writer = DataWriter(self.replicator_settings)
         self.state = State(
             os.path.join(self.replicator_settings.data_dir, "state.json")

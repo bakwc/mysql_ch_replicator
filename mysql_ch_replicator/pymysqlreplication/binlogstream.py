@@ -1,5 +1,6 @@
 import struct
 import logging
+import time
 from packaging.version import Version
 
 import pymysql
@@ -310,7 +311,27 @@ class BinLogStreamReader(object):
         self._ctl_connection_settings["db"] = "information_schema"
         self._ctl_connection_settings["cursorclass"] = DictCursor
         self._ctl_connection_settings["autocommit"] = True
-        self._ctl_connection = self.pymysql_wrapper(**self._ctl_connection_settings)
+
+        # Log connection attempt with timeout info for debugging
+        host = self._ctl_connection_settings.get("host", "unknown")
+        port = self._ctl_connection_settings.get("port", 3306)
+        connect_timeout = self._ctl_connection_settings.get("connect_timeout", "default")
+        self.__logger.debug(
+            f"Connecting to MySQL CTL: {host}:{port} (timeout: {connect_timeout}s)"
+        )
+
+        start_time = time.time()
+        try:
+            self._ctl_connection = self.pymysql_wrapper(**self._ctl_connection_settings)
+            elapsed = time.time() - start_time
+            self.__logger.debug(f"MySQL CTL connection established in {elapsed:.2f}s")
+        except Exception as e:
+            elapsed = time.time() - start_time
+            self.__logger.error(
+                f"MySQL CTL connection failed after {elapsed:.2f}s: {e}"
+            )
+            raise
+
         self._ctl_connection._get_dbms = self.__get_dbms
         self.__connected_ctl = True
         #self.__check_optional_meta_data()
@@ -349,7 +370,26 @@ class BinLogStreamReader(object):
         # flags (2) BINLOG_DUMP_NON_BLOCK (0 or 1)
         # server_id (4) -- server id of this slave
         # log_file (string.EOF) -- filename of the binlog on the master
-        self._stream_connection = self.pymysql_wrapper(**self.__connection_settings)
+
+        # Log connection attempt with timeout info for debugging
+        host = self.__connection_settings.get("host", "unknown")
+        port = self.__connection_settings.get("port", 3306)
+        connect_timeout = self.__connection_settings.get("connect_timeout", "default")
+        self.__logger.debug(
+            f"Connecting to MySQL stream: {host}:{port} (timeout: {connect_timeout}s)"
+        )
+
+        start_time = time.time()
+        try:
+            self._stream_connection = self.pymysql_wrapper(**self.__connection_settings)
+            elapsed = time.time() - start_time
+            self.__logger.debug(f"MySQL stream connection established in {elapsed:.2f}s")
+        except Exception as e:
+            elapsed = time.time() - start_time
+            self.__logger.error(
+                f"MySQL stream connection failed after {elapsed:.2f}s: {e}"
+            )
+            raise
 
         self.__use_checksum = self.__checksum_enabled()
 

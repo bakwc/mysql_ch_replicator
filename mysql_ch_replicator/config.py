@@ -52,15 +52,16 @@ def stype(obj):
 @dataclass
 class MysqlSettings:
     """MySQL database connection configuration with connection pool support.
-    
+
     Supports MySQL 5.7+, MySQL 8.0+, MariaDB 10.x, and Percona Server.
     Includes connection pooling configuration for high-performance replication.
-    
+
     Attributes:
         host: MySQL server hostname or IP address
         port: MySQL server port (default: 3306)
         user: MySQL username for authentication
         password: MySQL password for authentication
+        connect_timeout: Connection timeout in seconds (default: 30, important for AWS RDS)
         pool_size: Base number of connections in pool (default: 5)
         max_overflow: Maximum additional connections beyond pool_size (default: 10)
         pool_name: Identifier for connection pool (default: "default")
@@ -81,13 +82,15 @@ class MysqlSettings:
     port: int = 3306
     user: str = "root"
     password: str = ""
+    # Connection timeout in seconds (important for AWS RDS and remote connections)
+    connect_timeout: int = 30
     # Connection pool settings for high-performance replication
     pool_size: int = 5
     max_overflow: int = 10
     pool_name: str = "default"
     # Optional charset specification (critical for MariaDB compatibility)
     charset: str = None
-    # Optional collation specification (critical for MariaDB compatibility)  
+    # Optional collation specification (critical for MariaDB compatibility)
     collation: str = None
 
     def validate(self):
@@ -103,6 +106,11 @@ class MysqlSettings:
         if not isinstance(self.password, str):
             raise ValueError(
                 f"mysql password should be string and not {stype(self.password)}"
+            )
+
+        if not isinstance(self.connect_timeout, int) or self.connect_timeout < 1:
+            raise ValueError(
+                f"mysql connect_timeout should be positive integer and not {stype(self.connect_timeout)}"
             )
 
         if not isinstance(self.pool_size, int) or self.pool_size < 1:

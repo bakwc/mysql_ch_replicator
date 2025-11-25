@@ -3,6 +3,8 @@ mysql:
   port: 8306
   user: "root"
   password: "root"
+  # Connection timeout in seconds (default: 30, increase for AWS RDS)
+  connect_timeout: 30
   # Connection pooling settings (optional)
   pool_size: 5 # Base number of connections in pool
   max_overflow: 10 # Additional connections beyond pool_size
