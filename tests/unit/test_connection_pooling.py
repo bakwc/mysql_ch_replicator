@@ -241,3 +241,70 @@ def test_pool_cleanup(db_config):
 
     # Verify pools dict was cleared
     assert len(pool_manager._pools) == 0
+
+
+@pytest.mark.unit
+def test_long_hostname_pool_name():
+    """Test that long AWS RDS hostnames don't cause pool name errors"""
+    from mysql_ch_replicator.connection_pool import ConnectionPoolManager
+
+    manager = ConnectionPoolManager()
+
+    # Simulate a long AWS RDS hostname (74 chars total - exceeds 64 limit)
+    long_pool_key = (
+        "production.c1qddbamxlcn.us-east-1.rds.amazonaws.com:3306:replicator:default"
+    )
+
+    short_name = manager._generate_short_pool_name(long_pool_key, "replicator")
+
+    assert len(short_name) <= 64, f"Pool name '{short_name}' exceeds 64 characters"
+    assert short_name.startswith("pool_replicator_"), "Should have expected prefix"
+    logger.info(f"✓ Long hostname shortened: '{long_pool_key}' -> '{short_name}'")
+
+
+@pytest.mark.unit
+def test_short_pool_name_deterministic():
+    """Test that the same inputs produce the same shortened pool name"""
+    from mysql_ch_replicator.connection_pool import ConnectionPoolManager
+
+    manager = ConnectionPoolManager()
+    pool_key = "production.example.com:3306:user:default"
+
+    name1 = manager._generate_short_pool_name(pool_key, "user")
+    name2 = manager._generate_short_pool_name(pool_key, "user")
+
+    assert name1 == name2, "Same inputs should produce same output"
+    logger.info(f"✓ Pool name generation is deterministic: '{name1}'")
+
+
+@pytest.mark.unit
+def test_short_pool_name_uniqueness():
+    """Test that different inputs produce different shortened pool names"""
+    from mysql_ch_replicator.connection_pool import ConnectionPoolManager
+
+    manager = ConnectionPoolManager()
+
+    name1 = manager._generate_short_pool_name("host1:3306:user:default", "user")
+    name2 = manager._generate_short_pool_name("host2:3306:user:default", "user")
+
+    assert name1 != name2, "Different inputs should produce different outputs"
+    logger.info(f"✓ Different pool keys produce unique names: '{name1}' vs '{name2}'")
+
+
+@pytest.mark.unit
+def test_short_pool_name_with_long_username():
+    """Test that very long usernames are truncated safely"""
+    from mysql_ch_replicator.connection_pool import ConnectionPoolManager
+
+    manager = ConnectionPoolManager()
+
+    long_user = "verylongusernamethatexceedsnormallimits"
+    pool_key = f"host:3306:{long_user}:default"
+
+    short_name = manager._generate_short_pool_name(pool_key, long_user)
+
+    assert len(short_name) <= 64, "Pool name should be under 64 characters"
+    # Username should be truncated to 16 chars
+    assert "verylongusername" in short_name
+    assert long_user not in short_name, "Full long username should NOT appear"
+    logger.info(f"✓ Long username truncated safely: '{short_name}'")

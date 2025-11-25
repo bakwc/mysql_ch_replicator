@@ -1,5 +1,6 @@
 """MySQL Connection Pool Manager for mysql-ch-replicator"""
 
+import hashlib
 import threading
 from logging import getLogger
 
@@ -29,6 +30,29 @@ class ConnectionPoolManager:
         if not self._initialized:
             self._pools = {}
             self._initialized = True
+
+    def _generate_short_pool_name(self, pool_key: str, user: str) -> str:
+        """
+        Generate shortened pool name for MySQLConnectionPool.
+
+        MySQL connector limits pool names to ~64 characters. This method creates
+        a deterministic short name while keeping the full pool_key for internal
+        dictionary lookups.
+
+        Args:
+            pool_key: Full composite key (host:port:user:pool_name)
+            user: MySQL username for human-readable prefix
+
+        Returns:
+            Shortened pool name in format: pool_{user}_{hash8}
+        """
+        hash_digest = hashlib.sha256(pool_key.encode("utf-8")).hexdigest()[:8]
+        safe_user = user[:16] if len(user) > 16 else user
+        short_name = f"pool_{safe_user}_{hash_digest}"
+        logger.debug(
+            f"Generated short pool name '{short_name}' for pool key '{pool_key}'"
+        )
+        return short_name
 
     def get_or_create_pool(
         self,
@@ -63,15 +87,22 @@ class ConnectionPoolManager:
                             pool_size + max_overflow, 32
                         )  # MySQL max connections per user
 
+                        # Generate shortened pool name for MySQL connector
+                        # (MySQL limits pool names to ~64 characters)
+                        short_pool_name = self._generate_short_pool_name(
+                            pool_key, mysql_settings.user
+                        )
+
                         self._pools[pool_key] = MySQLConnectionPool(
-                            pool_name=pool_key,
+                            pool_name=short_pool_name,
                             pool_size=actual_pool_size,
                             pool_reset_session=True,
                             **config,
                         )
 
                         logger.info(
-                            f"Created MySQL connection pool '{pool_key}' with {actual_pool_size} connections"
+                            f"Created MySQL connection pool '{short_pool_name}' "
+                            f"(key: '{pool_key}') with {actual_pool_size} connections"
                         )
 
                     except MySQLError as e:
