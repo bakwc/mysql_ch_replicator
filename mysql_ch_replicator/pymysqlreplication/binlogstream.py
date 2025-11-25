@@ -643,8 +643,16 @@ class BinLogStreamReader(object):
             )
 
             if binlog_event.event_type == ROTATE_EVENT:
-                self.log_pos = binlog_event.event.position
-                self.log_file = binlog_event.event.next_binlog
+                # if self.log_file == binlog_event.event.next_binlog:
+                #     continue
+                # print(f' ==== rotate event {binlog_event.event.next_binlog} {binlog_event.event.position}, self: {self.log_file, self.log_pos}')
+
+                same_file = self.log_file == binlog_event.event.next_binlog
+                greater_pos = binlog_event.event.position > self.log_pos
+
+                if not same_file or greater_pos:
+                    self.log_pos = binlog_event.event.position
+                    self.log_file = binlog_event.event.next_binlog
                 # Table Id in binlog are NOT persistent in MySQL - they are in-memory identifiers
                 # that means that when MySQL master restarts, it will reuse same table id for different tables
                 # which will cause errors for us since our in-memory map will try to decode row data with
