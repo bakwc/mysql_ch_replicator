@@ -238,6 +238,9 @@ class BinLogStreamReader(object):
         self.__connection_settings = connection_settings
         self.__connection_settings.setdefault("charset", "utf8")
 
+        # Initialize logger for connection debugging
+        self.__logger = logging.getLogger(__name__)
+
         self.__connected_stream = False
         self.__connected_ctl = False
         self.__resume_stream = resume_stream
