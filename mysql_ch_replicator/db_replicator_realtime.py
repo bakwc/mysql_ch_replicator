@@ -230,7 +230,8 @@ class DbReplicatorRealtime:
         target_table_name = self.replicator.get_target_table_name(table_name)
         if table_name in self.replicator.state.tables_structure:
             self.replicator.state.tables_structure.pop(table_name)
-        self.replicator.clickhouse_api.execute_command(f'DROP TABLE {"IF EXISTS" if if_exists else ""} `{db_name}`.`{target_table_name}`')
+        on_cluster = self.replicator.clickhouse_api.get_on_cluster_clause()
+        self.replicator.clickhouse_api.execute_command(f'DROP TABLE {"IF EXISTS" if if_exists else ""} `{db_name}`.`{target_table_name}` {on_cluster}')
 
     def handle_rename_table_query(self, query, db_name):
         tokens = query.split()
@@ -261,7 +262,8 @@ class DbReplicatorRealtime:
                 self.replicator.state.tables_structure[dest_table_name] = self.replicator.state.tables_structure.pop(src_table_name)
 
             ch_clauses.append(f"`{src_db_name}`.`{src_target_table_name}` TO `{dest_db_name}`.`{dest_target_table_name}`")
-        self.replicator.clickhouse_api.execute_command(f'RENAME TABLE {", ".join(ch_clauses)}')
+        on_cluster = self.replicator.clickhouse_api.get_on_cluster_clause()
+        self.replicator.clickhouse_api.execute_command(f'RENAME TABLE {", ".join(ch_clauses)} {on_cluster}')
 
     def handle_truncate_query(self, query, db_name):
         """Handle TRUNCATE TABLE operations by clearing data in ClickHouse"""
@@ -296,7 +298,8 @@ class DbReplicatorRealtime:
         target_table_name = self.replicator.get_target_table_name(table_name)
         # Execute TRUNCATE on ClickHouse
         logger.info(f'Executing TRUNCATE on ClickHouse table: {db_name}.{target_table_name}')
-        self.replicator.clickhouse_api.execute_command(f'TRUNCATE TABLE `{db_name}`.`{target_table_name}`')
+        on_cluster = self.replicator.clickhouse_api.get_on_cluster_clause()
+        self.replicator.clickhouse_api.execute_command(f'TRUNCATE TABLE `{db_name}`.`{target_table_name}` {on_cluster}')
 
     def log_stats_if_required(self):
         curr_time = time.time()

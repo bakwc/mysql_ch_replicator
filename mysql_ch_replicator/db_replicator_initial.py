@@ -122,22 +122,37 @@ class DbReplicatorInitial:
                 self.replicator.is_multi_mysql_to_single_ch
             )
             
+            on_cluster = self.replicator.clickhouse_api.get_on_cluster_clause()
             if not should_skip_db_swap:
                 logger.info(f'initial replication - swapping database')
                 if self.replicator.target_database in self.replicator.clickhouse_api.get_databases():
                     self.replicator.clickhouse_api.execute_command(
-                        f'RENAME DATABASE `{self.replicator.target_database}` TO `{self.replicator.target_database}_old`',
+                        f'RENAME DATABASE `{self.replicator.target_database}` TO `{self.replicator.target_database}_old` {on_cluster}',
                     )
                     self.replicator.clickhouse_api.execute_command(
-                        f'RENAME DATABASE `{self.replicator.target_database_tmp}` TO `{self.replicator.target_database}`',
+                        f'RENAME DATABASE `{self.replicator.target_database_tmp}` TO `{self.replicator.target_database}` {on_cluster}',
                     )
                     self.replicator.clickhouse_api.drop_database(f'{self.replicator.target_database}_old')
                 else:
                     self.replicator.clickhouse_api.execute_command(
-                        f'RENAME DATABASE `{self.replicator.target_database_tmp}` TO `{self.replicator.target_database}`',
+                        f'RENAME DATABASE `{self.replicator.target_database_tmp}` TO `{self.replicator.target_database}` {on_cluster}',
                     )
-            self.replicator.clickhouse_api.database = self.replicator.target_database
-            
+                # drop distributed tables and create them again because they were pointing to *_tmp db
+                db_name = self.replicator.target_database
+                self.replicator.clickhouse_api.database = self.replicator.target_database
+                ch_tables = set(self.replicator.clickhouse_api.get_tables())
+                for table in ch_tables:
+                    if table.endswith(self.replicator.clickhouse_api.DISTRIBUTED_TABLE_SUFFIX):
+                        schema = self.replicator.clickhouse_api.show_create_table(table)
+                        if self.replicator.target_database_tmp in schema:
+                            logger.debug(schema)
+                            self.replicator.clickhouse_api.drop_table(table)
+                            logger.info(f'Dropped {table} as it was connected to {self.replicator.target_database_tmp} database.')
+                            query = self.replicator.clickhouse_api.get_distributed_table_schema(table, db_name)
+                            logger.debug(f'Create table query: {query}')
+                            self.replicator.clickhouse_api.execute_command(query)
+                            logger.info(f'Created table: {table}')
+
             # Execute post-initial-replication commands
             self.execute_post_initial_replication_commands()
         logger.info(f'initial replication - done')

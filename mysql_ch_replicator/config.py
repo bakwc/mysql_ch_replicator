@@ -61,6 +61,7 @@ class ClickhouseSettings:
     port: int = 3306
     user: str = 'root'
     password: str = ''
+    cluster: str = ''
     connection_timeout: int = 30
     send_receive_timeout: int = 120
     erase_batch_size: int = 100000  # Number of records to delete per batch
@@ -77,6 +78,9 @@ class ClickhouseSettings:
 
         if not isinstance(self.password, str):
             raise ValueError(f'clickhouse password should be string and not {stype(self.password)}')
+
+        if not isinstance(self.cluster, str):
+            raise ValueError(f'clickhouse cluster should be string and not {stype(self.cluster)}')
 
         if not isinstance(self.connection_timeout, int):
             raise ValueError(f'clickhouse connection_timeout should be int and not {stype(self.connection_timeout)}')
