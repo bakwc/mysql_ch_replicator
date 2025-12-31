@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "mysql-ch-replicator"
-version = "0.0.70"
+version = "0.0.71"
 description = "Tool for replication of MySQL databases to ClickHouse"
 authors = ["Filipp Ozinov <filipp@bakanov.su>"]
 license = "MIT"
