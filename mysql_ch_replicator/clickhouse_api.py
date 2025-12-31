@@ -237,9 +237,7 @@ class ClickhouseApi:
 
         if self.clickhouse_settings.cluster:
             # will fail if shard & replica macros aren't configured in clickhouse-server config
-            today = datetime.datetime.today().strftime('%Y%m%d')
-            # can't use database macro here because we swap databases in some cases so sticking to date
-            engine = f"ENGINE = ReplicatedReplacingMergeTree('/clickhouse/tables/{today}" + "/{table}/{shard}', '{replica}', _version)"
+            engine = "ENGINE = ReplicatedReplacingMergeTree('/clickhouse/tables/{database}/{table}/{shard}', '{replica}', _version)"
             query = self.get_distributed_table_schema(structure.table_name, self.database, structure.if_not_exists) 
             queries.append(query)
 

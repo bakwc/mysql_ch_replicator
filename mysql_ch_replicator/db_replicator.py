@@ -155,6 +155,11 @@ class DbReplicator:
         if self.config.ignore_deletes:
             self.target_database_tmp = self.target_database
         
+        # because its a pain in the neck to shift distributed tables from *_tmp db to new one
+        if self.config.cluster_mode:
+            self.target_database_tmp = self.target_database
+
+
         # If multiple MySQL databases map to same ClickHouse database, replicate directly
         if self.is_multi_mysql_to_single_ch:
             self.target_database_tmp = self.target_database
