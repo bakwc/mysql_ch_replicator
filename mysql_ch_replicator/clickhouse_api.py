@@ -129,8 +129,8 @@ class ClickhouseApi:
 
         # helps run alter, rename, truncate & drop commands from other modules on cluster if cluster mode is enabled
         on_cluster = self.get_on_cluster_clause()
-        if on_cluster:
-            query = self.apply_on_cluster(query, on_cluster) 
+        query = self.apply_on_cluster(query, on_cluster) 
+
         if self.clickhouse_settings.cluster:
             # we are in cluster mode so we need to be careful with queries and run them in their desired context
             if query.startswith('USE') or query.startswith('SET') or query.startswith('SHOW') or query.startswith('SYSTEM') \
@@ -182,8 +182,9 @@ class ClickhouseApi:
             return f'ON CLUSTER {self.clickhouse_settings.cluster}' 
         return ''
 
-    def apply_on_cluster(self, query, on_cluster) 
-        return query.format(**{'on_cluster': on_cluster}).strip()
+    def apply_on_cluster(self, query, on_cluster):
+        query = query.format(**{'on_cluster': on_cluster}) if '{on_cluster}' in query else query
+        return query.strip()
 
     def get_distributed_table_schema(self, table_name, database, if_not_exists=False): 
         # distributed table schema
