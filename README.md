@@ -28,6 +28,7 @@ With a focus on high performance, it utilizes batching heavily and uses C++ exte
     - [Required settings](#required-settings)
     - [Optional settings](#optional-settings)
   - [Advanced Features](#advanced-features)
+    - [Cluster Mode](#cluster-mode)
     - [Migrations & Schema Changes](#migrations--schema-changes)
     - [Recovery Without Downtime](#recovery-without-downtime)
     - [Known Limitations](#known-limitations)
@@ -219,6 +220,7 @@ clickhouse:
   password: 'default'
   connection_timeout: 30        # optional
   send_receive_timeout: 300     # optional
+  cluster: 'cluster_name'       # optional - should match cluster name defined in config files located at /etc/clickhouse-server
 
 binlog_replicator:
   data_dir: '/home/user/binlog/'  # a new EMPTY directory (for internal storage of data by mysql_ch_replicator itself)
@@ -319,6 +321,25 @@ tables: ['table_1', 'table_2*']
 - ClickHouse: `CLICKHOUSE_HOST`, `CLICKHOUSE_PORT`, `CLICKHOUSE_USER`, `CLICKHOUSE_PASSWORD`
 
 ### Advanced Features
+
+#### Cluster Mode
+
+`mysql_ch_replicator` supports copying data from a mysql database to a clickhouse cluster out of the box.
+
+> [!IMPORTANT]
+> Do not forget to define cluster.xml and macros.xml in clickhouse-server config otherwise mysql_ch_replicator will fail.
+
+Please note:
+  1. You need to define your clickhouse cluster in /etc/clickhouse-server as explained [here](https://clickhouse.com/docs/architecture/cluster-deployment#server-setup).
+  2. To tell `mysql_ch_replicator` to run itself in cluster mode just add `cluster` name under `clickhouse` section in `config.yaml` and it will create both Distributed & Replicated Tables automatically on defined cluster and will start syncing data.
+  3. If you previously were using `mysql_ch_replicator` to copy data form mysql to a standalone clickhouse database but now want to convert that clickhouse standalone db to a clustered one:
+
+      a. You can do so but you will have to manually create Replicated & Distributed tables in new database.
+
+      b. Define cluster in config and `mysql_ch_replicator` will start copying data from where it left.
+
+> [!WARNING]
+> Converting exisitng standalone clickhouse database to clustered one and telling `mysql_ch_replicator` to resume copying to that new database will work but we do NOT recommend this because this will result in some duplicate rows. It is better to start afresh.
 
 #### Migrations & Schema Changes
 
