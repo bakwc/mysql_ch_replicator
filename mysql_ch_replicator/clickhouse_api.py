@@ -111,7 +111,10 @@ class ClickhouseApi:
         return stats
 
     def get_tables(self):
-        result = self.client.query(f'SHOW TABLES FROM `{self.database}`')
+        query = 'SHOW TABLES'
+        if self.database:
+            query += f' FROM `{self.database}`'
+        result = self.client.query(query)
         tables = result.result_rows
         table_list = [row[0] for row in tables]
         return table_list
