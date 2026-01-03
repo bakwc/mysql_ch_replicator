@@ -71,11 +71,10 @@ class DbOptimizer:
     def optimize_table(self, db_name, table_name):
         logger.info(f'Optimizing table {db_name}.{table_name}')
         t1 = time.time()
-        on_cluster = self.clickhouse_api.get_on_cluster_clause()
-        # Let background merges do the work 
-        # https://clickhouse.com/docs/optimize/avoidoptimizefinal
+        on_cluster = self.clickhouse_api.get_on_cluster_clause()                
+        optimize_final = 'FINAL' if self.config.enable_optimize_final else ''
         self.clickhouse_api.execute_command(
-            f'OPTIMIZE TABLE `{db_name}`.`{table_name}` {on_cluster} SETTINGS mutations_sync = 2'
+            f'OPTIMIZE TABLE `{db_name}`.`{table_name}` {optimize_final} {on_cluster} SETTINGS mutations_sync = 2'
         )
         t2 = time.time()
         logger.info(f'Optimize finished in {int(t2-t1)} seconds')
