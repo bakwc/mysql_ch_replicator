@@ -289,7 +289,7 @@ mysql_timezone: 'UTC'    # optional, timezone for MySQL timestamp conversion (de
 - `target_databases` - if you want database in ClickHouse to have different name from MySQL database
 - `target_tables` - if you want table in ClickHouse to have different name from MySQL table. Specify as `source_database.source_table: target_table_name`. The target database is determined by existing rules (e.g., `target_databases` mapping). This mapping applies to both initial and realtime replication, including DDL operations like ALTER, DROP, etc.
 - `log_level` - log level, default is `info`, you can set to `debug` to get maximum information (allowed values are `debug`, `info`, `warning`, `error`, `critical`)
-- `optimize_interval` - interval (seconds) between automatic `OPTIMIZE table FINAL` calls. Default 86400 (1 day). This is required to perform all merges guaranteed and avoid increasing of used storage and decreasing performance.
+- `optimize_interval` - interval (seconds) between automatic `OPTIMIZE table` calls. Default 86400 (1 day). This is required to perform all merges guaranteed and avoid increasing of used storage and decreasing performance.
 - `auto_restart_interval` - interval (seconds) between automatic db_replicator restart. Default 3600 (1 hour). This is done to reduce memory usage.
 - `binlog_retention_period` - how long to keep binlog files in seconds. Default 43200 (12 hours). This setting controls how long the local binlog files are retained before being automatically cleaned up.
 - `indexes` - you may want to add some indexes to accelerate performance, eg. ngram index for full-test search, etc. To apply indexes you need to start replication from scratch.
