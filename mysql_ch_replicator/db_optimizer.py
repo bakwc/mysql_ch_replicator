@@ -80,11 +80,13 @@ class DbOptimizer:
 
     def optimize_database(self, db_name):
         self.mysql_api.set_database(db_name)
-        self.clickhouse_api.database = db_name
         tables = self.mysql_api.get_tables()
         self.mysql_api.close()
         tables = [table for table in tables if self.config.is_table_matches(table)]
-
+    
+        # todo: we should not be doing this and instead should have function just like we have "set_database" in mysql_api
+        # https://github.com/bakwc/mysql_ch_replicator/issues/225
+        self.clickhouse_api.execute_command(f'USE `{db_name}`')
         ch_tables = set(self.clickhouse_api.get_tables())
 
         for table in tables:

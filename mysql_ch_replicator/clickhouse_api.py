@@ -112,8 +112,8 @@ class ClickhouseApi:
 
     def get_tables(self):
         query = 'SHOW TABLES'
-        if self.database:
-            query += f' FROM `{self.database}`'
+        # todo: https://github.com/bakwc/mysql_ch_replicator/issues/225
+        #query = f'SHOW TABLES FROM `{self.database}`'
         result = self.client.query(query)
         tables = result.result_rows
         table_list = [row[0] for row in tables]
