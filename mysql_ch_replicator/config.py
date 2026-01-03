@@ -126,7 +126,6 @@ class BinlogReplicatorSettings:
 class Settings:
     DEFAULT_LOG_LEVEL = 'info'
     DEFAULT_OPTIMIZE_INTERVAL = 86400
-    DEFAULT_OPTIMIZE_FINAL = False # https://clickhouse.com/docs/optimize/avoidoptimizefinal
     DEFAULT_CHECK_DB_UPDATED_INTERVAL = 120
     DEFAULT_AUTO_RESTART_INTERVAL = 3600
     DEFAULT_INITIAL_REPLICATION_BATCH_SIZE = 50000
@@ -143,7 +142,7 @@ class Settings:
         self.log_level = 'info'
         self.debug_log_level = False
         self.optimize_interval = 0
-        self.enable_optimize_final = DEFAULT_OPTIMIZE_FINAL
+        self.enable_optimize_final = False
         self.check_db_updated_interval = 0
         self.indexes: list[Index] = []
         self.partition_bys: list[PartitionBy] = []
@@ -176,7 +175,8 @@ class Settings:
         self.exclude_tables = data.pop('exclude_tables', '')
         self.log_level = data.pop('log_level', Settings.DEFAULT_LOG_LEVEL)
         self.optimize_interval = data.pop('optimize_interval', Settings.DEFAULT_OPTIMIZE_INTERVAL)
-        self.enable_optimize_final = data.pop('enable_optimize_final', Settings.DEFAULT_OPTIMIZE_FINAL)
+        # https://clickhouse.com/docs/optimize/avoidoptimizefinal
+        self.enable_optimize_final = data.pop('enable_optimize_final', False)
         self.check_db_updated_interval = data.pop(
             'check_db_updated_interval', Settings.DEFAULT_CHECK_DB_UPDATED_INTERVAL,
         )
