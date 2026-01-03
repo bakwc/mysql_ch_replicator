@@ -177,7 +177,13 @@ Setting should be set to 1. If not, you should:
  * try to modify `users.xml` instead
 </details>
 
-3. Start the replication:
+3. Grant following permissions to MySQL user:
+ 
+  ```bash
+  GRANT SELECT, SUPER, REPLICATION SLAVE ON . TO 'user'@'%' identified by 'password';
+  ```
+
+4. Start the replication:
 
 ```bash
 mysql_ch_replicator --config config.yaml run_all
@@ -332,7 +338,13 @@ tables: ['table_1', 'table_2*']
 Please note:
   1. You need to define your clickhouse cluster in /etc/clickhouse-server as explained [here](https://clickhouse.com/docs/architecture/cluster-deployment#server-setup).
   2. To tell `mysql_ch_replicator` to run itself in cluster mode just add `cluster` name under `clickhouse` section in `config.yaml` and it will create both Distributed & Replicated Tables automatically on defined cluster and will start syncing data.
-  3. If you previously were using `mysql_ch_replicator` to copy data form mysql to a standalone clickhouse database but now want to convert that clickhouse standalone db to a clustered one:
+  3. You also need to grant these permissions to clickhouse user:
+     ```
+     GRANT CLUSTER ON *.* to '<user>' ON CLUSTER '<cluster_name>';
+
+     GRANT REMOTE ON *.* to '<user>' ON CLUSTER '<cluser_name>';
+     ```
+  4. If you previously were using `mysql_ch_replicator` to copy data form mysql to a standalone clickhouse database but now want to convert that clickhouse standalone db to a clustered one:
 
       a. You can do so but you will have to manually create Replicated & Distributed tables in new database.
 
