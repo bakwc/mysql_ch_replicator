@@ -1,7 +1,7 @@
 version: '2'
 services:
   clickhouse_db:
-    image: clickhouse/clickhouse-server:latest
+    image: clickhouse/clickhouse-server:25.11.2
     environment:
       - CLICKHOUSE_USER=default
       - CLICKHOUSE_PASSWORD=admin

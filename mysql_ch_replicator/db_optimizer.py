@@ -71,8 +71,10 @@ class DbOptimizer:
     def optimize_table(self, db_name, table_name):
         logger.info(f'Optimizing table {db_name}.{table_name}')
         t1 = time.time()
+        on_cluster = self.clickhouse_api.get_on_cluster_clause()                
+        optimize_final = 'FINAL' if self.config.enable_optimize_final else ''
         self.clickhouse_api.execute_command(
-            f'OPTIMIZE TABLE `{db_name}`.`{table_name}` FINAL SETTINGS mutations_sync = 2'
+            f'OPTIMIZE TABLE `{db_name}`.`{table_name}` {optimize_final} {on_cluster} SETTINGS mutations_sync = 2'
         )
         t2 = time.time()
         logger.info(f'Optimize finished in {int(t2-t1)} seconds')
@@ -82,7 +84,9 @@ class DbOptimizer:
         tables = self.mysql_api.get_tables()
         self.mysql_api.close()
         tables = [table for table in tables if self.config.is_table_matches(table)]
-
+    
+        # todo: we should not be doing this and instead should have function just like we have "set_database" in mysql_api
+        # https://github.com/bakwc/mysql_ch_replicator/issues/225
         self.clickhouse_api.execute_command(f'USE `{db_name}`')
         ch_tables = set(self.clickhouse_api.get_tables())
 

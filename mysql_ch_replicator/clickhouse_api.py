@@ -14,19 +14,24 @@ logger = getLogger(__name__)
 
 
 CREATE_TABLE_QUERY = '''
-CREATE TABLE {if_not_exists} `{db_name}`.`{table_name}`
+CREATE TABLE {if_not_exists} `{db_name}`.`{table_name}` {on_cluster}
 (
 {fields},
     `_version` UInt64,
     {indexes}
 )
-ENGINE = ReplacingMergeTree(_version)
+{engine}
 {partition_by}ORDER BY {primary_key}
 SETTINGS index_granularity = 8192
 '''
 
+CREATE_DIST_TABLE_QUERY = '''
+CREATE TABLE {if_not_exists} `{db_name}`.`{dist_table_name}` {on_cluster}
+ENGINE = Distributed('{cluster}', '{db_name}', '{table_name}', rand());
+'''
+
 DELETE_QUERY = '''
-DELETE FROM `{db_name}`.`{table_name}` WHERE ({field_name}) IN ({field_values})
+DELETE FROM `{db_name}`.`{table_name}` {on_cluster} WHERE ({field_name}) IN ({field_values})
 '''
 
 
@@ -81,6 +86,8 @@ class GeneralStats:
 class ClickhouseApi:
     MAX_RETRIES = 5
     RETRY_INTERVAL = 30
+    # todo: this should come from config
+    DISTRIBUTED_TABLE_SUFFIX = '_distributed'
 
     def __init__(self, database: str | None, clickhouse_settings: ClickhouseSettings):
         self.database = database
@@ -104,7 +111,10 @@ class ClickhouseApi:
         return stats
 
     def get_tables(self):
-        result = self.client.query('SHOW TABLES')
+        query = 'SHOW TABLES'
+        # todo: https://github.com/bakwc/mysql_ch_replicator/issues/225
+        #query = f'SHOW TABLES FROM `{self.database}`'
+        result = self.client.query(query)
         tables = result.result_rows
         table_list = [row[0] for row in tables]
         return table_list
@@ -119,8 +129,39 @@ class ClickhouseApi:
         return database_list
 
     def execute_command(self, query):
+
+        # helps run alter, rename, truncate & drop commands from other modules on cluster if cluster mode is enabled
+        on_cluster = self.get_on_cluster_clause()
+        query = self.apply_on_cluster(query, on_cluster) 
+
+        if self.clickhouse_settings.cluster:
+            # we are in cluster mode so we need to be careful with queries and run them in their desired context
+            if query.startswith('USE') or query.startswith('SET') or query.startswith('SHOW') or query.startswith('SYSTEM') \
+             or query.startswith('EXPLAIN') or query.startswith('CHECK') or query.startswith('DESCRIBE') or query.startswith('EXISTS') \
+             or query.startswith('MOVE'):
+                # nothing to be done here
+                pass
+            
+            elif query.startswith('SELECT') and 'system.' not in query and self.DISTRIBUTED_TABLE_SUFFIX not in query:
+                # if not selecting from system.* tables then we should be querying distributed table right?
+                raise RuntimeError(f'SELECT in cluster mode should be done on distributed table: {query}')
+            
+            elif query.startswith('INSERT') and self.DISTRIBUTED_TABLE_SUFFIX not in query:
+                # in cluster mode we should be inserting data to distubted table 
+                raise RuntimeError(f'INSERT in cluster mode should be done on distributed table: {query}')
+
+            elif query.startswith('CREATE') or query.startswith('ALTER') or query.startswith('DELETE') or query.startswith('GRANT') \
+             or query.startswith('REVOKE') or query.startswith('UPDATE') or query.startswith('ATTACH') or query.startswith('DETACH') \
+             or query.startswith('DROP') or query.startswith('UNDROP') or query.startswith('KILL') or query.startswith('OPTIMIZE') \
+             or query.startswith('RENAME') or query.startswith('EXCHANGE') or query.startswith('TRUNCATE'):
+                if 'ON CLUSTER' not in query:
+                    raise NotImplementedError(f'This query should be run on cluster: {query}')
+            else:
+                raise RuntimeError(f'Not sure what to do with this query in cluster mode: {query}')
+
+
         for attempt in range(ClickhouseApi.MAX_RETRIES):
-            try:
+            try:                        
                 self.client.command(query)
                 break
             except clickhouse_connect.driver.exceptions.OperationalError as e:
@@ -130,14 +171,37 @@ class ClickhouseApi:
                 time.sleep(ClickhouseApi.RETRY_INTERVAL)
 
     def recreate_database(self):
-        self.execute_command(f'DROP DATABASE IF EXISTS `{self.database}`')
-        self.execute_command(f'CREATE DATABASE `{self.database}`')
+        self.drop_database(self.database)
+        self.create_database(self.database)
 
     def get_last_used_version(self, table_name):
         return self.tables_last_record_version.get(table_name, 0)
 
     def set_last_used_version(self, table_name, last_used_version):
         self.tables_last_record_version[table_name] = last_used_version
+
+    def get_on_cluster_clause(self):
+        if self.clickhouse_settings.cluster:
+            return f'ON CLUSTER {self.clickhouse_settings.cluster}' 
+        return ''
+
+    def apply_on_cluster(self, query, on_cluster):
+        query = query.format(**{'on_cluster': on_cluster}) if '{on_cluster}' in query else query
+        return query.strip()
+
+    def get_distributed_table_schema(self, table_name, database, if_not_exists=False): 
+        # distributed table schema
+        table_name = table_name.replace(self.DISTRIBUTED_TABLE_SUFFIX, '') if table_name.endswith(self.DISTRIBUTED_TABLE_SUFFIX) else table_name
+        return CREATE_DIST_TABLE_QUERY.format(**{
+            'if_not_exists': 'IF NOT EXISTS' if if_not_exists else '',
+            'db_name': database,
+            'table_name': table_name,
+            'dist_table_name': table_name + self.DISTRIBUTED_TABLE_SUFFIX,
+            'on_cluster': self.get_on_cluster_clause(),
+            'cluster': self.clickhouse_settings.cluster
+
+        })
+
 
     def create_table(self, structure: TableStructure, additional_indexes: list | None = None, additional_partition_bys: list | None = None):
         if not structure.primary_keys:
@@ -174,17 +238,33 @@ class ClickhouseApi:
         if len(structure.primary_keys) > 1:
             primary_key = f'({primary_key})'
 
+        engine = 'ENGINE = ReplacingMergeTree(_version)'        
+        on_cluster = self.get_on_cluster_clause()
+        queries = list()
+
+        if self.clickhouse_settings.cluster:
+            # will fail if shard & replica macros aren't configured in clickhouse-server config
+            engine = "ENGINE = ReplicatedReplacingMergeTree('/clickhouse/tables/{database}/{table}/{shard}', '{replica}', _version)"
+            query = self.get_distributed_table_schema(structure.table_name, self.database, structure.if_not_exists) 
+            queries.append(query)
+
+
         query = CREATE_TABLE_QUERY.format(**{
             'if_not_exists': 'IF NOT EXISTS' if structure.if_not_exists else '',
             'db_name': self.database,
             'table_name': structure.table_name,
+            'on_cluster': on_cluster,
             'fields': fields,
             'primary_key': primary_key,
+            'engine': engine,
             'partition_by': partition_by,
             'indexes': indexes,
         })
-        logger.debug(f'create table query: {query}')
-        self.execute_command(query)
+
+        queries.insert(0, query) # in case of cluster mode we need to create Replicated Table first before Distributed one
+        for query in queries:
+            logger.debug(f'create table query: {query}')
+            self.execute_command(query)
 
     def insert(self, table_name, records, table_structure: TableStructure = None):
         current_version = self.get_last_used_version(table_name) + 1
@@ -220,7 +300,11 @@ class ClickhouseApi:
             records_to_insert.append(tuple(record) + (current_version,))
             current_version += 1
 
-        full_table_name = f'`table_name`'
+        # in cluster mode we want to insert data to distributed so that its replicated among other shards & replicas
+        if self.clickhouse_settings.cluster:
+            table_name += self.DISTRIBUTED_TABLE_SUFFIX
+
+        full_table_name = f'`{table_name}`'
         if '.' not in full_table_name:
             full_table_name = f'`{self.database}`.`{table_name}`'
 
@@ -255,7 +339,8 @@ class ClickhouseApi:
         
         total_duration = 0.0
         total_records = len(field_values_list)
-        
+        on_cluster = self.get_on_cluster_clause()
+
         for i in range(0, len(field_values_list), self.erase_batch_size):
             batch = field_values_list[i:i + self.erase_batch_size]
             batch_field_values = ', '.join(f'({v})' for v in batch)
@@ -263,6 +348,7 @@ class ClickhouseApi:
             query = DELETE_QUERY.format(**{
                 'db_name': self.database,
                 'table_name': table_name,
+                'on_cluster': on_cluster,
                 'field_name': field_name,
                 'field_values': batch_field_values,
             })
@@ -280,14 +366,19 @@ class ClickhouseApi:
         )
 
     def drop_database(self, db_name):
-        self.execute_command(f'DROP DATABASE IF EXISTS `{db_name}`')
+        on_cluster = self.get_on_cluster_clause()
+        self.execute_command(f'DROP DATABASE IF EXISTS `{db_name}` {on_cluster}')
 
     def create_database(self, db_name, if_not_exists=False):
         if_not_exists_clause = 'IF NOT EXISTS ' if if_not_exists else ''
-        self.execute_command(f'CREATE DATABASE {if_not_exists_clause}`{db_name}`')
+        on_cluster = self.get_on_cluster_clause()
+        self.execute_command(f'CREATE DATABASE {if_not_exists_clause}`{db_name}` {on_cluster}')
 
     def drop_table(self, table_name):
-        self.execute_command(f'DROP TABLE IF EXISTS `{self.database}`.`{table_name}`')
+        on_cluster = self.get_on_cluster_clause()
+        query = f'DROP TABLE IF EXISTS `{self.database}`.`{table_name}` {on_cluster}'
+        logger.debug(query)
+        self.execute_command(query)
 
     def select(self, table_name, where=None, final=None):
         query = f'SELECT * FROM {table_name}'
@@ -308,7 +399,7 @@ class ClickhouseApi:
         return self.client.query(query)
 
     def show_create_table(self, table_name):
-        return self.client.query(f'SHOW CREATE TABLE `{table_name}`').result_rows[0][0]
+        return self.client.query(f'SHOW CREATE TABLE `{self.database}`.`{table_name}`').result_rows[0][0]
 
     def get_system_setting(self, name):
         results = self.select('system.settings', f"name = '{name}'")
@@ -328,6 +419,9 @@ class ClickhouseApi:
             or has no records
         """
         try:
+            if self.clickhouse_settings.cluster:
+                table_name += self.DISTRIBUTED_TABLE_SUFFIX
+
             query = f"SELECT MAX(_version) FROM `{self.database}`.`{table_name}`"
             result = self.client.query(query)
             if not result.result_rows or result.result_rows[0][0] is None:

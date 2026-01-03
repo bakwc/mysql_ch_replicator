@@ -117,9 +117,11 @@ class DbReplicatorInitial:
             # Skip database swap if:
             # 1. ignore_deletes is enabled - we're replicating directly to target
             # 2. Multiple MySQL databases map to same ClickHouse database - we're replicating directly to target
+            # 3. cluster_mode is enabled - bcz once Distributed & Replicated tables are created we can't change their schema.
             should_skip_db_swap = (
                 self.replicator.config.ignore_deletes or 
-                self.replicator.is_multi_mysql_to_single_ch
+                self.replicator.is_multi_mysql_to_single_ch or 
+                self.replicator.config.cluster_mode
             )
             
             if not should_skip_db_swap:
@@ -137,7 +139,6 @@ class DbReplicatorInitial:
                         f'RENAME DATABASE `{self.replicator.target_database_tmp}` TO `{self.replicator.target_database}`',
                     )
             self.replicator.clickhouse_api.database = self.replicator.target_database
-            
             # Execute post-initial-replication commands
             self.execute_post_initial_replication_commands()
         logger.info(f'initial replication - done')
@@ -458,7 +459,9 @@ class DbReplicatorInitial:
             return
         
         logger.info(f'Executing {len(commands)} post-initial-replication commands for database {self.replicator.database}')
-        
+       
+        # we should not execute USE <db> through clickhouse_api.execute_command instead we should have ch_api.set_database function
+        # todo: https://github.com/bakwc/mysql_ch_replicator/issues/225
         self.replicator.clickhouse_api.execute_command(f'USE `{self.replicator.target_database}`')
         
         for i, command in enumerate(commands, 1):

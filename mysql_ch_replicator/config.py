@@ -61,6 +61,7 @@ class ClickhouseSettings:
     port: int = 3306
     user: str = 'root'
     password: str = ''
+    cluster: str = ''
     connection_timeout: int = 30
     send_receive_timeout: int = 120
     erase_batch_size: int = 100000  # Number of records to delete per batch
@@ -77,6 +78,9 @@ class ClickhouseSettings:
 
         if not isinstance(self.password, str):
             raise ValueError(f'clickhouse password should be string and not {stype(self.password)}')
+
+        if not isinstance(self.cluster, str):
+            raise ValueError(f'clickhouse cluster should be string and not {stype(self.cluster)}')
 
         if not isinstance(self.connection_timeout, int):
             raise ValueError(f'clickhouse connection_timeout should be int and not {stype(self.connection_timeout)}')
@@ -138,6 +142,7 @@ class Settings:
         self.log_level = 'info'
         self.debug_log_level = False
         self.optimize_interval = 0
+        self.enable_optimize_final = None
         self.check_db_updated_interval = 0
         self.indexes: list[Index] = []
         self.partition_bys: list[PartitionBy] = []
@@ -150,6 +155,7 @@ class Settings:
         self.target_tables = {}
         self.initial_replication_threads = 0
         self.ignore_deletes = False
+        self.cluster_mode = None
         self.mysql_timezone = 'UTC'
         self.initial_replication_batch_size = 50000
 
@@ -169,6 +175,8 @@ class Settings:
         self.exclude_tables = data.pop('exclude_tables', '')
         self.log_level = data.pop('log_level', Settings.DEFAULT_LOG_LEVEL)
         self.optimize_interval = data.pop('optimize_interval', Settings.DEFAULT_OPTIMIZE_INTERVAL)
+        # https://clickhouse.com/docs/optimize/avoidoptimizefinal
+        self.enable_optimize_final = data.pop('enable_optimize_final', True)
         self.check_db_updated_interval = data.pop(
             'check_db_updated_interval', Settings.DEFAULT_CHECK_DB_UPDATED_INTERVAL,
         )
@@ -182,6 +190,7 @@ class Settings:
         self.target_tables = data.pop('target_tables', {})
         self.initial_replication_threads = data.pop('initial_replication_threads', 0)
         self.ignore_deletes = data.pop('ignore_deletes', False)
+        self.cluster_mode = True if self.clickhouse.cluster else False
         self.mysql_timezone = data.pop('mysql_timezone', 'UTC')
         self.initial_replication_batch_size = data.pop('initial_replication_batch_size', Settings.DEFAULT_INITIAL_REPLICATION_BATCH_SIZE)
 
