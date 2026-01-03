@@ -944,20 +944,12 @@ class MysqlToClickhouseConverter:
         on_cluster = self.db_replicator.clickhouse_api.get_on_cluster_clause() if self.db_replicator else ''
         # Check if we're converting from nullable to non-nullable
         default_clause = ''
-        if self.db_replicator and 'not null' in column_type_mysql_parameters.lower():
-            # When converting to NOT NULL in MySQL, we need to add DEFAULT in ClickHouse
-            # because ClickHouse requires DEFAULT when converting from nullable to non-nullable
+        if self.db_replicator:
             current_field = ch_table_structure.get_field(column_name)
             if current_field:
-                # Always add DEFAULT when converting to NOT NULL in MySQL
-                # because ClickHouse might have the column as nullable even if we think it's not
-                # Extract the base type (remove Nullable wrapper if present)
-                field_type = current_field.field_type
-                if field_type.startswith('Nullable('):
-                    inner_type = field_type[9:-1]
-                else:
-                    inner_type = field_type
-                default_clause = f' DEFAULT {self.__get_default_value_for_type(inner_type)}'
+                default_clause = self.__get_default_clause_for_not_null_conversion(
+                    current_field.field_type, column_type_mysql_parameters
+                )
         
         query = f'ALTER TABLE `{db_name}`.`{target_table_name}` {on_cluster} MODIFY COLUMN `{column_name}` {column_type_ch}{default_clause}'
         if self.db_replicator:
@@ -1021,6 +1013,18 @@ class MysqlToClickhouseConverter:
             
         # Default fallback
         return "''"
+    
+    def __get_default_clause_for_not_null_conversion(self, current_column_type_ch: str, mysql_parameters: str) -> str:
+        """Get DEFAULT clause for ALTER TABLE when converting from nullable to non-nullable"""
+        default_clause = ''
+        if 'not null' in mysql_parameters.lower():
+            # Extract the base type (remove Nullable wrapper if present)
+            if current_column_type_ch.startswith('Nullable('):
+                inner_type = current_column_type_ch[9:-1]
+            else:
+                inner_type = current_column_type_ch
+            default_clause = f' DEFAULT {self.__get_default_value_for_type(inner_type)}'
+        return default_clause
 
     def __convert_alter_table_change_column(self, db_name, table_name, tokens):
         if len(tokens) < 3:
@@ -1044,6 +1048,10 @@ class MysqlToClickhouseConverter:
             on_cluster = self.db_replicator.clickhouse_api.get_on_cluster_clause()
 
             if current_column_type_ch != column_type_ch:
+                # Check if we're converting to NOT NULL (from nullable to non-nullable)
+                default_clause = self.__get_default_clause_for_not_null_conversion(
+                    current_column_type_ch, column_type_mysql_parameters
+                )
 
                 mysql_table_structure.update_field(
                     TableField(name=column_name, field_type=column_type_mysql),
@@ -1053,7 +1061,7 @@ class MysqlToClickhouseConverter:
                     TableField(name=column_name, field_type=column_type_ch),
                 )
 
-                query = f'ALTER TABLE `{db_name}`.`{target_table_name}` {on_cluster} MODIFY COLUMN {column_name} {column_type_ch}'
+                query = f'ALTER TABLE `{db_name}`.`{target_table_name}` {on_cluster} MODIFY COLUMN {column_name} {column_type_ch}{default_clause}'
                 self.db_replicator.clickhouse_api.execute_command(query)
 
             if column_name != new_column_name:
