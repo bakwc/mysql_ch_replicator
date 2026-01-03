@@ -459,7 +459,9 @@ class DbReplicatorInitial:
             return
         
         logger.info(f'Executing {len(commands)} post-initial-replication commands for database {self.replicator.database}')
-        
+       
+        # we should not execute USE <db> through clickhouse_api.execute_command instead we should have ch_api.set_database function
+        # todo: https://github.com/bakwc/mysql_ch_replicator/issues/225
         self.replicator.clickhouse_api.execute_command(f'USE `{self.replicator.target_database}`')
         
         for i, command in enumerate(commands, 1):
