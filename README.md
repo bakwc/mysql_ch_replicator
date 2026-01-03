@@ -1,4 +1,4 @@
-# mysql_ch_replicator
+# mysql_ch_replicator test
 ![tests](https://github.com/bakwc/mysql_ch_replicator/actions/workflows/tests.yaml/badge.svg)
 [![Release][release-image]][releases]
 [![License][license-image]][license]
