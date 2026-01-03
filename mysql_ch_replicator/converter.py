@@ -953,6 +953,7 @@ class MysqlToClickhouseConverter:
         
         query = f'ALTER TABLE `{db_name}`.`{target_table_name}` {on_cluster} MODIFY COLUMN `{column_name}` {column_type_ch}{default_clause}'
         if self.db_replicator:
+            print(" ==== RUNNING QUERY:", query)
             self.db_replicator.clickhouse_api.execute_command(query)
 
     def __get_default_value_for_type(self, ch_type: str) -> str:
