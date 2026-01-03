@@ -939,9 +939,86 @@ class MysqlToClickhouseConverter:
             )
 
         target_table_name = self.db_replicator.get_target_table_name(table_name) if self.db_replicator else table_name
-        query = f'ALTER TABLE `{db_name}`.`{target_table_name}` MODIFY COLUMN `{column_name}` {column_type_ch}'
+        
+        # Check if we're converting from nullable to non-nullable
+        default_clause = ''
+        if self.db_replicator and 'not null' in column_type_mysql_parameters.lower():
+            # When converting to NOT NULL in MySQL, we need to add DEFAULT in ClickHouse
+            # because ClickHouse requires DEFAULT when converting from nullable to non-nullable
+            current_field = ch_table_structure.get_field(column_name)
+            if current_field:
+                # Always add DEFAULT when converting to NOT NULL in MySQL
+                # because ClickHouse might have the column as nullable even if we think it's not
+                # Extract the base type (remove Nullable wrapper if present)
+                field_type = current_field.field_type
+                if field_type.startswith('Nullable('):
+                    inner_type = field_type[9:-1]
+                else:
+                    inner_type = field_type
+                default_clause = f' DEFAULT {self.__get_default_value_for_type(inner_type)}'
+        
+        query = f'ALTER TABLE `{db_name}`.`{target_table_name}` MODIFY COLUMN `{column_name}` {column_type_ch}{default_clause}'
         if self.db_replicator:
             self.db_replicator.clickhouse_api.execute_command(query)
+
+    def __get_default_value_for_type(self, ch_type: str) -> str:
+        """Get appropriate default value for ClickHouse type when converting from nullable to non-nullable"""
+        ch_type_lower = ch_type.lower().strip()
+        
+        # Handle numeric types
+        if ch_type_lower in ['int8', 'int16', 'int32', 'int64', 'int128', 'int256']:
+            return '0'
+        if ch_type_lower in ['uint8', 'uint16', 'uint32', 'uint64', 'uint128', 'uint256']:
+            return '0'
+        if ch_type_lower in ['float32', 'float64']:
+            return '0.0'
+        if ch_type_lower == 'decimal':
+            return '0'
+            
+        # Handle string types
+        if ch_type_lower in ['string', 'fixedstring']:
+            return "''"
+            
+        # Handle date/time types
+        if ch_type_lower == 'date':
+            return "'1970-01-01'"
+        if ch_type_lower.startswith('datetime'):
+            return "'1970-01-01 00:00:00'"
+        if ch_type_lower.startswith('date32'):
+            return "'1970-01-01'"
+            
+        # Handle UUID
+        if ch_type_lower == 'uuid':
+            return "'00000000-0000-0000-0000-000000000000'"
+            
+        # Handle IP addresses
+        if ch_type_lower == 'ipv4':
+            return "'0.0.0.0'"
+        if ch_type_lower == 'ipv6':
+            return "'::'"
+            
+        # Handle boolean
+        if ch_type_lower == 'bool':
+            return 'false'
+            
+        # For complex types like Array, Tuple, etc., use empty/default values
+        if ch_type_lower.startswith('array'):
+            return '[]'
+        if ch_type_lower.startswith('tuple'):
+            return '()'
+        if ch_type_lower.startswith('map'):
+            return '{}'
+            
+        # For enum types, try to get the first value
+        if ch_type_lower.startswith('enum'):
+            # Extract first enum value - format is Enum8('value1'=1, 'value2'=2) or similar
+            match = re.search(r"Enum\d+\('([^']+)'", ch_type)
+            if match:
+                return f"'{match.group(1)}'"
+            return "''"
+            
+        # Default fallback
+        return "''"
 
     def __convert_alter_table_change_column(self, db_name, table_name, tokens):
         if len(tokens) < 3:
