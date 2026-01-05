@@ -142,7 +142,7 @@ class Settings:
         self.log_level = 'info'
         self.debug_log_level = False
         self.optimize_interval = 0
-        self.enable_optimize_final = False
+        self.enable_optimize_final = None
         self.check_db_updated_interval = 0
         self.indexes: list[Index] = []
         self.partition_bys: list[PartitionBy] = []
@@ -176,7 +176,7 @@ class Settings:
         self.log_level = data.pop('log_level', Settings.DEFAULT_LOG_LEVEL)
         self.optimize_interval = data.pop('optimize_interval', Settings.DEFAULT_OPTIMIZE_INTERVAL)
         # https://clickhouse.com/docs/optimize/avoidoptimizefinal
-        self.enable_optimize_final = data.pop('enable_optimize_final', False)
+        self.enable_optimize_final = data.pop('enable_optimize_final', True)
         self.check_db_updated_interval = data.pop(
             'check_db_updated_interval', Settings.DEFAULT_CHECK_DB_UPDATED_INTERVAL,
         )
