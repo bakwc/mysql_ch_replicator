@@ -51,7 +51,8 @@ class MySQLApi:
         
         if self.mysql_timezone and self.mysql_timezone != 'UTC':
             # mysql expects time_zone in +HH:MM
-            offset = datetime.datetime.now(self.mysql_timezone).strftime('%z')
+            tz = zoneinfo.ZoneInfo(self.mysql_timezone)
+            offset = datetime.datetime.now(tz).strftime('%z')
             mysql_offset = offset[:3] + ':' + offset[3:]
             self.cursor.execute(f"SET time_zone = '{mysql_offset}'")
         
