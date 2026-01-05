@@ -50,7 +50,10 @@ class MySQLApi:
         self.cursor = self.db.cursor()
         
         if self.mysql_timezone and self.mysql_timezone != 'UTC':
-            self.cursor.execute(f"SET time_zone = '{self.mysql_timezone}'")
+            # mysql expects time_zone in +HH:MM
+            offset = datetime.now(self.mysql_timezone).strftime('%z')
+            mysql_offset = offset[:3] + ':' + offset[3:]
+            self.cursor.execute(f"SET time_zone = '{mysql_offset}'")
         
         if self.database is not None:
             self.cursor.execute(f'USE `{self.database}`')
