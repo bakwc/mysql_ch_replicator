@@ -373,7 +373,7 @@ def convert_timestamp_to_datetime64(input_str, timezone='UTC'):
 
 
 class MysqlToClickhouseConverter:
-    def __init__(self, db_replicator: 'DbReplicator' = None):
+    def __init__(self, db_replicator: 'DbReplicator' = None):  # noqa: F821
         self.db_replicator = db_replicator
         self.types_mapping = {}
         if self.db_replicator is not None:
@@ -1412,6 +1412,16 @@ class MysqlToClickhouseConverter:
                 continue
             if line.lower().startswith('spatial'):
                 continue
+            # Handle unnamed UNIQUE constraints like "UNIQUE (uuid)" or "UNIQUE(uuid)"
+            # This must be checked after other unique key checks to avoid false positives
+            # We check if "unique" is followed by optional whitespace and then "("
+            # This distinguishes constraints from a field named "unique" (which would be "unique VARCHAR(...)")
+            line_lower = line.strip().lower()
+            if line_lower.startswith('unique') and len(line_lower) > 6:
+                # Check if next non-space character after "unique" is "("
+                remaining = line_lower[6:].lstrip()
+                if remaining.startswith('('):
+                    continue
             if line.lower().startswith('primary key'):
                 # Define identifier to match column names, handling backticks and unquoted names
                 identifier = (Suppress('`') + Word(alphas + alphanums + '_') + Suppress('`')) | Word(
