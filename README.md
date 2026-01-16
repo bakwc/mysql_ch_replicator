@@ -101,6 +101,7 @@ Make sure to:
 2. Mount a persistent volume for the data directory
 3. Adjust the paths according to your setup
 4. Optionally use `-e` flags to override credentials via environment variables
+5. Adjust Timezone of the docker container `-e TZ=Region/City`. Otherwise `mysql_ch_replicator` might add a positive or negative offest (depending upon where the server is) to Datetime columns which [will lead to incorrect data in clickhouse](https://github.com/bakwc/mysql_ch_replicator/pull/230#issuecomment-3714257840).
 
 ## Usage
 
