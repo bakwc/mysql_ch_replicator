@@ -3,6 +3,7 @@ import json
 import uuid
 import sqlparse
 import re
+import datetime
 from pyparsing import Suppress, CaselessKeyword, Word, alphas, alphanums, delimitedList
 import copy
 
@@ -628,6 +629,11 @@ class MysqlToClickhouseConverter:
                             v for v in set_values if v in clickhouse_field_value
                         ]
                     clickhouse_field_value = ','.join(clickhouse_field_value)
+            else:
+                # Handle NULL values for non-nullable ClickHouse columns
+                # Convert NULL to appropriate default value based on ClickHouse type
+                if 'Nullable' not in clickhouse_field_type:
+                    clickhouse_field_value = self.__get_default_value_for_type_python(clickhouse_field_type)
 
             if mysql_field_type.startswith('point'):
                 clickhouse_field_value = parse_mysql_point(clickhouse_field_value)
@@ -1021,6 +1027,65 @@ class MysqlToClickhouseConverter:
             
         # Default fallback
         return "''"
+
+    def __get_default_value_for_type_python(self, ch_type: str):
+        """Get appropriate default value as Python native type for ClickHouse type"""
+        ch_type_lower = ch_type.lower().strip()
+        
+        # Handle numeric types - return actual Python int/float
+        if ch_type_lower in ['int8', 'int16', 'int32', 'int64', 'int128', 'int256']:
+            return 0
+        if ch_type_lower in ['uint8', 'uint16', 'uint32', 'uint64', 'uint128', 'uint256']:
+            return 0
+        if ch_type_lower in ['float32', 'float64']:
+            return 0.0
+        if ch_type_lower == 'decimal':
+            return 0
+            
+        # Handle string types
+        if ch_type_lower in ['string', 'fixedstring']:
+            return ''
+            
+        # Handle date/time types - return datetime objects
+        if ch_type_lower == 'date':
+            return datetime.date(1970, 1, 1)
+        if ch_type_lower.startswith('datetime'):
+            return datetime.datetime(1970, 1, 1, 0, 0, 0)
+        if ch_type_lower.startswith('date32'):
+            return datetime.date(1970, 1, 1)
+            
+        # Handle UUID
+        if ch_type_lower == 'uuid':
+            return '00000000-0000-0000-0000-000000000000'
+            
+        # Handle IP addresses
+        if ch_type_lower == 'ipv4':
+            return '0.0.0.0'
+        if ch_type_lower == 'ipv6':
+            return '::'
+            
+        # Handle boolean
+        if ch_type_lower == 'bool':
+            return False
+            
+        # For complex types like Array, Tuple, etc., use empty/default values
+        if ch_type_lower.startswith('array'):
+            return []
+        if ch_type_lower.startswith('tuple'):
+            return ()
+        if ch_type_lower.startswith('map'):
+            return {}
+            
+        # For enum types, try to get first value
+        if ch_type_lower.startswith('enum'):
+            # Extract first enum value - format is Enum8('value1'=1, 'value2'=2) or similar
+            match = re.search(r"Enum\d+\('([^']+)'", ch_type)
+            if match:
+                return match.group(1)
+            return ''
+            
+        # Default fallback
+        return ''
 
     def __convert_alter_table_change_column(self, db_name, table_name, tokens):
         if len(tokens) < 3:
