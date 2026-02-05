@@ -522,6 +522,30 @@ def test_timezone_conversion_values():
     expected_dt_with_microseconds = datetime.datetime(2023, 8, 15, 14, 30, 0, 123000)
     expected_dt_with_microseconds_tz = expected_dt_with_microseconds.replace(tzinfo=ny_tz)
     assert updated_at_value == expected_dt_with_microseconds_tz, f"Expected {expected_dt_with_microseconds_tz}, got {updated_at_value}"
+
+    # Test realtime replication - insert after replication started
+    mysql.execute(
+        f"INSERT INTO `{TEST_TABLE_NAME}` (name, created_at, updated_at) "
+        f"VALUES ('realtime_test', '2023-08-15 14:30:00', '2023-08-15 14:30:00.123');",
+        commit=True,
+    )
+
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 2)
+
+    realtime_results = ch.select(TEST_TABLE_NAME, "name='realtime_test'")
+    assert len(realtime_results) == 1
+
+    realtime_created_at = realtime_results[0]['created_at']
+    realtime_updated_at = realtime_results[0]['updated_at']
+
+    expected_realtime_dt = datetime.datetime(2023, 8, 15, 14, 30, 0)
+    expected_realtime_dt_with_tz = expected_realtime_dt.replace(tzinfo=ny_tz)
+
+    assert realtime_created_at == expected_realtime_dt_with_tz, f"Realtime: Expected {expected_realtime_dt_with_tz}, got {realtime_created_at}"
+
+    expected_realtime_us = datetime.datetime(2023, 8, 15, 14, 30, 0, 123000)
+    expected_realtime_us_tz = expected_realtime_us.replace(tzinfo=ny_tz)
+    assert realtime_updated_at == expected_realtime_us_tz, f"Realtime: Expected {expected_realtime_us_tz}, got {realtime_updated_at}"
     
     run_all_runner.stop()
 
