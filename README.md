@@ -240,6 +240,8 @@ tables: '*'
 
 # OPTIONAL SETTINGS
 
+skip_initial_replication: False                       # optional
+
 initial_replication_threads: 4                        # optional
 
 exclude_databases: ['database_10', 'database_*_42']   # optional
@@ -306,6 +308,29 @@ mysql_timezone: 'UTC'    # optional, timezone for MySQL timestamp conversion (de
 - `http_host`, `http_port` - http endpoint to control replication, use `/docs` for abailable commands
 - `types_mappings` - custom types mapping, eg. you can map char(36) to UUID instead of String, etc.
 - `ignore_deletes` - when set to `true`, DELETE operations in MySQL will be ignored during replication. This creates an append-only model where data is only added, never removed. In this mode, the replicator doesn't create a temporary database and instead replicates directly to the target database.
+- `skip_initial_replication` - when set to `true`, skips the initial data copy and starts realtime replication immediately. This is useful when ClickHouse tables already exist with data and you want to continue replication from the current binlog position. **Important**: ClickHouse tables must have the same structure as MySQL tables, plus an additional `_version` UInt64 column (used by ReplacingMergeTree engine). No temporary database is created in this mode.
+
+Example - MySQL table:
+```sql
+CREATE TABLE users (
+    id INT NOT NULL AUTO_INCREMENT,
+    name VARCHAR(255),
+    age INT,
+    PRIMARY KEY (id)
+);
+```
+
+Corresponding ClickHouse table (required when using `skip_initial_replication`):
+```sql
+CREATE TABLE users (
+    id Int32,
+    name String,
+    age Nullable(Int32),
+    `_version` UInt64
+) ENGINE = ReplacingMergeTree(_version)
+ORDER BY id;
+```
+
 - `mysql_timezone` - timezone to use for MySQL timestamp conversion to ClickHouse DateTime64. Default is `'UTC'`. Accepts any valid timezone name (e.g., `'America/New_York'`, `'Europe/London'`, `'Asia/Tokyo'`). This setting ensures proper timezone handling when converting MySQL timestamp fields to ClickHouse DateTime64 with timezone information.
 - `post_initial_replication_commands` - SQL commands to execute in ClickHouse after initial replication completes for each database. Useful for creating materialized views, summary tables, or other database objects. Commands are executed in order, once per database matching the pattern.
 

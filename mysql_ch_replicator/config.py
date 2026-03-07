@@ -158,6 +158,7 @@ class Settings:
         self.cluster_mode = None
         self.mysql_timezone = 'UTC'
         self.initial_replication_batch_size = 50000
+        self.skip_initial_replication = False
 
     def load(self, settings_file):
         data = open(settings_file, 'r').read()
@@ -193,6 +194,7 @@ class Settings:
         self.cluster_mode = True if self.clickhouse.cluster else False
         self.mysql_timezone = data.pop('mysql_timezone', 'UTC')
         self.initial_replication_batch_size = data.pop('initial_replication_batch_size', Settings.DEFAULT_INITIAL_REPLICATION_BATCH_SIZE)
+        self.skip_initial_replication = data.pop('skip_initial_replication', False)
 
         indexes = data.pop('indexes', [])
         for index in indexes:

@@ -34,6 +34,21 @@ class DbReplicatorInitial:
             self.create_initial_structure_table(table)
         self.replicator.state.save()
 
+    def parse_tables_structure(self):
+        for table in self.replicator.state.tables:
+            if not self.replicator.config.is_table_matches(table):
+                continue
+            if self.replicator.single_table and self.replicator.single_table != table:
+                continue
+            mysql_create_statement = self.replicator.mysql_api.get_table_create_statement(table)
+            mysql_structure = self.replicator.converter.parse_mysql_table_structure(
+                mysql_create_statement, required_table_name=table,
+            )
+            clickhouse_structure = self.replicator.converter.convert_table_structure(mysql_structure)
+            target_table_name = self.replicator.get_target_table_name(table)
+            clickhouse_structure.table_name = target_table_name
+            self.replicator.state.tables_structure[table] = (mysql_structure, clickhouse_structure)
+
     def create_initial_structure_table(self, table_name):
         if not self.replicator.config.is_table_matches(table_name):
             return
