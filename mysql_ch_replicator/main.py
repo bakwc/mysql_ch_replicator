@@ -112,6 +112,7 @@ def run_db_replicator(args, config: Settings):
         total_workers=args.total_workers,
         table=args.table,
         initial_replication_test_fail_records=getattr(args, 'initial_replication_test_fail_records', None),
+        skip_initial_replication=args.skip_initial_replication,
     )
     db_replicator.run()
 
@@ -186,6 +187,10 @@ def main():
     parser.add_argument(
         "--initial-replication-test-fail-records", type=int, default=None,
         help="FOR TESTING ONLY: Exit initial replication after processing this many records",
+    )
+    parser.add_argument(
+        "--skip_initial_replication", action="store_true",
+        help="Skip initial replication and start realtime replication directly",
     )
     args = parser.parse_args()
 
