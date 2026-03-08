@@ -41,7 +41,7 @@ With a focus on high performance, it utilizes batching heavily and uses C++ exte
 
 ## Features
 
-- **Real-Time Replication**: Keeps your ClickHouse database in sync with MySQL in real-time.
+- **Real-Time Replication**: Keeps your ClickHouse database in sync with MySQL in real-time (±5 seconds delay).
 - **High Performance**: Utilizes batching and ports slow parts to C++ (e.g., MySQL internal JSON parsing) for optimal performance (±20K events / second on a single core).
 - **Supports Migrations/Schema Changes**: Handles adding, altering, and removing tables without breaking the replication process (*for most cases, [details here](https://github.com/bakwc/mysql_ch_replicator#migrations--schema-changes)).
 - **Recovery without Downtime**: Allows for preserving old data while performing initial replication, ensuring continuous operation.
