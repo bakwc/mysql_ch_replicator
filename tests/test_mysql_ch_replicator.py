@@ -1128,4 +1128,12 @@ ORDER BY id
 
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1)
 
+    mysql.execute(f"CREATE TABLE `{TEST_TABLE_NAME}_like` LIKE `{TEST_TABLE_NAME}`;", commit=True)
+
+    assert_wait(lambda: f'{TEST_TABLE_NAME}_like' in ch.get_tables())
+
+    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}_like` (name, age) VALUES ('LikeRecord', 88);", commit=True)
+
+    assert_wait(lambda: len(ch.select(f'{TEST_TABLE_NAME}_like')) == 1)
+
     run_all_runner.stop()
