@@ -191,6 +191,11 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     # Test add KEY
     mysql.execute(
         f"ALTER TABLE `{TEST_TABLE_NAME}` ADD KEY `idx_c1_c2` (`c1`,`c2`)")
+
+    # Test CONVERT TO CHARACTER SET (should be ignored)
+    mysql.execute(
+        f"ALTER TABLE `{TEST_TABLE_NAME}` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+
     mysql.execute(
         f"INSERT INTO `{TEST_TABLE_NAME}` (id, c1, c2) VALUES (46, 333, 444)",
         commit=True,
