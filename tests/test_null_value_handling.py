@@ -144,7 +144,7 @@ def test_null_value_in_non_nullable_string_column():
 def test_clickhouse_api_get_table_structure():
     """
     Test that ClickhouseApi.get_table_structure returns the actual table structure
-    from ClickHouse, including non-nullable String columns.
+    from ClickHouse, including non-nullable String columns and primary keys.
     """
     cfg = Settings()
     cfg.load('tests/tests_config.yaml')
@@ -180,6 +180,8 @@ ORDER BY id
     
     assert structure.fields[2].name == 'name'
     assert 'Nullable' in structure.fields[2].field_type
+    
+    assert structure.primary_keys == ['id']
     
     ch.drop_table('test_structure_table')
     ch.drop_database('test_db')
