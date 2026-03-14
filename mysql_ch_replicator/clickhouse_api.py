@@ -1,5 +1,6 @@
 import datetime
 import time
+import re
 import clickhouse_connect
 
 from logging import getLogger
@@ -120,7 +121,31 @@ class ClickhouseApi:
         return table_list
 
     def get_table_structure(self, table_name):
-        return {}
+        result = self.client.query(f'DESCRIBE TABLE `{self.database}`.`{table_name}`')
+        structure = TableStructure()
+        structure.table_name = table_name
+        for row in result.result_rows:
+            field_name = row[0]
+            field_type = row[1]
+            if field_name == '_version':
+                continue
+            structure.fields.append(TableField(
+                name=field_name,
+                field_type=field_type,
+            ))
+        
+        create_statement = self.show_create_table(table_name)
+        order_by_match = re.search(r'ORDER BY\s*\(([^)]+)\)', create_statement)
+        if order_by_match:
+            keys_str = order_by_match.group(1)
+            structure.primary_keys = [k.strip().strip('`') for k in keys_str.split(',')]
+        else:
+            order_by_match = re.search(r'ORDER BY\s+(\S+)', create_statement)
+            if order_by_match:
+                structure.primary_keys = [order_by_match.group(1).strip('`')]
+        
+        structure.preprocess()
+        return structure
 
     def get_databases(self):
         result = self.client.query('SHOW DATABASES')

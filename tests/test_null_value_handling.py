@@ -1,6 +1,8 @@
 import pytest
 from mysql_ch_replicator.converter import MysqlToClickhouseConverter
 from mysql_ch_replicator.table_structure import TableStructure, TableField
+from mysql_ch_replicator.clickhouse_api import ClickhouseApi
+from mysql_ch_replicator.config import Settings
 
 
 def test_null_value_in_non_nullable_int_column():
@@ -137,3 +139,49 @@ def test_null_value_in_non_nullable_string_column():
     assert result[0] == 1
     # NULL should be converted to empty string for non-nullable String
     assert result[1] == ''
+
+
+def test_clickhouse_api_get_table_structure():
+    """
+    Test that ClickhouseApi.get_table_structure returns the actual table structure
+    from ClickHouse, including non-nullable String columns and primary keys.
+    """
+    cfg = Settings()
+    cfg.load('tests/tests_config.yaml')
+    
+    ch = ClickhouseApi(
+        database='test_db',
+        clickhouse_settings=cfg.clickhouse,
+    )
+    
+    ch.create_database('test_db')
+    ch.execute_command('USE `test_db`')
+    ch.execute_command('''
+CREATE TABLE `test_db`.`test_structure_table` (
+    id Int32,
+    email String,
+    name Nullable(String),
+    `_version` UInt64
+) ENGINE = ReplacingMergeTree(_version)
+ORDER BY id
+    ''')
+    
+    structure = ch.get_table_structure('test_structure_table')
+    
+    assert structure.table_name == 'test_structure_table'
+    assert len(structure.fields) == 3
+    
+    assert structure.fields[0].name == 'id'
+    assert structure.fields[0].field_type == 'Int32'
+    
+    assert structure.fields[1].name == 'email'
+    assert structure.fields[1].field_type == 'String'
+    assert 'Nullable' not in structure.fields[1].field_type
+    
+    assert structure.fields[2].name == 'name'
+    assert 'Nullable' in structure.fields[2].field_type
+    
+    assert structure.primary_keys == ['id']
+    
+    ch.drop_table('test_structure_table')
+    ch.drop_database('test_db')
