@@ -120,7 +120,19 @@ class ClickhouseApi:
         return table_list
 
     def get_table_structure(self, table_name):
-        return {}
+        result = self.client.query(f'DESCRIBE TABLE `{self.database}`.`{table_name}`')
+        structure = TableStructure()
+        structure.table_name = table_name
+        for row in result.result_rows:
+            field_name = row[0]
+            field_type = row[1]
+            if field_name == '_version':
+                continue
+            structure.fields.append(TableField(
+                name=field_name,
+                field_type=field_type,
+            ))
+        return structure
 
     def get_databases(self):
         result = self.client.query('SHOW DATABASES')

@@ -44,9 +44,15 @@ class DbReplicatorInitial:
             mysql_structure = self.replicator.converter.parse_mysql_table_structure(
                 mysql_create_statement, required_table_name=table,
             )
-            clickhouse_structure = self.replicator.converter.convert_table_structure(mysql_structure)
             target_table_name = self.replicator.get_target_table_name(table)
-            clickhouse_structure.table_name = target_table_name
+            
+            if self.replicator.skip_initial_replication:
+                clickhouse_structure = self.replicator.clickhouse_api.get_table_structure(target_table_name)
+                clickhouse_structure.preprocess()
+            else:
+                clickhouse_structure = self.replicator.converter.convert_table_structure(mysql_structure)
+                clickhouse_structure.table_name = target_table_name
+            
             self.replicator.state.tables_structure[table] = (mysql_structure, clickhouse_structure)
 
     def create_initial_structure_table(self, table_name):
