@@ -265,6 +265,8 @@ class ClickhouseApi:
         # Check for custom order_by first
         if additional_order_bys:
             primary_key = additional_order_bys[0]
+            if ',' in primary_key:
+                primary_key = f'({primary_key})'
         else:
             primary_key = ','.join(structure.primary_keys)
             if len(structure.primary_keys) > 1:
