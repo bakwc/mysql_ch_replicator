@@ -230,7 +230,7 @@ class ClickhouseApi:
         })
 
 
-    def create_table(self, structure: TableStructure, additional_indexes: list | None = None, additional_partition_bys: list | None = None):
+    def create_table(self, structure: TableStructure, additional_indexes: list | None = None, additional_partition_bys: list | None = None, additional_order_bys: list | None = None):
         if not structure.primary_keys:
             raise Exception(f'missing primary key for {structure.table_name}')
 
@@ -261,9 +261,16 @@ class ClickhouseApi:
             indexes += additional_indexes
 
         indexes = ',\n'.join(indexes)
-        primary_key = ','.join(structure.primary_keys)
-        if len(structure.primary_keys) > 1:
-            primary_key = f'({primary_key})'
+        
+        # Check for custom order_by first
+        if additional_order_bys:
+            primary_key = additional_order_bys[0]
+            if ',' in primary_key:
+                primary_key = f'({primary_key})'
+        else:
+            primary_key = ','.join(structure.primary_keys)
+            if len(structure.primary_keys) > 1:
+                primary_key = f'({primary_key})'
 
         engine = 'ENGINE = ReplacingMergeTree(_version)'        
         on_cluster = self.get_on_cluster_clause()

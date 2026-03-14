@@ -272,6 +272,11 @@ partition_bys:                  # optional
     tables: ['test_table']
     partition_by: 'toYYYYMM(created_at)'
 
+order_bys:                      # optional
+  - databases: '*'
+    tables: ['test_table']
+    order_by: 'created_at, id'
+
 http_host: '0.0.0.0'    # optional
 http_port: 9128         # optional
 
@@ -307,6 +312,7 @@ version_initial_value: 0  # optional, initial value for _version column (default
 - `binlog_retention_period` - how long to keep binlog files in seconds. Default 43200 (12 hours). This setting controls how long the local binlog files are retained before being automatically cleaned up.
 - `indexes` - you may want to add some indexes to accelerate performance, eg. ngram index for full-test search, etc. To apply indexes you need to start replication from scratch.
 - `partition_bys` - custom PARTITION BY expressions for tables. By default uses `intDiv(id, 4294967)` for integer primary keys. Useful for time-based partitioning like `toYYYYMM(created_at)`.
+- `order_bys` - custom ORDER BY expressions for tables. By default uses the MySQL primary key(s). Useful for optimizing query patterns, e.g., `created_at, id` for time-series data.
 - `http_host`, `http_port` - http endpoint to control replication, use `/docs` for abailable commands
 - `types_mappings` - custom types mapping, eg. you can map char(36) to UUID instead of String, etc.
 - `ignore_deletes` - when set to `true`, DELETE operations in MySQL will be ignored during replication. This creates an append-only model where data is only added, never removed. In this mode, the replicator doesn't create a temporary database and instead replicates directly to the target database.
