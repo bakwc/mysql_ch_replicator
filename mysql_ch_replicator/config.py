@@ -159,6 +159,7 @@ class Settings:
         self.mysql_timezone = 'UTC'
         self.initial_replication_batch_size = 50000
         self.skip_initial_replication = False
+        self.version_initial_value = 0
 
     def load(self, settings_file):
         data = open(settings_file, 'r').read()
@@ -195,6 +196,7 @@ class Settings:
         self.mysql_timezone = data.pop('mysql_timezone', 'UTC')
         self.initial_replication_batch_size = data.pop('initial_replication_batch_size', Settings.DEFAULT_INITIAL_REPLICATION_BATCH_SIZE)
         self.skip_initial_replication = data.pop('skip_initial_replication', False)
+        self.version_initial_value = data.pop('version_initial_value', 0)
 
         indexes = data.pop('indexes', [])
         for index in indexes:
@@ -350,4 +352,8 @@ class Settings:
             raise ValueError(f'initial_replication_threads should be an integer, not {type(self.initial_replication_threads)}')
         if self.initial_replication_threads < 0:
             raise ValueError(f'initial_replication_threads should be non-negative')
+        if not isinstance(self.version_initial_value, int):
+            raise ValueError(f'version_initial_value should be an integer, not {type(self.version_initial_value)}')
+        if self.version_initial_value < 0:
+            raise ValueError(f'version_initial_value should be non-negative')
         self.validate_mysql_timezone()

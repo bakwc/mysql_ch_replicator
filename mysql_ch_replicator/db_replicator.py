@@ -178,6 +178,7 @@ class DbReplicator:
         self.clickhouse_api = ClickhouseApi(
             database=self.target_database,
             clickhouse_settings=config.clickhouse,
+            version_initial_value=config.version_initial_value,
         )
         self.converter = MysqlToClickhouseConverter(self)
         self.data_reader = DataReader(config.binlog_replicator, database)
