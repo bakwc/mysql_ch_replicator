@@ -13,6 +13,7 @@ from .enum import (
     parse_enum_or_set_field,
     extract_enum_or_set_values
 )
+from .mysql_api import MySQLApi
 
 
 CHARSET_MYSQL_TO_PYTHON = {
@@ -1217,15 +1218,29 @@ class MysqlToClickhouseConverter:
                 
                 return (new_mysql_structure, new_ch_structure) if is_query_api else new_mysql_structure
         
-        # If we couldn't get it from state, try with MySQL API
+        mysql_api = None
+        mysql_api_was_provided = False
+        
         if (hasattr(self, 'db_replicator') and 
             self.db_replicator is not None and 
             hasattr(self.db_replicator, 'mysql_api') and 
             self.db_replicator.mysql_api is not None):
-            
+            mysql_api = self.db_replicator.mysql_api
+            mysql_api_was_provided = True
+        elif (hasattr(self, 'db_replicator') and 
+              self.db_replicator is not None and 
+              hasattr(self.db_replicator, 'config') and 
+              hasattr(self.db_replicator, 'database')):
+            mysql_api = MySQLApi(
+                database=self.db_replicator.database,
+                mysql_settings=self.db_replicator.config.mysql,
+                mysql_timezone=self.db_replicator.config.mysql_timezone,
+            )
+        
+        if mysql_api is not None:
             try:
                 # Get the CREATE statement for the source table
-                source_create_statement = self.db_replicator.mysql_api.get_table_create_statement(source_table_name)
+                source_create_statement = mysql_api.get_table_create_statement(source_table_name)
                 
                 # Parse the source table structure
                 source_structure = self.parse_mysql_table_structure(source_create_statement)
@@ -1245,6 +1260,9 @@ class MysqlToClickhouseConverter:
                 error_msg = f"Could not get source table structure for LIKE statement: {str(e)}"
                 print(f"Error: {error_msg}")
                 raise Exception(error_msg, create_statement)
+            finally:
+                if not mysql_api_was_provided:
+                    mysql_api.close()
         
         # If we got here, we couldn't determine the structure
         raise Exception(f"Could not determine structure for source table '{source_table_name}' in LIKE statement", create_statement)
