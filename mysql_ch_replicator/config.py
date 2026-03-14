@@ -50,6 +50,13 @@ class PartitionBy:
 
 
 @dataclass
+class OrderBy:
+    databases: str | list = '*'
+    tables: str | list = '*'
+    order_by: str = ''
+
+
+@dataclass
 class PostInitialReplicationCommands:
     databases: str | list = '*'
     commands: list = None
@@ -146,6 +153,7 @@ class Settings:
         self.check_db_updated_interval = 0
         self.indexes: list[Index] = []
         self.partition_bys: list[PartitionBy] = []
+        self.order_bys: list[OrderBy] = []
         self.post_initial_replication_commands: list[PostInitialReplicationCommands] = []
         self.auto_restart_interval = 0
         self.http_host = ''
@@ -208,6 +216,12 @@ class Settings:
         for partition_by in partition_bys:
             self.partition_bys.append(
                 PartitionBy(**partition_by)
+            )
+        
+        order_bys = data.pop('order_bys', [])
+        for order_by in order_bys:
+            self.order_bys.append(
+                OrderBy(**order_by)
             )
         
         post_initial_replication_commands = data.pop('post_initial_replication_commands', [])
@@ -301,6 +315,16 @@ class Settings:
             if not self.is_pattern_matches(table_name, partition_by.tables):
                 continue
             results.append(partition_by.partition_by)
+        return results
+
+    def get_order_bys(self, db_name, table_name):
+        results = []
+        for order_by in self.order_bys:
+            if not self.is_pattern_matches(db_name, order_by.databases):
+                continue
+            if not self.is_pattern_matches(table_name, order_by.tables):
+                continue
+            results.append(order_by.order_by)
         return results
 
     def get_post_initial_replication_commands(self, db_name):
