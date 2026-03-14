@@ -767,6 +767,9 @@ class MysqlToClickhouseConverter:
             if op_name == 'auto_increment':
                 continue
 
+            if op_name == 'convert':
+                continue
+
             if op_name == 'change':
                 self.__convert_alter_table_change_column(db_name, table_name, tokens)
                 continue
