@@ -21,3 +21,4 @@ log_level: 'info'
 optimize_interval: 3
 check_db_updated_interval: 3
 skip_initial_replication: true
+version_initial_value: 8000

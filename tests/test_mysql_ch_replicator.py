@@ -1128,6 +1128,10 @@ ORDER BY id
 
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1)
 
+    records = ch.query(f"SELECT _version FROM `{TEST_TABLE_NAME}`")
+    version = records.result_rows[0][0]
+    assert version >= 8000, f"Expected _version >= 8000, got {version}"
+
     mysql.execute(f"CREATE TABLE `{TEST_TABLE_NAME}_like` LIKE `{TEST_TABLE_NAME}`;", commit=True)
 
     assert_wait(lambda: f'{TEST_TABLE_NAME}_like' in ch.get_tables())

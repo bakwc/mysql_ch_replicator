@@ -282,6 +282,8 @@ ignore_deletes: false    # optional, set to true to ignore DELETE operations
 
 mysql_timezone: 'UTC'    # optional, timezone for MySQL timestamp conversion (default: 'UTC')
 
+version_initial_value: 0  # optional, initial value for _version column (default: 0)
+
 ```
 
 #### Required settings
@@ -309,6 +311,7 @@ mysql_timezone: 'UTC'    # optional, timezone for MySQL timestamp conversion (de
 - `types_mappings` - custom types mapping, eg. you can map char(36) to UUID instead of String, etc.
 - `ignore_deletes` - when set to `true`, DELETE operations in MySQL will be ignored during replication. This creates an append-only model where data is only added, never removed. In this mode, the replicator doesn't create a temporary database and instead replicates directly to the target database.
 - `skip_initial_replication` - when set to `true`, skips the initial data copy and starts realtime replication immediately. This is useful when ClickHouse tables already exist with data and you want to continue replication from the current binlog position. **Important**: ClickHouse tables must have the same structure as MySQL tables, plus an additional `_version` UInt64 column (used by ReplacingMergeTree engine). No temporary database is created in this mode.
+- `version_initial_value` - initial value for the `_version` column when no pre-saved version exists. Default is 0. This is useful when you want to start versioning from a specific number (e.g., to avoid conflicts with existing data from other sources).
 
 Example - MySQL table:
 ```sql

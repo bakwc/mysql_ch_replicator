@@ -87,13 +87,13 @@ class GeneralStats:
 class ClickhouseApi:
     MAX_RETRIES = 5
     RETRY_INTERVAL = 30
-    # todo: this should come from config
     DISTRIBUTED_TABLE_SUFFIX = '_distributed'
 
-    def __init__(self, database: str | None, clickhouse_settings: ClickhouseSettings):
+    def __init__(self, database: str | None, clickhouse_settings: ClickhouseSettings, version_initial_value: int = 0):
         self.database = database
         self.clickhouse_settings = clickhouse_settings
         self.erase_batch_size = clickhouse_settings.erase_batch_size
+        self.version_initial_value = version_initial_value
         self.client = clickhouse_connect.get_client(
             host=clickhouse_settings.host,
             port=clickhouse_settings.port,
@@ -102,7 +102,7 @@ class ClickhouseApi:
             connect_timeout=clickhouse_settings.connection_timeout,
             send_receive_timeout=clickhouse_settings.send_receive_timeout,
         )
-        self.tables_last_record_version = {}  # table_name => last used row version
+        self.tables_last_record_version = {}
         self.stats = GeneralStats()
         self.execute_command('SET final = 1;')
 
@@ -200,7 +200,9 @@ class ClickhouseApi:
         self.create_database(self.database)
 
     def get_last_used_version(self, table_name):
-        return self.tables_last_record_version.get(table_name, 0)
+        if table_name in self.tables_last_record_version:
+            return self.tables_last_record_version[table_name]
+        return self.version_initial_value
 
     def set_last_used_version(self, table_name, last_used_version):
         self.tables_last_record_version[table_name] = last_used_version
