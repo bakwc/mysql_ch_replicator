@@ -278,6 +278,10 @@ CREATE TABLE `{TEST_DB_NAME}`.`{TEST_TABLE_NAME}` (
     assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1)
 
+    # Check for custom order_by configuration
+    create_query = ch.show_create_table(TEST_TABLE_NAME)
+    assert 'ORDER BY (name, id)' in create_query, f"Custom order_by not found in CREATE TABLE query: {create_query}"
+
     # Now follow user's sequence of operations with fully qualified names (excluding RENAME operation)
     # 1. Add new column
     mysql.execute(f"ALTER TABLE `{TEST_DB_NAME}`.`{TEST_TABLE_NAME}` ADD COLUMN added_new_column char(1)", commit=True)

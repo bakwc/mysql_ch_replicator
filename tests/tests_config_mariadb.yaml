@@ -26,8 +26,3 @@ partition_bys:
     tables: ['test_table']
     partition_by: 'intDiv(id, 1000000)'
 
-order_bys:
-  - databases: 'replication-test_db'
-    tables: ['test_table']
-    order_by: 'name, id'
-
