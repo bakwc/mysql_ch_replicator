@@ -1,4 +1,5 @@
 <clickhouse>
+    <timezone>America/New_York</timezone>
     <profiles>
         <default>
             <final>1</final>

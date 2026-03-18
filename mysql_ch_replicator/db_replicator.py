@@ -88,7 +88,8 @@ class State:
 
 class DbReplicator:
     def __init__(self, config: Settings, database: str, target_database: str = None, initial_only: bool = False, 
-                 worker_id: int = None, total_workers: int = None, table: str = None, initial_replication_test_fail_records: int = None):
+                 worker_id: int = None, total_workers: int = None, table: str = None, 
+                 initial_replication_test_fail_records: int = None, skip_initial_replication: bool = False):
         self.config = config
         self.database = database
         self.worker_id = worker_id
@@ -96,6 +97,7 @@ class DbReplicator:
         self.settings_file = config.settings_file
         self.single_table = table  # Store the single table to process
         self.initial_replication_test_fail_records = initial_replication_test_fail_records  # Test flag for early exit
+        self.skip_initial_replication = skip_initial_replication or config.skip_initial_replication
         
         # use same as source database by default
         self.target_database = database
@@ -159,11 +161,14 @@ class DbReplicator:
         if self.config.cluster_mode:
             self.target_database_tmp = self.target_database
 
-
         # If multiple MySQL databases map to same ClickHouse database, replicate directly
         if self.is_multi_mysql_to_single_ch:
             self.target_database_tmp = self.target_database
             logger.info(f'detected multiple MySQL databases mapping to {self.target_database} - using direct replication')
+
+        # If skip_initial_replication is enabled, replicate directly to target
+        if self.skip_initial_replication:
+            self.target_database_tmp = self.target_database
 
         self.mysql_api = MySQLApi(
             database=self.database,
@@ -173,6 +178,7 @@ class DbReplicator:
         self.clickhouse_api = ClickhouseApi(
             database=self.target_database,
             clickhouse_settings=config.clickhouse,
+            version_initial_value=config.version_initial_value,
         )
         self.converter = MysqlToClickhouseConverter(self)
         self.data_reader = DataReader(config.binlog_replicator, database)
@@ -222,6 +228,20 @@ class DbReplicator:
                 return
             if self.state.status == Status.PERFORMING_INITIAL_REPLICATION:
                 self.initial_replicator.perform_initial_replication()
+                self.run_realtime_replication()
+                return
+
+            if self.skip_initial_replication:
+                logger.info('skipping initial replication')
+                self.clickhouse_api.database = self.target_database
+                self.state.tables = self.mysql_api.get_tables()
+                self.state.tables = [
+                    table for table in self.state.tables if self.config.is_table_matches(table)
+                ]
+                self.state.last_processed_transaction = self.data_reader.get_last_transaction_id()
+                self.initial_replicator.parse_tables_structure()
+                self.state.save()
+                logger.info(f'last known transaction {self.state.last_processed_transaction}')
                 self.run_realtime_replication()
                 return
 

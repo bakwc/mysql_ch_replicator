@@ -9,6 +9,7 @@ clickhouse:
   port: 9123
   user: 'default'
   password: 'admin'
+  erase_batch_size: 2
 
 binlog_replicator:
   data_dir: '/app/binlog/'
@@ -16,18 +17,8 @@ binlog_replicator:
   binlog_retention_period: 43200  # 12 hours in seconds
 
 databases: '*test*'
-log_level: 'debug'
+log_level: 'info'
 optimize_interval: 3
 check_db_updated_interval: 3
-
-# This mapping is the key part that causes issues with schema evolution
-target_databases:
-  replication-test_db: mapped_target_db
-
-order_bys:
-  - databases: 'replication-test_db'
-    tables: ['test_table']
-    order_by: 'name, id'
-
-http_host: 'localhost'
-http_port: 9128
+skip_initial_replication: true
+version_initial_value: 8000

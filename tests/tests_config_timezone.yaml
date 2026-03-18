@@ -15,6 +15,6 @@ binlog_replicator:
   records_per_file: 100000
 
 databases: '*test*'
-log_level: 'info'
+log_level: 'debug'
 mysql_timezone: 'America/New_York'
 

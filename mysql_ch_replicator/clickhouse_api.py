@@ -1,5 +1,6 @@
 import datetime
 import time
+import re
 import clickhouse_connect
 
 from logging import getLogger
@@ -86,13 +87,13 @@ class GeneralStats:
 class ClickhouseApi:
     MAX_RETRIES = 5
     RETRY_INTERVAL = 30
-    # todo: this should come from config
     DISTRIBUTED_TABLE_SUFFIX = '_distributed'
 
-    def __init__(self, database: str | None, clickhouse_settings: ClickhouseSettings):
+    def __init__(self, database: str | None, clickhouse_settings: ClickhouseSettings, version_initial_value: int = 0):
         self.database = database
         self.clickhouse_settings = clickhouse_settings
         self.erase_batch_size = clickhouse_settings.erase_batch_size
+        self.version_initial_value = version_initial_value
         self.client = clickhouse_connect.get_client(
             host=clickhouse_settings.host,
             port=clickhouse_settings.port,
@@ -101,7 +102,7 @@ class ClickhouseApi:
             connect_timeout=clickhouse_settings.connection_timeout,
             send_receive_timeout=clickhouse_settings.send_receive_timeout,
         )
-        self.tables_last_record_version = {}  # table_name => last used row version
+        self.tables_last_record_version = {}
         self.stats = GeneralStats()
         self.execute_command('SET final = 1;')
 
@@ -120,7 +121,31 @@ class ClickhouseApi:
         return table_list
 
     def get_table_structure(self, table_name):
-        return {}
+        result = self.client.query(f'DESCRIBE TABLE `{self.database}`.`{table_name}`')
+        structure = TableStructure()
+        structure.table_name = table_name
+        for row in result.result_rows:
+            field_name = row[0]
+            field_type = row[1]
+            if field_name == '_version':
+                continue
+            structure.fields.append(TableField(
+                name=field_name,
+                field_type=field_type,
+            ))
+        
+        create_statement = self.show_create_table(table_name)
+        order_by_match = re.search(r'ORDER BY\s*\(([^)]+)\)', create_statement)
+        if order_by_match:
+            keys_str = order_by_match.group(1)
+            structure.primary_keys = [k.strip().strip('`') for k in keys_str.split(',')]
+        else:
+            order_by_match = re.search(r'ORDER BY\s+(\S+)', create_statement)
+            if order_by_match:
+                structure.primary_keys = [order_by_match.group(1).strip('`')]
+        
+        structure.preprocess()
+        return structure
 
     def get_databases(self):
         result = self.client.query('SHOW DATABASES')
@@ -175,7 +200,9 @@ class ClickhouseApi:
         self.create_database(self.database)
 
     def get_last_used_version(self, table_name):
-        return self.tables_last_record_version.get(table_name, 0)
+        if table_name in self.tables_last_record_version:
+            return self.tables_last_record_version[table_name]
+        return self.version_initial_value
 
     def set_last_used_version(self, table_name, last_used_version):
         self.tables_last_record_version[table_name] = last_used_version
@@ -203,7 +230,7 @@ class ClickhouseApi:
         })
 
 
-    def create_table(self, structure: TableStructure, additional_indexes: list | None = None, additional_partition_bys: list | None = None):
+    def create_table(self, structure: TableStructure, additional_indexes: list | None = None, additional_partition_bys: list | None = None, additional_order_bys: list | None = None):
         if not structure.primary_keys:
             raise Exception(f'missing primary key for {structure.table_name}')
 
@@ -234,9 +261,16 @@ class ClickhouseApi:
             indexes += additional_indexes
 
         indexes = ',\n'.join(indexes)
-        primary_key = ','.join(structure.primary_keys)
-        if len(structure.primary_keys) > 1:
-            primary_key = f'({primary_key})'
+        
+        # Check for custom order_by first
+        if additional_order_bys:
+            primary_key = additional_order_bys[0]
+            if ',' in primary_key:
+                primary_key = f'({primary_key})'
+        else:
+            primary_key = ','.join(structure.primary_keys)
+            if len(structure.primary_keys) > 1:
+                primary_key = f'({primary_key})'
 
         engine = 'ENGINE = ReplacingMergeTree(_version)'        
         on_cluster = self.get_on_cluster_clause()

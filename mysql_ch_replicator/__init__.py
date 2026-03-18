@@ -1,4 +1,12 @@
 import importlib.metadata
+import os
+
+os.environ['TZ'] = 'UTC'
+try:
+    import time
+    time.tzset()
+except AttributeError:
+    pass
 
 from .main import main
 

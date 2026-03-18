@@ -61,6 +61,8 @@ services:
       context: ..
       dockerfile: Dockerfile
     network_mode: host
+    environment:
+      - TZ=America/New_York
     volumes:
       - ../:/app/
     entrypoint: ["/bin/bash"]
