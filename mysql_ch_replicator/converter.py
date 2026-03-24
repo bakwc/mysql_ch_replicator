@@ -776,6 +776,10 @@ class MysqlToClickhouseConverter:
                 continue
             
             if op_name == 'rename':
+                # Ignore RENAME INDEX/KEY operations: ClickHouse doesn't mirror MySQL indexes.
+                if tokens[0].lower() in ('index', 'key'):
+                    continue
+
                 # Handle RENAME COLUMN operation
                 if tokens[0].lower() == 'column':
                     tokens = tokens[1:]  # Skip the COLUMN keyword
