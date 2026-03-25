@@ -456,6 +456,16 @@ def test_alter_tokens_split():
         assert result == expected
 
 
+def test_alter_rename_index_is_ignored():
+    converter = MysqlToClickhouseConverter()
+
+    # Should not raise: RENAME INDEX is a MySQL index-only operation and is skipped.
+    converter.convert_alter_query(
+        "ALTER TABLE `mydb`.`mytable` RENAME INDEX `idx_old` TO `idx_new`",
+        "mydb",
+    )
+
+
 def test_enum_conversion():
     """
     Test that enum values are properly converted to lowercase in ClickHouse
