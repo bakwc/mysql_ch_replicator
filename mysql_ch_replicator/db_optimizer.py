@@ -82,7 +82,7 @@ class DbOptimizer:
     def optimize_database(self, db_name):
         self.mysql_api.set_database(db_name)
         tables = self.mysql_api.get_tables()
-        self.mysql_api.close()on_cluster = self.clickhouse_api.get_on_cluster_clause()
+        self.mysql_api.close()
         tables = [table for table in tables if self.config.is_table_matches(table)]
     
         # todo: we should not be doing this and instead should have function just like we have "set_database" in mysql_api
