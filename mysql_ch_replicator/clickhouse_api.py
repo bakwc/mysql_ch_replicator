@@ -302,6 +302,7 @@ class ClickhouseApi:
 
     def insert(self, table_name, records, table_structure: TableStructure = None):
         current_version = self.get_last_used_version(table_name) + 1
+        version_table_name = table_name
 
         records_to_insert = []
         for record in records:
@@ -334,7 +335,6 @@ class ClickhouseApi:
             records_to_insert.append(tuple(record) + (current_version,))
             current_version += 1
 
-        # in cluster mode we want to insert data to distributed so that its replicated among other shards & replicas
         if self.clickhouse_settings.cluster:
             table_name += self.DISTRIBUTED_TABLE_SUFFIX
 
@@ -363,7 +363,7 @@ class ClickhouseApi:
             records=len(records_to_insert),
         )
 
-        self.set_last_used_version(table_name, current_version)
+        self.set_last_used_version(version_table_name, current_version)
 
     def erase(self, table_name, field_name, field_values):
         field_name = ','.join(field_name)
