@@ -17,7 +17,7 @@ binlog_replicator:
   binlog_retention_period: 43200  # 12 hours in seconds
 
 databases: '*test*'
-log_level: 'debug'
+log_level: 'info'
 optimize_interval: 3
 check_db_updated_interval: 3
 
