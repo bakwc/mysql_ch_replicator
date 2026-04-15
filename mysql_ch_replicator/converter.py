@@ -347,6 +347,42 @@ def strip_sql_comments(sql_statement):
     return sqlparse.format(sql_statement, strip_comments=True).strip()
 
 
+def split_sql_statements(sql):
+    """Split a SQL string with multiple semicolon-separated statements.
+    Correctly skips semicolons inside single-quoted, double-quoted, or backtick-quoted strings.
+    Returns a list of non-empty statement strings (without trailing semicolons).
+    """
+    statements = []
+    current = []
+    in_quote = None  # None, "'", '"', or '`'
+    i = 0
+    while i < len(sql):
+        ch = sql[i]
+        if in_quote:
+            current.append(ch)
+            if ch == '\\':
+                i += 1
+                if i < len(sql):
+                    current.append(sql[i])
+            elif ch == in_quote:
+                in_quote = None
+        elif ch in ('"', "'", '`'):
+            in_quote = ch
+            current.append(ch)
+        elif ch == ';':
+            stmt = ''.join(current).strip()
+            if stmt:
+                statements.append(stmt)
+            current = []
+        else:
+            current.append(ch)
+        i += 1
+    stmt = ''.join(current).strip()
+    if stmt:
+        statements.append(stmt)
+    return statements
+
+
 def convert_timestamp_to_datetime64(input_str, timezone='UTC'):
 
     # Define the regex pattern
@@ -674,7 +710,10 @@ class MysqlToClickhouseConverter:
         mysql_query = mysql_query.strip()
         if mysql_query.endswith(';'):
             mysql_query = mysql_query[:-1]
-        if mysql_query.find(';') != -1:
+        # Use split_sql_statements to correctly ignore semicolons inside quoted strings
+        # (e.g. semicolons inside COMMENT '...' clauses are not statement separators)
+        if len(split_sql_statements(mysql_query)) > 1:
+            print(f'warning: multi-query statement detected, query: {mysql_query}')
             raise Exception('multi-query statement not supported')
         return mysql_query
     
