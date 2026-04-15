@@ -767,12 +767,14 @@ class MysqlToClickhouseConverter:
 
         for subquery in subqueries:
             subquery = subquery.strip()
+            if not subquery:
+                continue
             tokens = subquery.split()
 
-            op_name = tokens[0].lower()
+            op_name = tokens[0].lower().split('=')[0]
             tokens = tokens[1:]
 
-            if tokens[0].lower() == 'column':
+            if tokens and tokens[0].lower() == 'column':
                 tokens = tokens[1:]
 
             if op_name == 'add':
@@ -820,7 +822,7 @@ class MysqlToClickhouseConverter:
                     continue
 
                 # Handle RENAME COLUMN operation
-                if tokens[0].lower() == 'column':
+                if tokens and tokens[0].lower() == 'column':
                     tokens = tokens[1:]  # Skip the COLUMN keyword
                 self.__convert_alter_table_rename_column(db_name, table_name, tokens)
                 continue
