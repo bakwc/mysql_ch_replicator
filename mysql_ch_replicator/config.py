@@ -50,6 +50,13 @@ class PartitionBy:
 
 
 @dataclass
+class OrderBy:
+    databases: str | list = '*'
+    tables: str | list = '*'
+    order_by: str = ''
+
+
+@dataclass
 class PostInitialReplicationCommands:
     databases: str | list = '*'
     commands: list = None
@@ -146,6 +153,7 @@ class Settings:
         self.check_db_updated_interval = 0
         self.indexes: list[Index] = []
         self.partition_bys: list[PartitionBy] = []
+        self.order_bys: list[OrderBy] = []
         self.post_initial_replication_commands: list[PostInitialReplicationCommands] = []
         self.auto_restart_interval = 0
         self.http_host = ''
@@ -158,6 +166,8 @@ class Settings:
         self.cluster_mode = None
         self.mysql_timezone = 'UTC'
         self.initial_replication_batch_size = 50000
+        self.skip_initial_replication = False
+        self.version_initial_value = 0
 
     def load(self, settings_file):
         data = open(settings_file, 'r').read()
@@ -193,6 +203,8 @@ class Settings:
         self.cluster_mode = True if self.clickhouse.cluster else False
         self.mysql_timezone = data.pop('mysql_timezone', 'UTC')
         self.initial_replication_batch_size = data.pop('initial_replication_batch_size', Settings.DEFAULT_INITIAL_REPLICATION_BATCH_SIZE)
+        self.skip_initial_replication = data.pop('skip_initial_replication', False)
+        self.version_initial_value = data.pop('version_initial_value', 0)
 
         indexes = data.pop('indexes', [])
         for index in indexes:
@@ -204,6 +216,12 @@ class Settings:
         for partition_by in partition_bys:
             self.partition_bys.append(
                 PartitionBy(**partition_by)
+            )
+        
+        order_bys = data.pop('order_bys', [])
+        for order_by in order_bys:
+            self.order_bys.append(
+                OrderBy(**order_by)
             )
         
         post_initial_replication_commands = data.pop('post_initial_replication_commands', [])
@@ -299,6 +317,16 @@ class Settings:
             results.append(partition_by.partition_by)
         return results
 
+    def get_order_bys(self, db_name, table_name):
+        results = []
+        for order_by in self.order_bys:
+            if not self.is_pattern_matches(db_name, order_by.databases):
+                continue
+            if not self.is_pattern_matches(table_name, order_by.tables):
+                continue
+            results.append(order_by.order_by)
+        return results
+
     def get_post_initial_replication_commands(self, db_name):
         results = []
         for cmd_config in self.post_initial_replication_commands:
@@ -348,4 +376,8 @@ class Settings:
             raise ValueError(f'initial_replication_threads should be an integer, not {type(self.initial_replication_threads)}')
         if self.initial_replication_threads < 0:
             raise ValueError(f'initial_replication_threads should be non-negative')
+        if not isinstance(self.version_initial_value, int):
+            raise ValueError(f'version_initial_value should be an integer, not {type(self.version_initial_value)}')
+        if self.version_initial_value < 0:
+            raise ValueError(f'version_initial_value should be non-negative')
         self.validate_mysql_timezone()

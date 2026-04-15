@@ -41,7 +41,7 @@ With a focus on high performance, it utilizes batching heavily and uses C++ exte
 
 ## Features
 
-- **Real-Time Replication**: Keeps your ClickHouse database in sync with MySQL in real-time.
+- **Real-Time Replication**: Keeps your ClickHouse database in sync with MySQL in real-time (±5 seconds delay).
 - **High Performance**: Utilizes batching and ports slow parts to C++ (e.g., MySQL internal JSON parsing) for optimal performance (±20K events / second on a single core).
 - **Supports Migrations/Schema Changes**: Handles adding, altering, and removing tables without breaking the replication process (*for most cases, [details here](https://github.com/bakwc/mysql_ch_replicator#migrations--schema-changes)).
 - **Recovery without Downtime**: Allows for preserving old data while performing initial replication, ensuring continuous operation.
@@ -101,6 +101,7 @@ Make sure to:
 2. Mount a persistent volume for the data directory
 3. Adjust the paths according to your setup
 4. Optionally use `-e` flags to override credentials via environment variables
+5. Adjust Timezone of the docker container `-e TZ=Region/City`. Otherwise `mysql_ch_replicator` might add a positive or negative offest (depending upon where the server is) to Datetime columns which [will lead to incorrect data in clickhouse](https://github.com/bakwc/mysql_ch_replicator/pull/230#issuecomment-3714257840).
 
 ## Usage
 
@@ -239,6 +240,8 @@ tables: '*'
 
 # OPTIONAL SETTINGS
 
+skip_initial_replication: False                       # optional
+
 initial_replication_threads: 4                        # optional
 
 exclude_databases: ['database_10', 'database_*_42']   # optional
@@ -269,6 +272,11 @@ partition_bys:                  # optional
     tables: ['test_table']
     partition_by: 'toYYYYMM(created_at)'
 
+order_bys:                      # optional
+  - databases: '*'
+    tables: ['test_table']
+    order_by: 'created_at, id'
+
 http_host: '0.0.0.0'    # optional
 http_port: 9128         # optional
 
@@ -278,6 +286,8 @@ types_mapping:          # optional
 ignore_deletes: false    # optional, set to true to ignore DELETE operations
 
 mysql_timezone: 'UTC'    # optional, timezone for MySQL timestamp conversion (default: 'UTC')
+
+version_initial_value: 0  # optional, initial value for _version column (default: 0)
 
 ```
 
@@ -302,9 +312,34 @@ mysql_timezone: 'UTC'    # optional, timezone for MySQL timestamp conversion (de
 - `binlog_retention_period` - how long to keep binlog files in seconds. Default 43200 (12 hours). This setting controls how long the local binlog files are retained before being automatically cleaned up.
 - `indexes` - you may want to add some indexes to accelerate performance, eg. ngram index for full-test search, etc. To apply indexes you need to start replication from scratch.
 - `partition_bys` - custom PARTITION BY expressions for tables. By default uses `intDiv(id, 4294967)` for integer primary keys. Useful for time-based partitioning like `toYYYYMM(created_at)`.
+- `order_bys` - custom ORDER BY expressions for tables. By default uses the MySQL primary key(s). Useful for optimizing query patterns, e.g., `created_at, id` for time-series data.
 - `http_host`, `http_port` - http endpoint to control replication, use `/docs` for abailable commands
 - `types_mappings` - custom types mapping, eg. you can map char(36) to UUID instead of String, etc.
 - `ignore_deletes` - when set to `true`, DELETE operations in MySQL will be ignored during replication. This creates an append-only model where data is only added, never removed. In this mode, the replicator doesn't create a temporary database and instead replicates directly to the target database.
+- `skip_initial_replication` - when set to `true`, skips the initial data copy and starts realtime replication immediately. This is useful when ClickHouse tables already exist with data and you want to continue replication from the current binlog position. **Important**: ClickHouse tables must have the same structure as MySQL tables, plus an additional `_version` UInt64 column (used by ReplacingMergeTree engine). No temporary database is created in this mode.
+- `version_initial_value` - initial value for the `_version` column when no pre-saved version exists. Default is 0. This is useful when you want to start versioning from a specific number (e.g., to avoid conflicts with existing data from other sources).
+
+Example - MySQL table:
+```sql
+CREATE TABLE users (
+    id INT NOT NULL AUTO_INCREMENT,
+    name VARCHAR(255),
+    age INT,
+    PRIMARY KEY (id)
+);
+```
+
+Corresponding ClickHouse table (required when using `skip_initial_replication`):
+```sql
+CREATE TABLE users (
+    id Int32,
+    name String,
+    age Nullable(Int32),
+    `_version` UInt64
+) ENGINE = ReplacingMergeTree(_version)
+ORDER BY id;
+```
+
 - `mysql_timezone` - timezone to use for MySQL timestamp conversion to ClickHouse DateTime64. Default is `'UTC'`. Accepts any valid timezone name (e.g., `'America/New_York'`, `'Europe/London'`, `'Asia/Tokyo'`). This setting ensures proper timezone handling when converting MySQL timestamp fields to ClickHouse DateTime64 with timezone information.
 - `post_initial_replication_commands` - SQL commands to execute in ClickHouse after initial replication completes for each database. Useful for creating materialized views, summary tables, or other database objects. Commands are executed in order, once per database matching the pattern.
 

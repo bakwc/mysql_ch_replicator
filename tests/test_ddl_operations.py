@@ -191,6 +191,11 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
     # Test add KEY
     mysql.execute(
         f"ALTER TABLE `{TEST_TABLE_NAME}` ADD KEY `idx_c1_c2` (`c1`,`c2`)")
+
+    # Test CONVERT TO CHARACTER SET (should be ignored)
+    mysql.execute(
+        f"ALTER TABLE `{TEST_TABLE_NAME}` CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+
     mysql.execute(
         f"INSERT INTO `{TEST_TABLE_NAME}` (id, c1, c2) VALUES (46, 333, 444)",
         commit=True,
@@ -272,6 +277,10 @@ CREATE TABLE `{TEST_DB_NAME}`.`{TEST_TABLE_NAME}` (
     ch.execute_command(f'USE `mapped_target_db`')
     assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
     assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1)
+
+    # Check for custom order_by configuration
+    create_query = ch.show_create_table(TEST_TABLE_NAME)
+    assert 'ORDER BY (name, id)' in create_query, f"Custom order_by not found in CREATE TABLE query: {create_query}"
 
     # Now follow user's sequence of operations with fully qualified names (excluding RENAME operation)
     # 1. Add new column

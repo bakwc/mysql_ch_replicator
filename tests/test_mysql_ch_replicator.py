@@ -19,6 +19,8 @@ from mysql_ch_replicator.converter import MysqlToClickhouseConverter
 
 from common import *
 
+CONFIG_FILE_SKIP_INITIAL = 'tests/tests_config_skip_initial_replication.yaml'
+
 
 def test_multi_column_erase():
     config_file = CONFIG_FILE
@@ -452,6 +454,16 @@ def test_alter_tokens_split():
         print("Match?     ", result == expected)
         print("-" * 60)
         assert result == expected
+
+
+def test_alter_rename_index_is_ignored():
+    converter = MysqlToClickhouseConverter()
+
+    # Should not raise: RENAME INDEX is a MySQL index-only operation and is skipped.
+    converter.convert_alter_query(
+        "ALTER TABLE `mydb`.`mytable` RENAME INDEX `idx_old` TO `idx_new`",
+        "mydb",
+    )
 
 
 def test_enum_conversion():
@@ -1064,3 +1076,78 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
 
     db_replicator_runner.stop()
     binlog_replicator_runner.stop()
+
+
+def test_skip_initial_replication():
+    """
+    Test that skip_initial_replication option skips initial replication
+    and starts realtime replication directly without creating temporary tables.
+    """
+    cfg = config.Settings()
+    cfg.load(CONFIG_FILE_SKIP_INITIAL)
+
+    mysql = mysql_api.MySQLApi(
+        database=None,
+        mysql_settings=cfg.mysql,
+    )
+
+    ch = clickhouse_api.ClickhouseApi(
+        database=TEST_DB_NAME,
+        clickhouse_settings=cfg.clickhouse,
+    )
+
+    prepare_env(cfg, mysql, ch)
+
+    mysql.execute(f'''
+CREATE TABLE `{TEST_TABLE_NAME}` (
+    id int NOT NULL AUTO_INCREMENT,
+    name varchar(255),
+    age int,
+    PRIMARY KEY (id)
+); 
+    ''')
+
+    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, age) VALUES ('Ivan', 42);", commit=True)
+    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, age) VALUES ('Peter', 33);", commit=True)
+
+    ch.create_database(TEST_DB_NAME)
+    ch.execute_command(f'USE `{TEST_DB_NAME}`')
+    ch.execute_command(f'''
+CREATE TABLE `{TEST_DB_NAME}`.`{TEST_TABLE_NAME}` (
+    id Int32,
+    name String,
+    age Nullable(Int32),
+    `_version` UInt64
+) ENGINE = ReplacingMergeTree(_version)
+ORDER BY id
+    ''')
+
+    run_all_runner = RunAllRunner(cfg_file=CONFIG_FILE_SKIP_INITIAL)
+    run_all_runner.run()
+
+    time.sleep(10)
+
+    assert_wait(lambda: TEST_DB_NAME in ch.get_databases())
+    assert_wait(lambda: TEST_TABLE_NAME in ch.get_tables())
+    assert_wait(lambda: f'{TEST_DB_NAME}_tmp' not in ch.get_databases(), max_wait_time=5)
+
+    records = ch.select(TEST_TABLE_NAME)
+    assert len(records) == 0, "Initial data should NOT be replicated when skip_initial_replication=True"
+
+    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, age) VALUES ('NewRecord', 99);", commit=True)
+
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 1)
+
+    records = ch.query(f"SELECT _version FROM `{TEST_TABLE_NAME}`")
+    version = records.result_rows[0][0]
+    assert version >= 8000, f"Expected _version >= 8000, got {version}"
+
+    mysql.execute(f"CREATE TABLE `{TEST_TABLE_NAME}_like` LIKE `{TEST_TABLE_NAME}`;", commit=True)
+
+    assert_wait(lambda: f'{TEST_TABLE_NAME}_like' in ch.get_tables())
+
+    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}_like` (name, age) VALUES ('LikeRecord', 88);", commit=True)
+
+    assert_wait(lambda: len(ch.select(f'{TEST_TABLE_NAME}_like')) == 1)
+
+    run_all_runner.stop()

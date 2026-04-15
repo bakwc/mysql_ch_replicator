@@ -12,6 +12,7 @@ secure-file-priv = /var/lib/mysql-files
 socket = /var/lib/mysql/mysql.sock
 user = mysql
 bind-address = 0.0.0.0
+default-time-zone = 'America/New_York'
 
 # Custom settings
 collation-server = utf8mb4_0900_ai_ci

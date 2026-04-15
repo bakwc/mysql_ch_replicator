@@ -3,6 +3,7 @@ import json
 import uuid
 import sqlparse
 import re
+import datetime
 from pyparsing import Suppress, CaselessKeyword, Word, alphas, alphanums, delimitedList
 import copy
 
@@ -12,6 +13,7 @@ from .enum import (
     parse_enum_or_set_field,
     extract_enum_or_set_values
 )
+from .mysql_api import MySQLApi
 
 
 CHARSET_MYSQL_TO_PYTHON = {
@@ -589,6 +591,37 @@ class MysqlToClickhouseConverter:
                 if not isinstance(clickhouse_field_value, str):
                     clickhouse_field_value = json.dumps(convert_bytes(clickhouse_field_value))
 
+            if mysql_field_type.startswith('point'):
+                clickhouse_field_value = parse_mysql_point(clickhouse_field_value)
+
+            if mysql_field_type.startswith('polygon'):
+                clickhouse_field_value = parse_mysql_polygon(clickhouse_field_value)
+
+            if mysql_field_type.startswith('multipolygon'):
+                clickhouse_field_value = parse_mysql_multipolygon(clickhouse_field_value)
+
+            if mysql_field_type.startswith('enum('):
+                enum_values = mysql_structure.fields[idx].additional_data
+                field_name = mysql_structure.fields[idx].name if idx < len(mysql_structure.fields) else "unknown"
+                
+                clickhouse_field_value = EnumConverter.convert_mysql_to_clickhouse_enum(
+                    clickhouse_field_value,
+                    enum_values,
+                    field_name
+                )
+
+            # Handle MySQL YEAR type conversion
+            if mysql_field_type == 'year' and clickhouse_field_value is not None:
+                # MySQL YEAR type can store years from 1901 to 2155
+                # Convert to integer if it's a string
+                if isinstance(clickhouse_field_value, str):
+                    clickhouse_field_value = int(clickhouse_field_value)
+                # Ensure the value is within valid range
+                if clickhouse_field_value < 1901:
+                    clickhouse_field_value = 1901
+                elif clickhouse_field_value > 2155:
+                    clickhouse_field_value = 2155
+
             if clickhouse_field_value is not None:
                 if 'UUID' in clickhouse_field_type:
                     if len(clickhouse_field_value) == 36:
@@ -628,37 +661,11 @@ class MysqlToClickhouseConverter:
                             v for v in set_values if v in clickhouse_field_value
                         ]
                     clickhouse_field_value = ','.join(clickhouse_field_value)
-
-            if mysql_field_type.startswith('point'):
-                clickhouse_field_value = parse_mysql_point(clickhouse_field_value)
-
-            if mysql_field_type.startswith('polygon'):
-                clickhouse_field_value = parse_mysql_polygon(clickhouse_field_value)
-
-            if mysql_field_type.startswith('multipolygon'):
-                clickhouse_field_value = parse_mysql_multipolygon(clickhouse_field_value)
-
-            if mysql_field_type.startswith('enum('):
-                enum_values = mysql_structure.fields[idx].additional_data
-                field_name = mysql_structure.fields[idx].name if idx < len(mysql_structure.fields) else "unknown"
-                
-                clickhouse_field_value = EnumConverter.convert_mysql_to_clickhouse_enum(
-                    clickhouse_field_value, 
-                    enum_values,
-                    field_name
-                )
-
-            # Handle MySQL YEAR type conversion
-            if mysql_field_type == 'year' and clickhouse_field_value is not None:
-                # MySQL YEAR type can store years from 1901 to 2155
-                # Convert to integer if it's a string
-                if isinstance(clickhouse_field_value, str):
-                    clickhouse_field_value = int(clickhouse_field_value)
-                # Ensure the value is within valid range
-                if clickhouse_field_value < 1901:
-                    clickhouse_field_value = 1901
-                elif clickhouse_field_value > 2155:
-                    clickhouse_field_value = 2155
+            else:
+                # Handle NULL values for non-nullable ClickHouse columns
+                # Convert NULL to appropriate default value based on ClickHouse type
+                if 'Nullable' not in clickhouse_field_type:
+                    clickhouse_field_value = self.__get_default_value_for_type_python(clickhouse_field_type)
 
             clickhouse_record.append(clickhouse_field_value)
         return tuple(clickhouse_record)
@@ -761,11 +768,18 @@ class MysqlToClickhouseConverter:
             if op_name == 'auto_increment':
                 continue
 
+            if op_name == 'convert':
+                continue
+
             if op_name == 'change':
                 self.__convert_alter_table_change_column(db_name, table_name, tokens)
                 continue
             
             if op_name == 'rename':
+                # Ignore RENAME INDEX/KEY operations: ClickHouse doesn't mirror MySQL indexes.
+                if tokens[0].lower() in ('index', 'key'):
+                    continue
+
                 # Handle RENAME COLUMN operation
                 if tokens[0].lower() == 'column':
                     tokens = tokens[1:]  # Skip the COLUMN keyword
@@ -1022,6 +1036,65 @@ class MysqlToClickhouseConverter:
         # Default fallback
         return "''"
 
+    def __get_default_value_for_type_python(self, ch_type: str):
+        """Get appropriate default value as Python native type for ClickHouse type"""
+        ch_type_lower = ch_type.lower().strip()
+        
+        # Handle numeric types - return actual Python int/float
+        if ch_type_lower in ['int8', 'int16', 'int32', 'int64', 'int128', 'int256']:
+            return 0
+        if ch_type_lower in ['uint8', 'uint16', 'uint32', 'uint64', 'uint128', 'uint256']:
+            return 0
+        if ch_type_lower in ['float32', 'float64']:
+            return 0.0
+        if ch_type_lower == 'decimal':
+            return 0
+            
+        # Handle string types
+        if ch_type_lower in ['string', 'fixedstring']:
+            return ''
+            
+        # Handle date/time types - return datetime objects
+        if ch_type_lower == 'date':
+            return datetime.date(1970, 1, 1)
+        if ch_type_lower.startswith('datetime'):
+            return datetime.datetime(1970, 1, 1, 0, 0, 0)
+        if ch_type_lower.startswith('date32'):
+            return datetime.date(1970, 1, 1)
+            
+        # Handle UUID
+        if ch_type_lower == 'uuid':
+            return '00000000-0000-0000-0000-000000000000'
+            
+        # Handle IP addresses
+        if ch_type_lower == 'ipv4':
+            return '0.0.0.0'
+        if ch_type_lower == 'ipv6':
+            return '::'
+            
+        # Handle boolean
+        if ch_type_lower == 'bool':
+            return False
+            
+        # For complex types like Array, Tuple, etc., use empty/default values
+        if ch_type_lower.startswith('array'):
+            return []
+        if ch_type_lower.startswith('tuple'):
+            return ()
+        if ch_type_lower.startswith('map'):
+            return {}
+            
+        # For enum types, try to get first value
+        if ch_type_lower.startswith('enum'):
+            # Extract first enum value - format is Enum8('value1'=1, 'value2'=2) or similar
+            match = re.search(r"Enum\d+\('([^']+)'", ch_type)
+            if match:
+                return match.group(1)
+            return ''
+            
+        # Default fallback
+        return ''
+
     def __convert_alter_table_change_column(self, db_name, table_name, tokens):
         if len(tokens) < 3:
             raise Exception('wrong tokens count', tokens)
@@ -1149,15 +1222,29 @@ class MysqlToClickhouseConverter:
                 
                 return (new_mysql_structure, new_ch_structure) if is_query_api else new_mysql_structure
         
-        # If we couldn't get it from state, try with MySQL API
+        mysql_api = None
+        mysql_api_was_provided = False
+        
         if (hasattr(self, 'db_replicator') and 
             self.db_replicator is not None and 
             hasattr(self.db_replicator, 'mysql_api') and 
             self.db_replicator.mysql_api is not None):
-            
+            mysql_api = self.db_replicator.mysql_api
+            mysql_api_was_provided = True
+        elif (hasattr(self, 'db_replicator') and 
+              self.db_replicator is not None and 
+              hasattr(self.db_replicator, 'config') and 
+              hasattr(self.db_replicator, 'database')):
+            mysql_api = MySQLApi(
+                database=self.db_replicator.database,
+                mysql_settings=self.db_replicator.config.mysql,
+                mysql_timezone=self.db_replicator.config.mysql_timezone,
+            )
+        
+        if mysql_api is not None:
             try:
                 # Get the CREATE statement for the source table
-                source_create_statement = self.db_replicator.mysql_api.get_table_create_statement(source_table_name)
+                source_create_statement = mysql_api.get_table_create_statement(source_table_name)
                 
                 # Parse the source table structure
                 source_structure = self.parse_mysql_table_structure(source_create_statement)
@@ -1177,6 +1264,9 @@ class MysqlToClickhouseConverter:
                 error_msg = f"Could not get source table structure for LIKE statement: {str(e)}"
                 print(f"Error: {error_msg}")
                 raise Exception(error_msg, create_statement)
+            finally:
+                if not mysql_api_was_provided:
+                    mysql_api.close()
         
         # If we got here, we couldn't determine the structure
         raise Exception(f"Could not determine structure for source table '{source_table_name}' in LIKE statement", create_statement)
