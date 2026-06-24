@@ -13,6 +13,18 @@ from .table_structure import TableStructure, TableField
 
 logger = getLogger(__name__)
 
+# Table engines that do not support OPTIMIZE TABLE (e.g. View).
+NON_OPTIMIZABLE_TABLE_ENGINES = frozenset({
+    'View',
+    'MaterializedView',
+    'LiveView',
+    'WindowView',
+})
+
+
+def is_optimizable_table_engine(engine: str) -> bool:
+    return engine not in NON_OPTIMIZABLE_TABLE_ENGINES
+
 
 CREATE_TABLE_QUERY = '''
 CREATE TABLE {if_not_exists} `{db_name}`.`{table_name}` {on_cluster}
@@ -119,6 +131,17 @@ class ClickhouseApi:
         tables = result.result_rows
         table_list = [row[0] for row in tables]
         return table_list
+
+    def get_optimizable_tables(self, database: str) -> set[str]:
+        escaped_db = database.replace("'", "''")
+        result = self.client.query(
+            f"SELECT name, engine FROM system.tables WHERE database = '{escaped_db}'",
+        )
+        return {
+            row[0]
+            for row in result.result_rows
+            if is_optimizable_table_engine(row[1])
+        }
 
     def get_table_structure(self, table_name):
         result = self.client.query(f'DESCRIBE TABLE `{self.database}`.`{table_name}`')

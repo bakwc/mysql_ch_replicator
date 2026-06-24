@@ -42,6 +42,11 @@ class RunAllRunner(ProcessRunner):
         super().__init__(f'./main.py --config {cfg_file} run_all')
 
 
+class DbOptimizerRunner(ProcessRunner):
+    def __init__(self, cfg_file=CONFIG_FILE):
+        super().__init__(f'./main.py --config {cfg_file} db_optimizer')
+
+
 def kill_process(pid, force=False):
     command = f'kill {pid}'
     if force:
@@ -97,3 +102,10 @@ def get_db_replicator_pid(cfg: config.Settings, db_name: str):
 
 def read_logs(db_name):
     return open(os.path.join('binlog', db_name, 'db_replicator.log')).read()
+
+
+def read_db_optimizer_logs(cfg: config.Settings):
+    path = os.path.join(cfg.binlog_replicator.data_dir, 'db_optimizer.log')
+    if not os.path.exists(path):
+        return ''
+    return open(path).read()
