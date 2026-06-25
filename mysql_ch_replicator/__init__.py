@@ -1,7 +1,9 @@
 import importlib.metadata
 import os
 
-os.environ['TZ'] = 'UTC'
+# respect TZ env var passed to docker container via -e flag. If TZ flag wasn't set then fallback to UTC timezone.
+tz = os.environ.get('TZ', 'UTC')
+os.environ['TZ'] = tz
 try:
     import time
     time.tzset()
