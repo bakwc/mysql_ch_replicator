@@ -6,10 +6,12 @@ import os.path
 import json
 import random
 import re
+import pymysql
 
 from enum import Enum
 from logging import getLogger
 from dataclasses import dataclass
+from collections import OrderedDict
 
 from pymysql.err import OperationalError
 
@@ -252,15 +254,15 @@ class DataWriter:
         self.records_per_file = replicator_settings.records_per_file
         self.db_file_writers: dict = {}  # db_name => FileWriter
 
-    def store_event(self, log_event: LogEvent):
+    def store_event(self, log_event: LogEvent, allow_create_new_file: bool = True):
         logger.debug(f'store event {log_event.transaction_id}')
-        file_writer = self.get_or_create_file_writer(log_event.db_name)
+        file_writer = self.get_or_create_file_writer(log_event.db_name, allow_create_new_file)
         file_writer.write_event(log_event)
 
-    def get_or_create_file_writer(self, db_name: str) -> FileWriter:
+    def get_or_create_file_writer(self, db_name: str, allow_create_new_file: bool) -> FileWriter:
         file_writer = self.db_file_writers.get(db_name)
         if file_writer is not None:
-            if file_writer.num_records >= self.records_per_file:
+            if file_writer.num_records >= self.records_per_file and allow_create_new_file:
                 file_writer.close()
                 del self.db_file_writers[db_name]
                 file_writer = None
@@ -359,7 +361,10 @@ class BinlogReplicator:
 
         log_file, log_pos = None, None
         if self.state.prev_last_seen_transaction:
-            log_file, log_pos = self.state.prev_last_seen_transaction
+            log_file, log_pos = self.state.prev_last_seen_transaction[:2]
+
+        is_mariadb = self._detect_mariadb(mysql_settings)
+        logger.info(f'detected database type: {"MariaDB" if is_mariadb else "MySQL"}')
 
         self.stream = BinLogStreamReader(
             connection_settings=mysql_settings,
@@ -369,9 +374,25 @@ class BinlogReplicator:
             log_pos=log_pos,
             log_file=log_file,
             mysql_timezone=settings.mysql_timezone,
+            is_mariadb=is_mariadb,
         )
         self.last_state_update = 0
         self.last_binlog_clear_time = 0
+
+    def _detect_mariadb(self, mysql_settings):
+        """Detect if connected to MariaDB or MySQL by checking version string"""
+        
+        try:
+            conn = pymysql.connect(**mysql_settings)
+            cursor = conn.cursor()
+            cursor.execute("SELECT VERSION()")
+            version = cursor.fetchone()[0]
+            cursor.close()
+            conn.close()
+            return 'MariaDB' in version
+        except Exception as e:
+            logger.warning(f'failed to detect database type: {e}, assuming MySQL')
+            return False
 
     def clear_old_binlog_if_required(self):
         curr_time = time.time()
@@ -426,6 +447,8 @@ class BinlogReplicator:
 
     def run(self):
         last_transaction_id = None
+        position_seq_cache = OrderedDict()
+        max_cache_size = 500
 
         killer = GracefulKiller()
 
@@ -445,7 +468,23 @@ class BinlogReplicator:
                 for event in self.stream:
                     last_read_count += 1
                     total_processed_events += 1
-                    transaction_id = (self.stream.log_file, self.stream.log_pos)
+                    base_transaction_id = (self.stream.log_file, self.stream.log_pos)
+                    
+                    if self.stream.is_mariadb:
+                        if base_transaction_id in position_seq_cache:
+                            transaction_seq = position_seq_cache[base_transaction_id] + 1
+                        else:
+                            transaction_seq = 0
+                        
+                        position_seq_cache[base_transaction_id] = transaction_seq
+                        
+                        if len(position_seq_cache) > max_cache_size:
+                            position_seq_cache.popitem(last=False)
+                        
+                        transaction_id = (base_transaction_id[0], base_transaction_id[1], transaction_seq)
+                    else:
+                        transaction_id = base_transaction_id
+                    
                     last_transaction_id = transaction_id
 
                     self.update_state_if_required(transaction_id)
@@ -524,7 +563,8 @@ class BinlogReplicator:
                             f'records: {log_event.records}',
                         )
 
-                    self.data_writer.store_event(log_event)
+                    allow_create_new_file = not self.stream.is_mariadb or transaction_seq == 0
+                    self.data_writer.store_event(log_event, allow_create_new_file)
 
                     if last_read_count > 1000:
                         break
