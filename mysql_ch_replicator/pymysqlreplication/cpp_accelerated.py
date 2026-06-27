@@ -11,6 +11,8 @@ FILE_PATH = None
 
 if platform.system() == 'Darwin':
     FILE_PATH = f'{FILE_NAME}.dylib'
+if platform.system() == 'FreeBSD':
+    FILE_PATH = f'{FILE_NAME}_bsd.so'
 if platform.system() == 'Linux':
     FILE_PATH = f'{FILE_NAME}.so'
     if platform.machine() == 'x86_64':
