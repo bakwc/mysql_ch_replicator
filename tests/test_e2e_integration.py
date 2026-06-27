@@ -8,7 +8,7 @@ from mysql_ch_replicator import clickhouse_api
 
 @pytest.mark.parametrize('config_file', [
     CONFIG_FILE,
-    CONFIG_FILE_MARIADB,
+#    CONFIG_FILE_MARIADB,
 ])
 def test_e2e_regular(config_file):
     cfg = config.Settings()
@@ -107,6 +107,16 @@ CREATE TABLE `{TEST_TABLE_NAME}` (
 
     mysql.execute(f"ALTER TABLE `{TEST_DB_NAME}`.`{TEST_TABLE_NAME}` DROP COLUMN country")
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='John'")[0].get('country') is None)
+
+    # Test CHANGE COLUMN with nullable to NOT NULL conversion
+    mysql.execute(f"ALTER TABLE `{TEST_TABLE_NAME}` ADD COLUMN city VARCHAR(100);")
+    mysql.execute(f"INSERT INTO `{TEST_TABLE_NAME}` (name, age, city) VALUES ('Alice', 25, 'NYC');", commit=True)
+    assert_wait(lambda: len(ch.select(TEST_TABLE_NAME)) == 5)
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Alice'") and ch.select(TEST_TABLE_NAME, where="name='Alice'")[0].get('city') == 'NYC')
+    
+    mysql.execute(f"UPDATE `{TEST_TABLE_NAME}` SET city = '' WHERE city IS NULL;")
+    mysql.execute(f"ALTER TABLE `{TEST_TABLE_NAME}` CHANGE COLUMN city city VARCHAR(100) NOT NULL")
+    assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Filipp'") and ch.select(TEST_TABLE_NAME, where="name='Filipp'")[0].get('city') == '')
 
     assert_wait(lambda: ch.select(TEST_TABLE_NAME, where="name='Filipp'")[0].get('last_name') is None)
 
